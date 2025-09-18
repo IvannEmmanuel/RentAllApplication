@@ -87,7 +87,8 @@ const styles = StyleSheet.create({
   },
   text: {
     paddingLeft: 10,
-    marginBottom: 3
+    marginBottom: 3,
+    fontFamily: 'DM-Bold'
   },
   textInput: {
     height: 50,
@@ -110,7 +111,8 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: 'white',
     alignSelf: 'center',
-    fontSize: 15
+    fontSize: 15,
+    fontFamily: 'DM-Bold'
   },
   bottomContainer: {
     flexDirection: 'row'

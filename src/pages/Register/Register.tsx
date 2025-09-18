@@ -1,7 +1,8 @@
-import { ImageBackground, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import React, { useState } from 'react';
 import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { useNavigation } from '@react-navigation/native';
 
 const Register = () => {
     const [isDatePickerVisible, setDatePickerVisible] = useState(false);
@@ -38,100 +39,112 @@ const Register = () => {
         }
     };
 
+    const navigation = useNavigation();
+
+    const handleLogin = () => {
+        navigation.navigate('Login')
+    }
+
     return (
-        <ScrollView
-            contentContainerStyle={{ paddingBottom: 40 }}
-            keyboardShouldPersistTaps="handled"
+        <KeyboardAvoidingView
+            style={{ flex: 1 }}
         >
-            <ImageBackground
-                source={require('../../../assets/registerBackground.png')}
-                style={styles.background}
+            <ScrollView
+                contentContainerStyle={{ paddingBottom: 40 }}
+                keyboardShouldPersistTaps="handled"
             >
-                <Text style={styles.header}>Registration</Text>
+                <ImageBackground
+                    source={require('../../../assets/registerBackground.png')}
+                    style={styles.background}
+                >
+                    <Text style={styles.header}>Registration</Text>
 
-                <View style={styles.nameRow}>
-                    <View style={styles.nameColumn}>
-                        <Text style={styles.fieldLabel}>First Name</Text>
-                        <TextInput
-                            placeholder="First Name"
-                            placeholderTextColor="#A1A1A1"
-                            style={styles.inputLeft}
-                        />
+                    <View style={styles.nameRow}>
+                        <View style={styles.nameColumn}>
+                            <Text style={styles.fieldLabel}>First Name</Text>
+                            <TextInput
+                                placeholder="First Name"
+                                placeholderTextColor="#A1A1A1"
+                                style={styles.inputLeft}
+                            />
+                        </View>
+
+                        <View style={styles.nameColumn}>
+                            <Text style={styles.fieldLabel}>Last Name</Text>
+                            <TextInput
+                                placeholder="Last Name"
+                                placeholderTextColor="#A1A1A1"
+                                style={styles.inputRight}
+                            />
+                        </View>
                     </View>
 
-                    <View style={styles.nameColumn}>
-                        <Text style={styles.fieldLabel}>Last Name</Text>
-                        <TextInput
-                            placeholder="Last Name"
-                            placeholderTextColor="#A1A1A1"
-                            style={styles.inputRight}
-                        />
-                    </View>
-                </View>
-
-                <View style={styles.birthdateContainer}>
-                    <Text style={styles.label}>Birthdate</Text>
-                    <TouchableOpacity style={styles.dateButton} onPress={showDatePicker}>
-                        <Text style={styles.dateText}>
-                            {birthdate || 'Select Date'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.emailColumn}>
-                        <Text style={styles.fieldLabel}>Email</Text>
-                        <TextInput
-                            placeholder="Email"
-                            placeholderTextColor="#A1A1A1"
-                            style={styles.fullWidthInput}
-                        />
-                    </View>
-
-                    <Text style={styles.fieldLabel}>Upload a capture image</Text>
-                    <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
-                        <Text style={styles.uploadButtonText}>
-                            {selectedFileName || 'Upload image'}
-                        </Text>
-                    </TouchableOpacity>
-
-                    <View style={styles.emailColumn}>
-                        <Text style={styles.fieldLabel}>Password</Text>
-                        <TextInput
-                            placeholder="Password"
-                            placeholderTextColor="#A1A1A1"
-                            style={styles.fullWidthInput}
-                        />
-                    </View>
-                    <View style={styles.emailColumn}>
-                        <Text style={styles.fieldLabel}>Confirm Password</Text>
-                        <TextInput
-                            placeholder="Confirm Password"
-                            placeholderTextColor="#A1A1A1"
-                            style={styles.fullWidthInput}
-                        />
-                    </View>
-                    <View style={{ flexDirection: 'row', marginBottom: 20 }}>
-                        <Text>By clicking next, you agree to our</Text>
-                        <Text style={{ color: '#FFAB00', paddingLeft: 10 }}>Terms and Conditions</Text>
-                    </View>
-                    <TouchableOpacity style={{ backgroundColor: '#1E1E1E', height: 60, borderRadius: 20, justifyContent: 'center' }}>
-                        <Text style={{ color: 'white', alignSelf: 'center', fontSize: 15, fontFamily: 'DM-Bold' }}>Next</Text>
-                    </TouchableOpacity>
-                    <View style={{ flexDirection: 'row', marginTop: 20 }}>
-                        <Text style={{ fontFamily: 'DM-Medium', fontSize: 15 }}>Already have an account?</Text>
-                        <TouchableOpacity style={{marginBottom: 20}}>
-                            <Text style={{ color: '#FFAB00', fontFamily: 'DM-Bold', fontSize: 15, paddingLeft: 5 }}>Login</Text>
+                    <View style={styles.birthdateContainer}>
+                        <Text style={styles.label}>Birthdate</Text>
+                        <TouchableOpacity style={styles.dateButton} onPress={showDatePicker}>
+                            <Text style={styles.dateText}>
+                                {birthdate || 'Select Date'}
+                            </Text>
                         </TouchableOpacity>
-                    </View>
-                </View>
 
-                <DateTimePickerModal
-                    isVisible={isDatePickerVisible}
-                    mode="date"
-                    onConfirm={handleConfirm}
-                    onCancel={hideDatePicker}
-                />
-            </ImageBackground>
-        </ScrollView>
+                        <View style={styles.emailColumn}>
+                            <Text style={styles.fieldLabel}>Email</Text>
+                            <TextInput
+                                placeholder="Email"
+                                placeholderTextColor="#A1A1A1"
+                                style={styles.fullWidthInput}
+                            />
+                        </View>
+
+                        <Text style={styles.fieldLabel}>Upload a capture image</Text>
+                        <TouchableOpacity style={styles.uploadButton} onPress={pickImage}>
+                            <Text style={styles.uploadButtonText}>
+                                {selectedFileName || 'Upload image'}
+                            </Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.emailColumn}>
+                            <Text style={styles.fieldLabel}>Password</Text>
+                            <TextInput
+                                placeholder="Password"
+                                placeholderTextColor="#A1A1A1"
+                                style={styles.fullWidthInput}
+                            />
+                        </View>
+                        <View style={styles.emailColumn}>
+                            <Text style={styles.fieldLabel}>Confirm Password</Text>
+                            <TextInput
+                                placeholder="Confirm Password"
+                                placeholderTextColor="#A1A1A1"
+                                style={styles.fullWidthInput}
+                            />
+                        </View>
+                        <View style={{ flexDirection: 'row', marginBottom: 20 }}>
+                            <Text>By clicking next, you agree to our</Text>
+                            <TouchableOpacity>
+                                <Text style={{ color: '#FFAB00', paddingLeft: 10 }}>Terms and Conditions</Text>
+                            </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity style={{ backgroundColor: '#1E1E1E', height: 60, borderRadius: 20, justifyContent: 'center' }}>
+                            <Text style={{ color: 'white', alignSelf: 'center', fontSize: 15, fontFamily: 'DM-Bold' }}>Next</Text>
+                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', marginTop: 20 }}>
+                            <Text style={{ fontFamily: 'DM-Medium', fontSize: 15 }}>Already have an account?</Text>
+                            <TouchableOpacity style={{ marginBottom: 20 }} onPress={handleLogin}>
+                                <Text style={{ color: '#FFAB00', fontFamily: 'DM-Bold', fontSize: 15, paddingLeft: 5 }}>Login</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    <DateTimePickerModal
+                        isVisible={isDatePickerVisible}
+                        mode="date"
+                        onConfirm={handleConfirm}
+                        onCancel={hideDatePicker}
+                    />
+                </ImageBackground>
+            </ScrollView>
+        </KeyboardAvoidingView>
     );
 };
 
@@ -188,7 +201,7 @@ const styles = StyleSheet.create({
         color: 'black',
         fontSize: 16,
         marginBottom: 5,
-        fontFamily: 'DM-Medium',
+        fontFamily: 'DM-Bold',
     },
     dateButton: {
         height: 50,
@@ -211,7 +224,7 @@ const styles = StyleSheet.create({
         color: 'black',
         fontSize: 16,
         marginBottom: 5,
-        fontFamily: 'DM-Medium',
+        fontFamily: 'DM-Bold',
     },
     emailColumn: {
         flexDirection: 'column',
