@@ -21,10 +21,23 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.iemmanuel.RentApplication"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "77f3db89-5546-468c-9f76-b5986074e44b"
+      }
+    },
+    "assetBundlePatterns": [
+      "**/*",
+      "assets/fonts/*"
+    ],
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
