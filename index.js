@@ -24,7 +24,7 @@ messaging().setBackgroundMessageHandler(async remoteMessage => {
     body: remoteMessage.notification?.body || 'You have a new message',
     sound: 'default',
     android: {
-      channelId: 'default-channel-id', // Must match the registered channel
+      channelId: 'urgent-channel-v2', // Must match the registered channel
     },
   });
 });
