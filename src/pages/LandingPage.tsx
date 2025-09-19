@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Image, Text, ImageBackground, TouchableOpacity, SafeAreaView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Image, Text, ImageBackground, TouchableOpacity, SafeAreaView, Platform } from 'react-native';
 import LandingStyles from '../styles/LandingStyles';
 import { useNavigation } from '@react-navigation/native';
 

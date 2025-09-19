@@ -38,6 +38,15 @@ import * as Notifications from 'expo-notifications';
 import { Platform, PermissionsAndroid } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 
+// Expo notification handler (needed for foreground)
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: true,
+  }),
+});
+
 export async function requestUserPermission() {
   if (Platform.OS === 'android') {
     const granted = await PermissionsAndroid.request(
@@ -70,15 +79,15 @@ export async function getFcmToken() {
 
 async function registerNotificationChannel() {
   if (Platform.OS === 'android') {
-    await Notifications.setNotificationChannelAsync('default-channel-id', {
-      name: 'Default Channel', // Name visible in Android settings
-      importance: Notifications.AndroidImportance.HIGH, // Ensures a pop-up (heads-up) notification
-      vibrationPattern: [0, 250, 250, 250], // Vibration pattern (optional)
-      sound: 'default', // Default sound
-      lightColor: '#FF231F7C', // Optional light color for LED
-      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC, // Visible on lock screen
+    await Notifications.setNotificationChannelAsync('urgent-channel-v2', {
+      name: 'Urgent Channel V2',
+      importance: Notifications.AndroidImportance.HIGH, // heads-up
+      vibrationPattern: [0, 250, 250, 250],
+      sound: 'default',
+      lightColor: '#FF231F7C',
+      lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
     });
-    console.log('Notification channel registered');
+    console.log('High-priority channel registered: urgent-channel-v2');
   }
 }
 
@@ -86,29 +95,28 @@ export const useNotification = () => {
   useEffect(() => {
     requestUserPermission();
     getFcmToken();
-    registerNotificationChannel(); // Register the channel here
+    registerNotificationChannel();
 
-    // Handle foreground notifications
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Foreground notification:', notification);
-      Notifications.presentNotificationAsync({
-        title: notification.request.content.title || 'Notification',
-        body: notification.request.content.body || 'You have a new message',
-        sound: 'default',
-        android: {
-          channelId: 'default-channel-id', // Must match the registered channel
+    // Foreground FCM listener → trigger local heads-up
+    const unsubscribe = messaging().onMessage(async remoteMessage => {
+      console.log('Foreground FCM:', remoteMessage);
+
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: remoteMessage.notification?.title || 'New message',
+          body: remoteMessage.notification?.body || 'You got something!',
+          sound: 'default',
+          android: {
+            channelId: 'urgent-channel-v2',
+            priority: Notifications.AndroidNotificationPriority.HIGH,
+          },
         },
+        trigger: null, // show immediately
       });
     });
 
-    // Handle notification response
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      console.log('Notification response:', response);
-    });
-
     return () => {
-      subscription.remove();
-      responseSubscription.remove();
+      unsubscribe();
     };
   }, []);
 };
