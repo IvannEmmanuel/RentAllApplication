@@ -333,7 +333,6 @@ const styles = StyleSheet.create({
     },
     otpContainer: {
         flexDirection: "row",
-        alignSelf: 'center',
         justifyContent: 'center',
     },
     otpInput: {
