@@ -6,6 +6,7 @@ import Register from '../pages/Register/Register';
 import Otp from '../pages/Register/Otp';
 import Face from '../pages/Register/Face';
 import { RegistrationProvider } from '../hooks/RegistrationContext';
+import Home from '../pages/Home/Home';
 
 const Stack = createNativeStackNavigator();
 
@@ -19,6 +20,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="Register" component={Register} />
                     <Stack.Screen name="Otp" component={Otp} />
                     <Stack.Screen name="Face" component={Face} />
+                    <Stack.Screen name="Home" component={Home} />
                 </Stack.Navigator>
             </NavigationContainer>
         </RegistrationProvider>
