@@ -91,7 +91,7 @@ const Login = () => {
 
       // Navigate based on role
       if (profile.role === "user") {
-        navigation.navigate("Home")
+        navigation.navigate("Dashboard")
       } else {
         showToast("Unknown role — cannot log in.")
       }
@@ -201,7 +201,7 @@ const Login = () => {
       showToast("Signed in successfully with email OTP", "success")
 
       if (profile.role === "user") {
-        navigation.navigate("Home")
+        navigation.navigate("Dashboard")
       } else {
         showToast("Unknown role — cannot log in.")
       }
