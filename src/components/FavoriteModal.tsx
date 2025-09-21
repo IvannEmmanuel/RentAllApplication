@@ -11,10 +11,53 @@ import {
 } from 'react-native'
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../supbaseClient'
+import BookItemModal from './BookItemModal'
 
-const FavoritesModal = ({ visible, onClose, currentUser, onFavoriteRemoved }) => {
+const FavoritesModal = ({
+    visible,
+    onClose,
+    currentUser,
+    userBookings, // RECEIVE SHARED STATE
+    getUserBookingStatus, // RECEIVE SHARED FUNCTION  
+    getButtonInfo, // RECEIVE SHARED FUNCTION
+    onBookingUpdate, // RECEIVE REFRESH FUNCTION
+    onFavoriteRemoved
+}) => {
     const [favorites, setFavorites] = useState([])
     const [loading, setLoading] = useState(false)
+    const [bookModalVisible, setBookModalVisible] = useState(false)
+    const [selectedItem, setSelectedItem] = useState(null)
+
+    // Handle rent now button
+    const handleRentNow = (item) => {
+        if (!currentUser) {
+            Alert.alert('Login Required', 'Please log in to rent items')
+            return
+        }
+
+        if (currentUser.id === item.user_id) {
+            Alert.alert('Your Item', 'You cannot rent your own item')
+            return
+        }
+
+        // Check if user already has a booking for this item using SHARED function
+        const bookingStatus = getUserBookingStatus(item.item_id)
+        if (bookingStatus) {
+            Alert.alert(
+                'Already Booked',
+                `You already have a ${bookingStatus} booking for this item.`
+            )
+            return
+        }
+
+        setSelectedItem(item)
+        setBookModalVisible(true)
+    }
+
+    // Check if item belongs to current user
+    const isUserItem = (item) => {
+        return currentUser && currentUser.id === item.user_id
+    }
 
     const getImageUrl = async (userId, itemId) => {
         try {
@@ -65,7 +108,7 @@ const FavoritesModal = ({ visible, onClose, currentUser, onFavoriteRemoved }) =>
             const itemIds = favoriteIds.map(fav => fav.item_id)
             const { data: items, error: itemsError } = await supabase
                 .from('items')
-                .select('item_id,user_id,title,description,price_per_day,location,created_at')
+                .select('item_id,user_id,title,description,price_per_day,deposit_fee,location,created_at')
                 .in('item_id', itemIds)
                 .eq('available', true)
 
@@ -141,88 +184,133 @@ const FavoritesModal = ({ visible, onClose, currentUser, onFavoriteRemoved }) =>
         }
     }, [visible, currentUser])
 
-    const renderFavoriteItem = (item) => (
-        <View key={item.item_id} style={styles.favoriteItem}>
-            <View style={styles.itemImageContainer}>
-                {item.imageUrl ? (
-                    <Image
-                        source={{ uri: item.imageUrl }}
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                    />
-                ) : (
-                    <Image
-                        source={require('../../assets/splash-icon.png')}
-                        style={styles.itemImage}
-                        resizeMode="cover"
-                    />
-                )}
-            </View>
+    const renderFavoriteItem = (item) => {
+        // Use SHARED function from Home component
+        const buttonInfo = getButtonInfo ? getButtonInfo(item) : {
+            text: 'Rent Now',
+            disabled: false,
+            style: 'normal'
+        }
 
-            <View style={styles.itemDetails}>
-                <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
-                <Text style={styles.itemLocation} numberOfLines={1}>
-                    {item.location || 'Location not specified'}
-                </Text>
-                <Text style={styles.itemDate}>{item.formattedDate}</Text>
-                <Text style={styles.itemPrice}>{item.formattedPrice}/day</Text>
-            </View>
+        return (
+            <View key={item.item_id} style={styles.favoriteItem}>
+                <View style={styles.itemImageContainer}>
+                    {item.imageUrl ? (
+                        <Image
+                            source={{ uri: item.imageUrl }}
+                            style={styles.itemImage}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <Image
+                            source={require('../../assets/splash-icon.png')}
+                            style={styles.itemImage}
+                            resizeMode="cover"
+                        />
+                    )}
+                </View>
 
-            <TouchableOpacity
-                style={styles.removeButton}
-                onPress={() => removeFavorite(item.item_id)}
-            >
-                <Text style={styles.removeButtonText}>✕</Text>
-            </TouchableOpacity>
-        </View>
-    )
+                <View style={styles.itemDetails}>
+                    <Text style={styles.itemTitle} numberOfLines={2}>{item.title}</Text>
+                    <Text style={styles.itemLocation} numberOfLines={1}>
+                        {item.location || 'Location not specified'}
+                    </Text>
+                    <Text style={styles.itemDate}>{item.formattedDate}</Text>
+                    <Text style={styles.itemPrice}>{item.formattedPrice}/day</Text>
 
-    return (
-        <Modal
-            visible={visible}
-            animationType="slide"
-            presentationStyle="pageSheet"
-        >
-            <View style={styles.container}>
-                {/* Header */}
-                <View style={styles.header}>
-                    <Text style={styles.headerTitle}>My Favorites</Text>
-                    <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                        <Text style={styles.closeButtonText}>✕</Text>
+                    {/* Rent Now Button - using SHARED logic */}
+                    <TouchableOpacity
+                        style={[
+                            styles.rentButton,
+                            buttonInfo.style === 'disabled' && styles.disabledRentButton,
+                            buttonInfo.style === 'pending' && styles.pendingRentButton
+                        ]}
+                        onPress={() => handleRentNow(item)}
+                        disabled={buttonInfo.disabled}
+                    >
+                        <Text style={[
+                            styles.rentButtonText,
+                            buttonInfo.style === 'disabled' && styles.disabledRentButtonText,
+                            buttonInfo.style === 'pending' && styles.pendingRentButtonText
+                        ]}>
+                            {buttonInfo.text}
+                        </Text>
                     </TouchableOpacity>
                 </View>
 
-                {/* Content */}
-                {loading ? (
-                    <View style={styles.loadingContainer}>
-                        <ActivityIndicator size="large" color="#FFAB00" />
-                        <Text style={styles.loadingText}>Loading your favorites...</Text>
-                    </View>
-                ) : favorites.length === 0 ? (
-                    <View style={styles.emptyContainer}>
-                        <Image
-                            source={require('../../assets/heart.png')}
-                            style={styles.emptyIcon}
-                        />
-                        <Text style={styles.emptyTitle}>No Favorites Yet</Text>
-                        <Text style={styles.emptySubtitle}>
-                            Start exploring and tap the heart icon on items you love!
-                        </Text>
-                    </View>
-                ) : (
-                    <ScrollView
-                        style={styles.favoritesList}
-                        showsVerticalScrollIndicator={false}
-                        contentContainerStyle={styles.favoritesContent}
-                    >
-                        <Text style={styles.countText}>
-                            {favorites.length} item{favorites.length !== 1 ? 's' : ''} in your favorites
-                        </Text>
-                        {favorites.map(renderFavoriteItem)}
-                    </ScrollView>
-                )}
+                <TouchableOpacity
+                    style={styles.removeButton}
+                    onPress={() => removeFavorite(item.item_id)}
+                >
+                    <Text style={styles.removeButtonText}>✕</Text>
+                </TouchableOpacity>
             </View>
-        </Modal>
+        )
+    }
+
+    return (
+        <>
+            <Modal
+                visible={visible}
+                animationType="slide"
+                presentationStyle="pageSheet"
+            >
+                <View style={styles.container}>
+                    {/* Header */}
+                    <View style={styles.header}>
+                        <Text style={styles.headerTitle}>My Favorites</Text>
+                        <TouchableOpacity style={styles.closeButton} onPress={onClose}>
+                            <Text style={styles.closeButtonText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* Content */}
+                    {loading ? (
+                        <View style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color="#FFAB00" />
+                            <Text style={styles.loadingText}>Loading your favorites...</Text>
+                        </View>
+                    ) : favorites.length === 0 ? (
+                        <View style={styles.emptyContainer}>
+                            <Image
+                                source={require('../../assets/heart.png')}
+                                style={styles.emptyIcon}
+                            />
+                            <Text style={styles.emptyTitle}>No Favorites Yet</Text>
+                            <Text style={styles.emptySubtitle}>
+                                Start exploring and tap the heart icon on items you love!
+                            </Text>
+                        </View>
+                    ) : (
+                        <ScrollView
+                            style={styles.favoritesList}
+                            showsVerticalScrollIndicator={false}
+                            contentContainerStyle={styles.favoritesContent}
+                        >
+                            <Text style={styles.countText}>
+                                {favorites.length} item{favorites.length !== 1 ? 's' : ''} in your favorites
+                            </Text>
+                            {favorites.map(renderFavoriteItem)}
+                        </ScrollView>
+                    )}
+                </View>
+            </Modal>
+
+            {/* Book Item Modal */}
+            <BookItemModal
+                visible={bookModalVisible}
+                onClose={() => setBookModalVisible(false)}
+                item={selectedItem}
+                currentUserId={currentUser?.id}
+                onBooked={() => {
+                    // Call parent's refresh function instead of local one
+                    console.log('Booking completed in FavoritesModal, calling parent refresh...') // Debug log
+                    if (onBookingUpdate) {
+                        onBookingUpdate()
+                    }
+                }}
+            />
+        </>
     )
 }
 
@@ -361,6 +449,32 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: 'DM-Bold',
         color: '#FFAB00',
+        marginBottom: 8,
+    },
+    rentButton: {
+        backgroundColor: '#000',
+        borderRadius: 6,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
+        alignSelf: 'flex-start',
+    },
+    disabledRentButton: {
+        backgroundColor: '#CCC',
+    },
+    pendingRentButton: {
+        backgroundColor: '#FF8C00', // Orange color for pending status
+    },
+    rentButtonText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontFamily: 'DM-Bold',
+        textAlign: 'center',
+    },
+    disabledRentButtonText: {
+        color: '#999',
+    },
+    pendingRentButtonText: {
+        color: '#FFF',
     },
     removeButton: {
         width: 28,
