@@ -14,6 +14,7 @@ import {
 import { useState } from "react"
 import { useNavigation } from "@react-navigation/native"
 import { supabase } from "../../../supbaseClient"
+import { useFavorites } from "../../components/FavoritesContext"
 
 const Login = () => {
   const navigation = useNavigation()
@@ -26,6 +27,8 @@ const Login = () => {
   const [emailOtpCode, setEmailOtpCode] = useState("")
   const [smsPhone, setSmsPhone] = useState("")
   const [loading, setLoading] = useState(false)
+
+  const { setCurrentUser } = useFavorites()
 
   const handleRegister = () => {
     navigation.navigate("Register")
@@ -91,6 +94,7 @@ const Login = () => {
 
       // Navigate based on role
       if (profile.role === "user") {
+        setCurrentUser(userInfo)
         navigation.navigate("Dashboard")
       } else {
         showToast("Unknown role — cannot log in.")
@@ -201,6 +205,7 @@ const Login = () => {
       showToast("Signed in successfully with email OTP", "success")
 
       if (profile.role === "user") {
+        setCurrentUser(userInfo)
         navigation.navigate("Dashboard")
       } else {
         showToast("Unknown role — cannot log in.")
