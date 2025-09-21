@@ -139,6 +139,7 @@ export const FavoritesProvider = ({ children }) => {
     const value = {
         favorites,
         currentUser,
+        setCurrentUser,
         toggleFavorite,
         isFavorited,
         fetchFavorites,
