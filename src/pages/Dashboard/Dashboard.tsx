@@ -6,8 +6,29 @@ import Inbox from '../Screens/Inbox';
 import Notification from '../Screens/Notification';
 import Profile from '../Screens/Profile';
 import AddItem from '../Screens/AddItem';
+import Chat from '../Screens/Chat';
+import { createStackNavigator } from '@react-navigation/stack';
 
 const Tab = createBottomTabNavigator();
+const Stack = createStackNavigator();
+
+const InboxStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="InboxMain" component={Inbox} />
+      <Stack.Screen name="Chat" component={Chat} />
+    </Stack.Navigator>
+  );
+};
+
+const HomeStack = () => {
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      <Stack.Screen name="HomeMain" component={Home} />
+      <Stack.Screen name="Chat" component={Chat} />
+    </Stack.Navigator>
+  );
+};
 
 const Dashboard = () => {
     return (
@@ -78,8 +99,8 @@ const Dashboard = () => {
                 tabBarInactiveTintColor: 'gray',
             })}
         >
-            <Tab.Screen name="Home" component={Home} />
-            <Tab.Screen name="Inbox" component={Inbox} />
+            <Tab.Screen name="Home" component={HomeStack} />
+            <Tab.Screen name="Inbox" component={InboxStack} />
             <Tab.Screen
                 name="AddItem"
                 component={AddItem}
