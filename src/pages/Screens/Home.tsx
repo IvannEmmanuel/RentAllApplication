@@ -181,9 +181,10 @@
 //   }
 // })
 
-import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, ActivityIndicator, FlatList } from 'react-native'
+import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView, ActivityIndicator, Alert } from 'react-native'
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
+import FavoritesModal from '../../components/FavoriteModal'
 
 const Home = () => {
   const [items, setItems] = useState([])
@@ -191,6 +192,76 @@ const Home = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [categories, setCategories] = useState([])
   const [selectedCategoryId, setSelectedCategoryId] = useState("")
+  const [favorites, setFavorites] = useState([])
+  const [currentUser, setCurrentUser] = useState(null)
+  const [favoritesModalVisible, setFavoritesModalVisible] = useState(false)
+
+  // Get current user
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+    }
+    getCurrentUser()
+  }, [])
+
+  // Fetch user's favorites
+  const fetchFavorites = useCallback(async () => {
+    if (!currentUser) return
+
+    const { data, error } = await supabase
+      .from('favorites')
+      .select('item_id')
+      .eq('user_id', currentUser.id)
+
+    if (!error) {
+      setFavorites(data.map(fav => fav.item_id))
+    }
+  }, [currentUser])
+
+  // Toggle favorite
+  const toggleFavorite = async (itemId) => {
+    if (!currentUser) {
+      Alert.alert('Login Required', 'Please log in to add items to favorites')
+      return
+    }
+
+    const isFavorited = favorites.includes(itemId)
+
+    try {
+      if (isFavorited) {
+        // Remove from favorites
+        const { error } = await supabase
+          .from('favorites')
+          .delete()
+          .eq('user_id', currentUser.id)
+          .eq('item_id', itemId)
+
+        if (!error) {
+          setFavorites(prev => prev.filter(id => id !== itemId))
+        } else {
+          console.error('Error removing favorite:', error)
+        }
+      } else {
+        // Add to favorites
+        const { error } = await supabase
+          .from('favorites')
+          .insert([{
+            user_id: currentUser.id,
+            item_id: itemId
+          }])
+
+        if (!error) {
+          setFavorites(prev => [...prev, itemId])
+        } else {
+          console.error('Error adding favorite:', error)
+        }
+      }
+    } catch (error) {
+      console.error('Toggle favorite error:', error)
+      Alert.alert('Error', 'Failed to update favorites')
+    }
+  }
 
   const getImageUrl = async (userId, itemId) => {
     try {
@@ -303,6 +374,11 @@ const Home = () => {
     fetchItems()
   }, [fetchItems])
 
+  // Load favorites when user is available
+  useEffect(() => {
+    fetchFavorites()
+  }, [fetchFavorites])
+
   // Real-time updates
   useEffect(() => {
     const channel = supabase
@@ -320,6 +396,31 @@ const Home = () => {
       supabase.removeChannel(channel)
     }
   }, [fetchItems])
+
+  // Real-time updates for favorites
+  useEffect(() => {
+    if (!currentUser) return
+
+    const channel = supabase
+      .channel("favorites_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "favorites",
+          filter: `user_id=eq.${currentUser.id}`
+        },
+        () => {
+          fetchFavorites()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser, fetchFavorites])
 
   const renderItem = (item) => (
     <View style={styles.itemContainer}>
@@ -344,14 +445,17 @@ const Home = () => {
             <Text> 5.0</Text>
           </View>
         </View>
-        <View style={{ alignSelf: 'baseline', paddingLeft: 10 }}>
+        <View style={{ alignSelf: 'baseline' }}>
           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
           <Text style={styles.text}>{item.formattedDate}</Text>
           <View style={styles.moneyRateContainer}>
             <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-            <TouchableOpacity>
+            <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
               <Image
-                source={require('../../../assets/like.png')}
+                source={favorites.includes(item.item_id)
+                  ? require('../../../assets/liked.png')
+                  : require('../../../assets/like.png')
+                }
                 style={styles.likeImage}
               />
             </TouchableOpacity>
@@ -362,76 +466,88 @@ const Home = () => {
   )
 
   return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-      <View style={styles.topMenuBar}>
-        <TextInput
-          placeholder='Search'
-          placeholderTextColor={'#000'}
-          style={styles.searchContainer}
-          value={searchTerm}
-          onChangeText={setSearchTerm}
-        />
-        <TouchableOpacity>
-          <View style={styles.heartContainer}>
-            <Image source={require('../../../assets/heart.png')} style={styles.heartLogo} />
-            <Text>Likes</Text>
-          </View>
-        </TouchableOpacity>
-      </View>
+    <>
+      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+        <View style={styles.topMenuBar}>
+          <TextInput
+            placeholder='Search'
+            placeholderTextColor={'#000'}
+            style={styles.searchContainer}
+            value={searchTerm}
+            onChangeText={setSearchTerm}
+          />
+          <TouchableOpacity onPress={() => setFavoritesModalVisible(true)}>
+            <View style={styles.heartContainer}>
+              <Image source={require('../../../assets/heart.png')} style={styles.heartLogo} />
+              <Text>Likes({favorites.length})</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
 
-      {/* Categories */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.categoriesContainer}
-      >
-        <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
-          <Text style={[
-            styles.categoriesText,
-            selectedCategoryId === "" && styles.selectedCategoryText
-          ]}>
-            All
-          </Text>
-        </TouchableOpacity>
-        {categories.map((category) => (
-          <TouchableOpacity
-            key={category.category_id}
-            onPress={() => setSelectedCategoryId(selectedCategoryId === String(category.category_id) ? "" : String(category.category_id))}
-          >
+        {/* Categories */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.categoriesContainer}
+        >
+          <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
             <Text style={[
               styles.categoriesText,
-              selectedCategoryId === String(category.category_id) && styles.selectedCategoryText
+              selectedCategoryId === "" && styles.selectedCategoryText
             ]}>
-              {category.name}
+              All
             </Text>
           </TouchableOpacity>
-        ))}
+          {categories.map((category) => (
+            <TouchableOpacity
+              key={category.category_id}
+              onPress={() => setSelectedCategoryId(selectedCategoryId === String(category.category_id) ? "" : String(category.category_id))}
+            >
+              <Text style={[
+                styles.categoriesText,
+                selectedCategoryId === String(category.category_id) && styles.selectedCategoryText
+              ]}>
+                {category.name}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+
+        <View style={styles.itemTextContainer}>
+          <Text style={styles.itemText}>Items</Text>
+        </View>
+
+        {/* Items Grid */}
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#FFAB00" />
+            <Text style={styles.loadingText}>Loading items...</Text>
+          </View>
+        ) : items.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No items found</Text>
+          </View>
+        ) : (
+          <View style={styles.itemsGrid}>
+            {items.map((item, index) => (
+              <View key={item.item_id.toString()} style={styles.itemWrapper}>
+                {renderItem(item)}
+              </View>
+            ))}
+          </View>
+        )}
       </ScrollView>
 
-      <View style={styles.itemTextContainer}>
-        <Text style={styles.itemText}>Items</Text>
-      </View>
-
-      {/* Items Grid */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFAB00" />
-          <Text style={styles.loadingText}>Loading items...</Text>
-        </View>
-      ) : items.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No items found</Text>
-        </View>
-      ) : (
-        <View style={styles.itemsGrid}>
-          {items.map((item, index) => (
-            <View key={item.item_id.toString()} style={styles.itemWrapper}>
-              {renderItem(item)}
-            </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+      <FavoritesModal
+        visible={favoritesModalVisible}
+        onClose={() => setFavoritesModalVisible(false)}
+        currentUser={currentUser}
+        onFavoriteRemoved={(itemId) => {
+          // Update Home component's favorites state immediately
+          setFavorites(prev => prev.filter(id => id !== itemId))
+        }}
+      />
+    </>
   )
 }
 
@@ -527,7 +643,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 5
+    marginBottom: 5,
+    height: 50
   },
   itemName: {
     flex: 1,
@@ -557,7 +674,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8
+    marginTop: 8,
+    width: 130
   },
   loadingContainer: {
     flex: 1,
