@@ -155,33 +155,33 @@
 //         }
 //     }
 
-//     // Format message time
-//     const formatMessageTime = (timestamp) => {
-//         const messageTime = new Date(timestamp)
-//         const now = new Date()
+// // Format message time
+// const formatMessageTime = (timestamp) => {
+//     const messageTime = new Date(timestamp)
+//     const now = new Date()
 
-//         if (messageTime.toDateString() === now.toDateString()) {
-//             // Same day - show time
-//             return messageTime.toLocaleTimeString([], {
+//     if (messageTime.toDateString() === now.toDateString()) {
+//         // Same day - show time
+//         return messageTime.toLocaleTimeString([], {
+//             hour: '2-digit',
+//             minute: '2-digit'
+//         })
+//     } else {
+//         // Different day - show date and time
+//         return messageTime.toLocaleDateString() + ' ' +
+//             messageTime.toLocaleTimeString([], {
 //                 hour: '2-digit',
 //                 minute: '2-digit'
 //             })
-//         } else {
-//             // Different day - show date and time
-//             return messageTime.toLocaleDateString() + ' ' +
-//                 messageTime.toLocaleTimeString([], {
-//                     hour: '2-digit',
-//                     minute: '2-digit'
-//                 })
-//         }
 //     }
+// }
 
 //     // Scroll to bottom when new messages arrive
-//     const scrollToBottom = () => {
-//         setTimeout(() => {
-//             scrollViewRef.current?.scrollToEnd({ animated: true })
-//         }, 100)
-//     }
+// const scrollToBottom = () => {
+//     setTimeout(() => {
+//         scrollViewRef.current?.scrollToEnd({ animated: true })
+//     }, 100)
+// }
 
 //     // Load messages when component mounts
 //     useEffect(() => {
@@ -294,63 +294,63 @@
 //                 <View style={styles.headerSpacer} />
 //             </View>
 
-//             {/* Messages */}
-//             <ScrollView
-//                 ref={scrollViewRef}
-//                 style={styles.messagesContainer}
-//                 contentContainerStyle={styles.messagesContent}
-//                 showsVerticalScrollIndicator={false}
-//                 onContentSizeChange={() => scrollToBottom()}
-//             >
-//                 {loading ? (
-//                     <View style={styles.loadingContainer}>
-//                         <ActivityIndicator size="small" color="#FFAB00" />
-//                         <Text style={styles.loadingText}>Loading messages...</Text>
-//                     </View>
-//                 ) : messages.length === 0 ? (
-//                     <View style={styles.emptyContainer}>
-//                         <Text style={styles.emptyText}>No messages yet</Text>
-//                         <Text style={styles.emptySubtext}>Start the conversation!</Text>
-//                     </View>
-//                 ) : (
-//                     messages.map((message, index) => {
-//                         const isMyMessage = message.sender_id === currentUser.id
-//                         const showTimestamp = index === 0 ||
-//                             (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000 // 5 minutes
+// {/* Messages */}
+// <ScrollView
+//     ref={scrollViewRef}
+//     style={styles.messagesContainer}
+//     contentContainerStyle={styles.messagesContent}
+//     showsVerticalScrollIndicator={false}
+//     onContentSizeChange={() => scrollToBottom()}
+// >
+//     {loading ? (
+//         <View style={styles.loadingContainer}>
+//             <ActivityIndicator size="small" color="#FFAB00" />
+//             <Text style={styles.loadingText}>Loading messages...</Text>
+//         </View>
+//     ) : messages.length === 0 ? (
+//         <View style={styles.emptyContainer}>
+//             <Text style={styles.emptyText}>No messages yet</Text>
+//             <Text style={styles.emptySubtext}>Start the conversation!</Text>
+//         </View>
+//     ) : (
+//         messages.map((message, index) => {
+//             const isMyMessage = message.sender_id === currentUser.id
+//             const showTimestamp = index === 0 ||
+//                 (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000 // 5 minutes
 
-//                         return (
-//                             <View key={message.id}>
-//                                 {showTimestamp && (
-//                                     <Text style={styles.timestamp}>
-//                                         {formatMessageTime(message.created_at)}
-//                                     </Text>
-//                                 )}
-//                                 <View style={[
-//                                     styles.messageContainer,
-//                                     isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
-//                                 ]}>
-//                                     <View style={[
-//                                         styles.messageBubble,
-//                                         isMyMessage ? styles.myMessage : styles.otherMessage
-//                                     ]}>
-//                                         <Text style={[
-//                                             styles.messageText,
-//                                             isMyMessage ? styles.myMessageText : styles.otherMessageText
-//                                         ]}>
-//                                             {message.content}
-//                                         </Text>
-//                                     </View>
-//                                     {isMyMessage && (
-//                                         <Text style={styles.readStatus}>
-//                                             {message.read_at ? '✓✓' : '✓'}
-//                                         </Text>
-//                                     )}
-//                                 </View>
-//                             </View>
-//                         )
-//                     })
-//                 )}
-//             </ScrollView>
+//             return (
+//                 <View key={message.id}>
+//                     {showTimestamp && (
+//                         <Text style={styles.timestamp}>
+//                             {formatMessageTime(message.created_at)}
+//                         </Text>
+//                     )}
+//                     <View style={[
+//                         styles.messageContainer,
+//                         isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
+//                     ]}>
+//                         <View style={[
+//                             styles.messageBubble,
+//                             isMyMessage ? styles.myMessage : styles.otherMessage
+//                         ]}>
+//                             <Text style={[
+//                                 styles.messageText,
+//                                 isMyMessage ? styles.myMessageText : styles.otherMessageText
+//                             ]}>
+//                                 {message.content}
+//                             </Text>
+//                         </View>
+//                         {isMyMessage && (
+//                             <Text style={styles.readStatus}>
+//                                 {message.read_at ? '✓✓' : '✓'}
+//                             </Text>
+//                         )}
+//                     </View>
+//                 </View>
+//             )
+//         })
+//     )}
+// </ScrollView>
 
 //             {/* Message Input */}
 //             <View style={styles.inputContainer}>
@@ -563,8 +563,6 @@
 //     },
 // })
 
-// "use client"
-
 import {
     StyleSheet,
     Text,
@@ -673,6 +671,33 @@ const Chat = () => {
         }
     }
 
+    // Format message time
+    const formatMessageTime = (timestamp) => {
+        const messageTime = new Date(timestamp)
+        const now = new Date()
+
+        if (messageTime.toDateString() === now.toDateString()) {
+            // Same day - show time
+            return messageTime.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit'
+            })
+        } else {
+            // Different day - show date and time
+            return messageTime.toLocaleDateString() + ' ' +
+                messageTime.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                })
+        }
+    }
+
+    const scrollToBottom = () => {
+        setTimeout(() => {
+            scrollViewRef.current?.scrollToEnd({ animated: true })
+        }, 100)
+    }
+
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
             <KeyboardAvoidingView
@@ -698,35 +723,57 @@ const Chat = () => {
                     </View>
 
                     {/* Messages */}
+                    {/* Messages */}
                     <ScrollView
                         ref={scrollViewRef}
                         style={styles.messagesContainer}
                         contentContainerStyle={styles.messagesContent}
                         showsVerticalScrollIndicator={false}
-                        keyboardShouldPersistTaps="handled"
-                        onContentSizeChange={() =>
-                            scrollViewRef.current?.scrollToEnd({ animated: true })
-                        }
+                        onContentSizeChange={() => scrollToBottom()}
                     >
                         {loading ? (
-                            <View style={styles.centerContainer}>
+                            <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="small" color="#FFAB00" />
                                 <Text style={styles.loadingText}>Loading messages...</Text>
                             </View>
                         ) : messages.length === 0 ? (
-                            <View style={styles.centerContainer}>
+                            <View style={styles.emptyContainer}>
                                 <Text style={styles.emptyText}>No messages yet</Text>
                                 <Text style={styles.emptySubtext}>Start the conversation!</Text>
                             </View>
                         ) : (
-                            messages.map((message) => {
-                                const isMyMessage = message.sender_id === currentUser?.id
+                            messages.map((message, index) => {
+                                const isMyMessage = message.sender_id === currentUser.id
+                                const showTimestamp = index === 0 ||
+                                    (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000 // 5 minutes
+
                                 return (
-                                    <View key={message.id} style={[styles.messageRow, isMyMessage ? styles.myMessageRow : styles.otherMessageRow]}>
-                                        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-                                            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
-                                                {message.content}
+                                    <View key={message.id}>
+                                        {showTimestamp && (
+                                            <Text style={styles.timestamp}>
+                                                {formatMessageTime(message.created_at)}
                                             </Text>
+                                        )}
+                                        <View style={[
+                                            styles.messageContainer,
+                                            isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
+                                        ]}>
+                                            <View style={[
+                                                styles.messageBubble,
+                                                isMyMessage ? styles.myMessage : styles.otherMessage
+                                            ]}>
+                                                <Text style={[
+                                                    styles.messageText,
+                                                    isMyMessage ? styles.myMessageText : styles.otherMessageText
+                                                ]}>
+                                                    {message.content}
+                                                </Text>
+                                            </View>
+                                            {isMyMessage && (
+                                                <Text style={styles.readStatus}>
+                                                    {message.read_at ? '✓✓' : '✓'}
+                                                </Text>
+                                            )}
                                         </View>
                                     </View>
                                 )
@@ -735,9 +782,9 @@ const Chat = () => {
                     </ScrollView>
 
                     {/* Input fixed at bottom & moves with keyboard */}
-                    <View style={styles.inputArea}>
+                    <View style={styles.inputContainer}>
                         <TextInput
-                            style={styles.messageInput}
+                            style={styles.textInput}
                             value={newMessage}
                             onChangeText={setNewMessage}
                             placeholder="Type a message..."
@@ -746,7 +793,10 @@ const Chat = () => {
                             maxLength={1000}
                         />
                         <TouchableOpacity
-                            style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
+                            style={[
+                                styles.sendButton,
+                                (!newMessage.trim() || sending) && styles.sendButtonDisabled
+                            ]}
                             onPress={sendMessage}
                             disabled={!newMessage.trim() || sending}
                         >
@@ -759,146 +809,187 @@ const Chat = () => {
                     </View>
                 </View >
             </KeyboardAvoidingView>
-        </SafeAreaView>
+        </SafeAreaView >
     )
 }
 
 export default Chat
 
 const styles = StyleSheet.create({
-    container: { 
-        flex: 1, 
-        backgroundColor: "#FAF5EF" 
+    container: {
+        flex: 1,
+        backgroundColor: '#FAF5EF',
     },
     header: {
-        flexDirection: "row",
-        alignItems: "center",
+        flexDirection: 'row',
+        alignItems: 'center',
         paddingHorizontal: 20,
-        paddingTop: 50,
-        paddingBottom: 10,
-        backgroundColor: "#FFF",
+        paddingTop: 60,
+        paddingBottom: 15,
+        backgroundColor: '#FFF',
         borderBottomWidth: 1,
-        borderBottomColor: "#E5E5E5",
+        borderBottomColor: '#E5E5E5',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 2
     },
-    headerInfo: { 
-        flex: 1, 
-        marginLeft: 15 
+    backButton: {
+        fontSize: 16,
+        color: '#181818ff',
+        fontFamily: 'DM-Medium',
     },
-    headerTitle: { 
-        fontSize: 18, 
-        fontFamily: "DM-Bold", 
-        color: "#333" 
+    headerInfo: {
+        flex: 1,
+        marginLeft: 15,
     },
-    headerSubtitle: { 
-        fontSize: 14, 
-        color: "#666", 
-        fontFamily: "DM-Regular" 
+    headerTitle: {
+        fontSize: 18,
+        fontFamily: 'DM-Bold',
+        color: '#333'
     },
-    headerSpacer: { 
-        width: 30 
+    headerSubtitle: {
+        fontSize: 14,
+        color: '#666',
+        fontFamily: 'DM-Regular',
     },
-    backImage: { 
-        width: 24, 
-        height: 24 
+    headerSpacer: {
+        width: 50,
     },
-    messagesContainer: { 
-        flex: 1, 
-        paddingHorizontal: 15 
+    backImage: {
+        width: 30,
+        height: 30
     },
-    messagesContent: { 
-        paddingVertical: 10, 
-        flexGrow: 1 
+    messagesContainer: {
+        flex: 1,
+        paddingHorizontal: 15,
     },
-    centerContainer: { 
-        flex: 1, 
-        justifyContent: "center", 
-        alignItems: "center", 
-        minHeight: 200 
+    messagesContent: {
+        paddingVertical: 10,
     },
-    loadingText: { 
-        marginTop: 10, 
-        color: "#666", 
-        fontSize: 14 
+    loadingContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
     },
-    emptyText: { 
-        fontSize: 16, 
-        color: "#333", 
-        fontFamily: "DM-Medium", 
-        marginBottom: 5 
+    loadingText: {
+        marginTop: 10,
+        color: '#666',
+        fontSize: 14,
     },
-    emptySubtext: { 
-        fontSize: 14, 
-        color: "#666", 
-        fontFamily: "DM-Regular" 
+    emptyContainer: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        paddingVertical: 50,
     },
-    messageRow: { 
-        marginVertical: 2 
+    emptyText: {
+        fontSize: 16,
+        color: '#333',
+        fontFamily: 'DM-Medium',
+        marginBottom: 5,
     },
-    myMessageRow: { 
-        alignItems: "flex-end" 
+    emptySubtext: {
+        fontSize: 14,
+        color: '#666',
+        fontFamily: 'DM-Regular',
     },
-    otherMessageRow: { 
-        alignItems: "flex-start" 
+    timestamp: {
+        textAlign: 'center',
+        fontSize: 12,
+        color: '#999',
+        marginVertical: 15,
+        fontFamily: 'DM-Regular',
     },
-    messageBubble: { 
-        maxWidth: "75%", 
-        paddingHorizontal: 12, 
-        paddingVertical: 8, 
-        borderRadius: 16 
+    messageContainer: {
+        marginVertical: 2,
     },
-    myMessage: { 
-        backgroundColor: "#FFAB00", 
-        borderBottomRightRadius: 4 
+    myMessageContainer: {
+        alignItems: 'flex-end',
+    },
+    otherMessageContainer: {
+        alignItems: 'flex-start',
+    },
+    messageBubble: {
+        maxWidth: '80%',
+        paddingHorizontal: 15,
+        paddingVertical: 10,
+        borderRadius: 18,
+    },
+    myMessage: {
+        backgroundColor: '#FFAB00',
+        borderBottomRightRadius: 5,
     },
     otherMessage: {
-        backgroundColor: "#FFF",
-        borderBottomLeftRadius: 4,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 1 },
+        backgroundColor: '#FFF',
+        borderBottomLeftRadius: 5,
+        elevation: 1,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 1,
+        },
         shadowOpacity: 0.1,
         shadowRadius: 1,
-        elevation: 1,
     },
-    messageText: { 
-        fontSize: 16, 
-        fontFamily: "DM-Regular", 
-        lineHeight: 20 
+    messageText: {
+        fontSize: 16,
+        fontFamily: 'DM-Regular',
+        lineHeight: 20,
     },
-    myMessageText: { 
-        color: "#FFF" 
+    myMessageText: {
+        color: '#FFF',
     },
-    otherMessageText: { 
-        color: "#333" 
+    otherMessageText: {
+        color: '#333',
     },
-    inputArea: {
-        flexDirection: "row",
-        alignItems: "flex-end",
+    readStatus: {
+        fontSize: 12,
+        color: '#666',
+        marginTop: 2,
+        marginRight: 5,
+        textAlign: 'right',
+    },
+    inputContainer: {
+        flexDirection: 'row',
+        alignItems: 'flex-end',
         paddingHorizontal: 15,
-        paddingVertical: 30,
-        backgroundColor: "#FFF",
+        paddingVertical: 20,
+        backgroundColor: '#FFF',
         borderTopWidth: 1,
-        borderTopColor: "#E5E5E5",
+        borderTopColor: '#E5E5E5',
     },
-    messageInput: {
+    textInput: {
         flex: 1,
         borderWidth: 1,
-        borderColor: "#DDD",
+        borderColor: '#DDD',
         borderRadius: 20,
         paddingHorizontal: 15,
-        paddingVertical: 8,
+        paddingVertical: 10,
         fontSize: 16,
-        fontFamily: "DM-Regular",
+        fontFamily: 'DM-Regular',
         maxHeight: 100,
-        marginRight: 8,
+        marginRight: 10,
     },
     sendButton: {
-        backgroundColor: "#FFAB00",
+        backgroundColor: '#FFAB00',
         borderRadius: 20,
-        paddingHorizontal: 18,
+        paddingHorizontal: 20,
         paddingVertical: 10,
-        justifyContent: "center",
-        alignItems: "center",
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    sendButtonDisabled: { backgroundColor: "#DDD" },
-    sendButtonText: { color: "#FFF", fontSize: 16, fontFamily: "DM-Bold" },
+    sendButtonDisabled: {
+        backgroundColor: '#DDD',
+    },
+    sendButtonText: {
+        color: '#FFF',
+        fontSize: 16,
+        fontFamily: 'DM-Bold',
+    },
 })
