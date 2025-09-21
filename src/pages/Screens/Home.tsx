@@ -450,15 +450,20 @@ const Home = () => {
           <Text style={styles.text}>{item.formattedDate}</Text>
           <View style={styles.moneyRateContainer}>
             <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-            <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
-              <Image
-                source={favorites.includes(item.item_id)
-                  ? require('../../../assets/liked.png')
-                  : require('../../../assets/like.png')
-                }
-                style={styles.likeImage}
-              />
-            </TouchableOpacity>
+            <View style={{justifyContent: 'flex-end', flexDirection: 'row'}}>
+              <TouchableOpacity style={styles.messageContainer}>
+                <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
+                <Image
+                  source={favorites.includes(item.item_id)
+                    ? require('../../../assets/liked.png')
+                    : require('../../../assets/like.png')
+                  }
+                  style={styles.likeImage}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -669,6 +674,13 @@ const styles = StyleSheet.create({
   likeImage: {
     width: 20,
     height: 20
+  },
+  messageImage: {
+    width: 20,
+    height: 20
+  },
+  messageContainer: {
+    right: 5
   },
   moneyRateContainer: {
     flexDirection: 'row',
