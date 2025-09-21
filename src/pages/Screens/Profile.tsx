@@ -472,12 +472,15 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import { useNavigation } from '@react-navigation/native'
 import { useFavorites } from '../../components/FavoritesContext'
+import BookItemModal from '../../components/BookItemModal' // Import BookItemModal
 
 const Profile = () => {
   const navigation = useNavigation()
   const [recommendedItems, setRecommendedItems] = useState([])
   const [userProfile, setUserProfile] = useState(null)
   const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
+  const [bookModalVisible, setBookModalVisible] = useState(false) // Add modal state
+  const [selectedItem, setSelectedItem] = useState(null) // Add selected item state
 
   // Use shared favorites context instead of local state
   const { favorites, currentUser, toggleFavorite, isFavorited } = useFavorites()
@@ -548,7 +551,7 @@ const Profile = () => {
     }
   }, [getUserBookingStatus])
 
-  // Handle rent now button
+  // Handle rent now button - UPDATED to show BookItemModal
   const handleRentNow = (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to rent items')
@@ -570,8 +573,9 @@ const Profile = () => {
       return
     }
 
-    // Navigate to booking or show booking modal
-    Alert.alert('Booking', 'Navigate to booking screen or show booking modal')
+    // Show BookItemModal instead of alert
+    setSelectedItem(item)
+    setBookModalVisible(true)
   }
 
   useEffect(() => {
@@ -592,19 +596,6 @@ const Profile = () => {
 
     fetchUserProfile()
   }, [currentUser]) // currentUser from context
-
-  // Fetch user's favorites - REMOVED (now handled by context)
-  // const fetchFavorites = useCallback(async () => {
-  //   if (!currentUser) return
-  //   const { data, error } = await supabase
-  //     .from('favorites')
-  //     .select('item_id')
-  //     .eq('user_id', currentUser.id)
-  // 
-  //   if (!error) {
-  //     setFavorites(data.map(fav => fav.item_id))
-  //   }
-  // }, [currentUser])
 
   // Toggle favorites - SIMPLIFIED (now uses context)
   const handleToggleFavorite = async (itemId) => {
@@ -675,8 +666,9 @@ const Profile = () => {
       fetchUserBookings()
       fetchRecommendedItems()
     }
-  }, [currentUser, fetchUserBookings, fetchRecommendedItems]) // Removed fetchFavorites - handled by context
+  }, [currentUser, fetchUserBookings, fetchRecommendedItems])
 
+  // Handle message button press - UPDATED to navigate to Chat
   const handleMessage = async (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to send messages')
@@ -689,26 +681,36 @@ const Profile = () => {
     }
 
     try {
+      // First, get the other user's name
       const { data: otherUser, error: userError } = await supabase
         .from('users')
         .select('first_name, last_name')
         .eq('id', item.user_id)
         .single()
 
-      if (userError) return
+      if (userError) {
+        console.error('Error fetching user:', userError)
+        Alert.alert('Error', 'Failed to get user information')
+        return
+      }
 
-      const otherUserName = otherUser
-        ? `${otherUser.first_name} ${otherUser.last_name}`
-        : 'Unknown User'
+      // Create the display name
+      const otherUserName = otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User'
 
+      // Get or create conversation
       let { data: conversation, error } = await supabase
         .from('conversations')
         .select('*')
         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
         .single()
 
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+        throw error
+      }
+
       if (!conversation) {
-        const { data: newConversation } = await supabase
+        // Create new conversation
+        const { data: newConversation, error: createError } = await supabase
           .from('conversations')
           .insert([{
             user1_id: currentUser.id,
@@ -720,43 +722,24 @@ const Profile = () => {
           .select()
           .single()
 
+        if (createError) throw createError
         conversation = newConversation
       }
 
+      // Navigate to chat screen
       navigation.navigate('Chat', {
         conversationId: conversation.id,
         otherUserId: item.user_id,
-        otherUserName,
+        otherUserName: otherUserName,
         itemTitle: item.title,
         itemId: item.item_id
       })
 
-    } catch (e) {
+    } catch (error) {
+      console.error('Error creating/finding conversation:', error)
       Alert.alert('Error', 'Failed to start conversation')
     }
   }
-
-  // Real-time updates for favorites - SHARED SUBSCRIPTION (same channel name as Home.tsx)
-  useEffect(() => {
-    if (!currentUser) return
-
-    const channel = supabase
-      .channel("favorites_changes") // ← SAME channel name as Home.tsx
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "favorites",
-          filter: `user_id=eq.${currentUser.id}`
-        },
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [currentUser])
 
   // Real-time updates for rental transactions - SHARED SUBSCRIPTION
   useEffect(() => {
@@ -764,7 +747,7 @@ const Profile = () => {
 
     console.log('Setting up rental transactions real-time subscription') // Debug log
     const channel = supabase
-      .channel("profile_rental_transactions_changes")
+      .channel("rental_transactions_changes") // Use same channel name as Home.tsx
       .on(
         "postgres_changes",
         {
@@ -789,7 +772,7 @@ const Profile = () => {
   // Real-time updates for items - SHARED SUBSCRIPTION
   useEffect(() => {
     const channel = supabase
-      .channel("profile_items_changes")
+      .channel("items_changes") // Use same channel name as Home.tsx
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "items" },
@@ -872,70 +855,86 @@ const Profile = () => {
   }
 
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.profileText}>Profile</Text>
-        <View style={styles.profileContainer}>
-          <View style={styles.subprofileContainer}>
-            <Image
-              source={
-                userProfile?.face_image_url
-                  ? { uri: userProfile.face_image_url }
-                  : require('../../../assets/splash-icon.png') // fallback
-              }
-              style={styles.profileImage}
-            />
-            <View style={styles.informationContainer}>
-              <Text style={styles.nameText}>
-                {userProfile
-                  ? `${userProfile.first_name} ${userProfile.last_name}`
-                  : 'Loading...'}
-              </Text>
+    <>
+      <ScrollView style={styles.container}>
+        <View style={styles.header}>
+          <Text style={styles.profileText}>Profile</Text>
+          <View style={styles.profileContainer}>
+            <View style={styles.subprofileContainer}>
+              <Image
+                source={
+                  userProfile?.face_image_url
+                    ? { uri: userProfile.face_image_url }
+                    : require('../../../assets/splash-icon.png') // fallback
+                }
+                style={styles.profileImage}
+              />
+              <View style={styles.informationContainer}>
+                <Text style={styles.nameText}>
+                  {userProfile
+                    ? `${userProfile.first_name} ${userProfile.last_name}`
+                    : 'Loading...'}
+                </Text>
 
-              <Text style={styles.birthdayText}>
-                {userProfile?.dob
-                  ? new Date(userProfile.dob).toLocaleDateString()
-                  : 'Birthdate not available'}
-              </Text>
+                <Text style={styles.birthdayText}>
+                  {userProfile?.dob
+                    ? new Date(userProfile.dob).toLocaleDateString()
+                    : 'Birthdate not available'}
+                </Text>
+              </View>
             </View>
           </View>
-        </View>
 
-        <View style={styles.transactContainer}>
-          <Text style={styles.transactionText}>Transaction Management</Text>
-        </View>
+          <View style={styles.transactContainer}>
+            <Text style={styles.transactionText}>Transaction Management</Text>
+          </View>
 
-        <View style={styles.mainActivitiesContainer}>
-          <View style={styles.firstActivitiesContainer}>
-            <TouchableOpacity style={styles.subActivitiesContainer}>
-              <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
-              <Text>Active Rental</Text>
-            </TouchableOpacity>
+          <View style={styles.mainActivitiesContainer}>
+            <View style={styles.firstActivitiesContainer}>
+              <TouchableOpacity style={styles.subActivitiesContainer}>
+                <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
+                <Text>Active Rental</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity style={styles.subActivitiesContainer}>
+                <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
+                <Text>Pending</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity style={styles.subActivitiesContainer}>
+                <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
+                <Text>Completed</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-          <View style={styles.activitiesContainer}>
-            <TouchableOpacity style={styles.subActivitiesContainer}>
-              <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
-              <Text>Pending</Text>
-            </TouchableOpacity>
-          </View>
-          <View style={styles.activitiesContainer}>
-            <TouchableOpacity style={styles.subActivitiesContainer}>
-              <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
-              <Text>Completed</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
 
-        <View style={styles.mainItemContainer}>
-          <Text style={styles.itemText}>Items for you</Text>
-          {recommendedItems.length === 0 ? (
-            <ActivityIndicator size="large" color="#FFAB00" style={{ marginTop: 20 }} />
-          ) : (
-            recommendedItems.map(renderItem)
-          )}
+          <View style={styles.mainItemContainer}>
+            <Text style={styles.itemText}>Items for you</Text>
+            {recommendedItems.length === 0 ? (
+              <ActivityIndicator size="large" color="#FFAB00" style={{ marginTop: 20 }} />
+            ) : (
+              recommendedItems.map(renderItem)
+            )}
+          </View>
         </View>
-      </View>
-    </ScrollView>
+      </ScrollView>
+
+      {/* BookItemModal - Same as Home.tsx */}
+      <BookItemModal
+        visible={bookModalVisible}
+        onClose={() => setBookModalVisible(false)}
+        item={selectedItem}
+        currentUserId={currentUser?.id}
+        onBooked={() => {
+          // Refresh user bookings and items after booking
+          console.log('Booking completed, refreshing data...') // Debug log
+          fetchUserBookings()
+          fetchRecommendedItems()
+        }}
+      />
+    </>
   )
 }
 
