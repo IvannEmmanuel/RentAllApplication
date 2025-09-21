@@ -2,8 +2,10 @@
 // import React, { useEffect, useState, useCallback } from 'react'
 // import { supabase } from '../../../supbaseClient'
 // import FavoritesModal from '../../components/FavoriteModal'
+// import { useNavigation } from '@react-navigation/native'
 
 // const Home = () => {
+//   const navigation = useNavigation()
 //   const [items, setItems] = useState([])
 //   const [loading, setLoading] = useState(false)
 //   const [searchTerm, setSearchTerm] = useState("")
@@ -77,6 +79,79 @@
 //     } catch (error) {
 //       console.error('Toggle favorite error:', error)
 //       Alert.alert('Error', 'Failed to update favorites')
+//     }
+//   }
+
+//   // Handle message button press
+//   const handleMessage = async (item) => {
+//     if (!currentUser) {
+//       Alert.alert('Login Required', 'Please log in to send messages')
+//       return
+//     }
+
+//     if (currentUser.id === item.user_id) {
+//       Alert.alert('Cannot Message', 'You cannot send a message to yourself')
+//       return
+//     }
+
+//     try {
+//       // First, get the other user's name (matching your Inbox.tsx schema)
+//       const { data: otherUser, error: userError } = await supabase
+//         .from('users')
+//         .select('first_name, last_name')
+//         .eq('id', item.user_id)
+//         .single()
+
+//       if (userError) {
+//         console.error('Error fetching user:', userError)
+//         Alert.alert('Error', 'Failed to get user information')
+//         return
+//       }
+
+//       // Create the display name exactly like in your Inbox.tsx
+//       const otherUserName = otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User'
+
+//       // Get or create conversation
+//       let { data: conversation, error } = await supabase
+//         .from('conversations')
+//         .select('*')
+//         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
+//         .single()
+
+//       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+//         throw error
+//       }
+
+//       if (!conversation) {
+//         // Create new conversation
+//         const { data: newConversation, error: createError } = await supabase
+//           .from('conversations')
+//           .insert([{
+//             user1_id: currentUser.id,
+//             user2_id: item.user_id,
+//             item_id: item.item_id,
+//             last_message: `Interested in: ${item.title}`,
+//             last_message_at: new Date().toISOString()
+//           }])
+//           .select()
+//           .single()
+
+//         if (createError) throw createError
+//         conversation = newConversation
+//       }
+
+//       // Navigate to chat screen with the user name
+//       navigation.navigate('Chat', {
+//         conversationId: conversation.id,
+//         otherUserId: item.user_id,
+//         otherUserName: otherUserName, // Now properly defined
+//         itemTitle: item.title,
+//         itemId: item.item_id
+//       })
+
+//     } catch (error) {
+//       console.error('Error creating/finding conversation:', error)
+//       Alert.alert('Error', 'Failed to start conversation')
 //     }
 //   }
 
@@ -262,13 +337,16 @@
 //             <Text> 5.0</Text>
 //           </View>
 //         </View>
-//         <View style={{ alignSelf: 'baseline' }}>
+//         <View style={{ alignSelf: 'baseline', width: '100%' }}>
 //           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
 //           <Text style={styles.text}>{item.formattedDate}</Text>
 //           <View style={styles.moneyRateContainer}>
 //             <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-//             <View style={{justifyContent: 'flex-end', flexDirection: 'row'}}>
-//               <TouchableOpacity style={styles.messageContainer}>
+//             <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
+//               <TouchableOpacity
+//                 style={styles.messageContainer}
+//                 onPress={() => handleMessage(item)}
+//               >
 //                 <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
 //               </TouchableOpacity>
 //               <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
@@ -281,6 +359,11 @@
 //                 />
 //               </TouchableOpacity>
 //             </View>
+//           </View>
+//           <View style={styles.rentNowContainer}>
+//             <TouchableOpacity style={styles.buttonContainer}>
+//               <Text style={styles.rentText}>Rent Now</Text>
+//             </TouchableOpacity>
 //           </View>
 //         </View>
 //       </View>
@@ -465,7 +548,6 @@
 //     flexDirection: 'row',
 //     justifyContent: 'space-between',
 //     alignItems: 'center',
-//     marginBottom: 5,
 //     height: 50
 //   },
 //   itemName: {
@@ -503,7 +585,6 @@
 //     flexDirection: 'row',
 //     justifyContent: 'space-between',
 //     alignItems: 'center',
-//     marginTop: 8,
 //     width: 130
 //   },
 //   loadingContainer: {
@@ -527,6 +608,23 @@
 //     color: '#9C9894',
 //     fontSize: 18,
 //     fontFamily: 'DM-Medium'
+//   },
+//   rentNowContainer: {
+//     justifyContent: 'center',
+//     marginTop: 10,
+//   },
+//   buttonContainer: {
+//     backgroundColor: '#000',
+//     borderRadius: 10,
+//     height: 30,
+//     justifyContent: 'center',
+//     alignSelf: 'flex-end',
+//     width: '70%'
+//   },
+//   rentText: {
+//     color: '#FFF',
+//     fontFamily: 'DM-Medium',
+//     textAlign: 'center'
 //   }
 // })
 
@@ -534,6 +632,7 @@ import { Image, StyleSheet, Text, TextInput, TouchableOpacity, View, ScrollView,
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import FavoritesModal from '../../components/FavoriteModal'
+import BookItemModal from '../../components/BookItemModal'
 import { useNavigation } from '@react-navigation/native'
 
 const Home = () => {
@@ -546,6 +645,9 @@ const Home = () => {
   const [favorites, setFavorites] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [favoritesModalVisible, setFavoritesModalVisible] = useState(false)
+  const [bookModalVisible, setBookModalVisible] = useState(false)
+  const [selectedItem, setSelectedItem] = useState(null)
+  const [userBookings, setUserBookings] = useState([]) // Track user's bookings
 
   // Get current user
   useEffect(() => {
@@ -555,6 +657,93 @@ const Home = () => {
     }
     getCurrentUser()
   }, [])
+
+  // Fetch user's bookings
+  const fetchUserBookings = useCallback(async () => {
+    if (!currentUser) {
+      setUserBookings([])
+      return
+    }
+
+    try {
+      const { data, error } = await supabase
+        .from('rental_transactions')
+        .select('item_id, status')
+        .eq('renter_id', currentUser.id)
+        .in('status', ['pending', 'confirmed', 'ongoing'])
+
+      if (!error && data) {
+        setUserBookings(data)
+      }
+    } catch (error) {
+      console.error('Error fetching user bookings:', error)
+    }
+  }, [currentUser])
+
+  // Check if user has pending/active booking for an item
+  const getUserBookingStatus = (itemId) => {
+    return userBookings.find(booking => booking.item_id === itemId)?.status || null
+  }
+
+  // Handle rent now button
+  const handleRentNow = (item) => {
+    if (!currentUser) {
+      Alert.alert('Login Required', 'Please log in to rent items')
+      return
+    }
+
+    if (currentUser.id === item.user_id) {
+      Alert.alert('Your Item', 'You cannot rent your own item')
+      return
+    }
+
+    // Check if user already has a booking for this item
+    const bookingStatus = getUserBookingStatus(item.item_id)
+    if (bookingStatus) {
+      Alert.alert(
+        'Already Booked', 
+        `You already have a ${bookingStatus} booking for this item.`
+      )
+      return
+    }
+
+    setSelectedItem(item)
+    setBookModalVisible(true)
+  }
+
+  // Check if item belongs to current user
+  const isUserItem = (item) => {
+    return currentUser && currentUser.id === item.user_id
+  }
+
+  // Get button text and style based on item status
+  const getButtonInfo = (item) => {
+    const isOwner = isUserItem(item)
+    const bookingStatus = getUserBookingStatus(item.item_id)
+
+    if (isOwner) {
+      return {
+        text: 'Your Item',
+        disabled: true,
+        style: 'disabled'
+      }
+    }
+
+    if (bookingStatus) {
+      let statusText = bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1)
+      return {
+        text: statusText,
+        disabled: true,
+        style: 'pending'
+      }
+    }
+
+    return {
+      text: 'Rent Now',
+      disabled: false,
+      style: 'normal'
+    }
+  }
 
   // Fetch user's favorites
   const fetchFavorites = useCallback(async () => {
@@ -676,7 +865,7 @@ const Home = () => {
       navigation.navigate('Chat', {
         conversationId: conversation.id,
         otherUserId: item.user_id,
-        otherUserName: otherUserName, // Now properly defined
+        otherUserName: otherUserName,
         itemTitle: item.title,
         itemId: item.item_id
       })
@@ -798,12 +987,15 @@ const Home = () => {
     fetchItems()
   }, [fetchItems])
 
-  // Load favorites when user is available
+  // Load user data when user is available
   useEffect(() => {
-    fetchFavorites()
-  }, [fetchFavorites])
+    if (currentUser) {
+      fetchFavorites()
+      fetchUserBookings()
+    }
+  }, [currentUser, fetchFavorites, fetchUserBookings])
 
-  // Real-time updates
+  // Real-time updates for items
   useEffect(() => {
     const channel = supabase
       .channel("items_changes")
@@ -846,56 +1038,107 @@ const Home = () => {
     }
   }, [currentUser, fetchFavorites])
 
-  const renderItem = (item) => (
-    <View style={styles.itemContainer}>
-      <View style={styles.itemImageContainer}>
-        {item.imageUrl ? (
-          <Image
-            source={{ uri: item.imageUrl }}
-            style={styles.itemImage}
-            resizeMode="cover"
-          />
-        ) : (
-          <Image
-            source={require('../../../assets/splash-icon.png')}
-            style={styles.itemImage}
-            resizeMode="cover"
-          />
-        )}
-        <View style={styles.itemRateContainer}>
-          <Text style={styles.itemName}>{item.title}</Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }}>
-            <Image source={require('../../../assets/rate.png')} style={styles.rateImage} />
-            <Text> 5.0</Text>
+  // Real-time updates for rental transactions
+  useEffect(() => {
+    if (!currentUser) return
+
+    const channel = supabase
+      .channel("rental_transactions_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rental_transactions",
+          filter: `renter_id=eq.${currentUser.id}`
+        },
+        () => {
+          fetchUserBookings()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser, fetchUserBookings])
+
+  const renderItem = (item) => {
+    const isOwner = isUserItem(item)
+    const buttonInfo = getButtonInfo(item)
+    
+    return (
+      <View style={styles.itemContainer}>
+        <View style={styles.itemImageContainer}>
+          {item.imageUrl ? (
+            <Image
+              source={{ uri: item.imageUrl }}
+              style={styles.itemImage}
+              resizeMode="cover"
+            />
+          ) : (
+            <Image
+              source={require('../../../assets/splash-icon.png')}
+              style={styles.itemImage}
+              resizeMode="cover"
+            />
+          )}
+          <View style={styles.itemRateContainer}>
+            <Text style={styles.itemName}>{item.title}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }}>
+              <Image source={require('../../../assets/rate.png')} style={styles.rateImage} />
+              <Text> 5.0</Text>
+            </View>
           </View>
-        </View>
-        <View style={{ alignSelf: 'baseline' }}>
-          <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
-          <Text style={styles.text}>{item.formattedDate}</Text>
-          <View style={styles.moneyRateContainer}>
-            <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-            <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
-              <TouchableOpacity
-                style={styles.messageContainer}
-                onPress={() => handleMessage(item)}
+          <View style={{ alignSelf: 'baseline', width: '100%' }}>
+            <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
+            <Text style={styles.text}>{item.formattedDate}</Text>
+            <View style={styles.moneyRateContainer}>
+              <Text style={styles.moneyText}>{item.formattedPrice}</Text>
+              <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
+                {!isOwner && (
+                  <TouchableOpacity
+                    style={styles.messageContainer}
+                    onPress={() => handleMessage(item)}
+                  >
+                    <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
+                  <Image
+                    source={favorites.includes(item.item_id)
+                      ? require('../../../assets/liked.png')
+                      : require('../../../assets/like.png')
+                    }
+                    style={styles.likeImage}
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            <View style={styles.rentNowContainer}>
+              <TouchableOpacity 
+                style={[
+                  styles.buttonContainer,
+                  buttonInfo.style === 'disabled' && styles.disabledButtonContainer,
+                  buttonInfo.style === 'pending' && styles.pendingButtonContainer
+                ]}
+                onPress={() => handleRentNow(item)}
+                disabled={buttonInfo.disabled}
               >
-                <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
-                <Image
-                  source={favorites.includes(item.item_id)
-                    ? require('../../../assets/liked.png')
-                    : require('../../../assets/like.png')
-                  }
-                  style={styles.likeImage}
-                />
+                <Text style={[
+                  styles.rentText,
+                  buttonInfo.style === 'disabled' && styles.disabledRentText,
+                  buttonInfo.style === 'pending' && styles.pendingRentText
+                ]}>
+                  {buttonInfo.text}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
-    </View>
-  )
+    )
+  }
 
   return (
     <>
@@ -975,8 +1218,19 @@ const Home = () => {
         onClose={() => setFavoritesModalVisible(false)}
         currentUser={currentUser}
         onFavoriteRemoved={(itemId) => {
-          // Update Home component's favorites state immediately
           setFavorites(prev => prev.filter(id => id !== itemId))
+        }}
+      />
+
+      <BookItemModal
+        visible={bookModalVisible}
+        onClose={() => setBookModalVisible(false)}
+        item={selectedItem}
+        currentUserId={currentUser?.id}
+        onBooked={() => {
+          // Refresh user bookings and items after booking
+          fetchUserBookings()
+          fetchItems()
         }}
       />
     </>
@@ -1075,7 +1329,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 5,
     height: 50
   },
   itemName: {
@@ -1113,7 +1366,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
     width: 130
   },
   loadingContainer: {
@@ -1137,5 +1389,34 @@ const styles = StyleSheet.create({
     color: '#9C9894',
     fontSize: 18,
     fontFamily: 'DM-Medium'
+  },
+  rentNowContainer: {
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  buttonContainer: {
+    backgroundColor: '#000',
+    borderRadius: 10,
+    height: 30,
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    width: '70%'
+  },
+  disabledButtonContainer: {
+    backgroundColor: '#CCC',
+  },
+  pendingButtonContainer: {
+    backgroundColor: '#FF8C00', // Orange color for pending status
+  },
+  rentText: {
+    color: '#FFF',
+    fontFamily: 'DM-Medium',
+    textAlign: 'center'
+  },
+  disabledRentText: {
+    color: '#999',
+  },
+  pendingRentText: {
+    color: '#FFF',
   }
 })
