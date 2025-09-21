@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import { getFocusedRouteNameFromRoute } from '@react-navigation/native';
 import { Image, StyleSheet, View } from 'react-native';
 import Home from '../Screens/Home';
 import Inbox from '../Screens/Inbox';
@@ -30,17 +31,28 @@ const HomeStack = () => {
   );
 };
 
+// Helper function to determine if tab bar should be shown
+const getTabBarVisibility = (route) => {
+  const routeName = getFocusedRouteNameFromRoute(route);
+  
+  if (routeName === 'Chat') {
+    return { display: 'none' };
+  }
+  
+  return {
+    backgroundColor: '#FFF4E6',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    height: 80,
+  };
+};
+
 const Dashboard = () => {
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarStyle: {
-                    backgroundColor: '#FFF4E6',
-                    borderTopLeftRadius: 20,
-                    borderTopRightRadius: 20,
-                    height: 80,
-                },
+                tabBarStyle: getTabBarVisibility(route),
                 tabBarIconStyle: {
                     marginTop: 10,
                     marginBottom: 10
@@ -89,7 +101,7 @@ const Dashboard = () => {
                             style={{
                                 width: size,
                                 height: size,
-                                tintColor: focused ? '#1E1E1E' : 'gray', // optional tint
+                                tintColor: focused ? '#1E1E1E' : 'gray',
                             }}
                             resizeMode="contain"
                         />
@@ -99,13 +111,25 @@ const Dashboard = () => {
                 tabBarInactiveTintColor: 'gray',
             })}
         >
-            <Tab.Screen name="Home" component={HomeStack} />
-            <Tab.Screen name="Inbox" component={InboxStack} />
+            <Tab.Screen 
+                name="Home" 
+                component={HomeStack}
+                options={({ route }) => ({
+                    tabBarStyle: getTabBarVisibility(route),
+                })}
+            />
+            <Tab.Screen 
+                name="Inbox" 
+                component={InboxStack}
+                options={({ route }) => ({
+                    tabBarStyle: getTabBarVisibility(route),
+                })}
+            />
             <Tab.Screen
                 name="AddItem"
                 component={AddItem}
                 options={{
-                    tabBarLabel: () => null, // hide text
+                    tabBarLabel: () => null,
                 }}
             />
             <Tab.Screen name="Notification" component={Notification} />
