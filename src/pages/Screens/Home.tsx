@@ -4,6 +4,7 @@ import { supabase } from '../../../supbaseClient'
 import FavoritesModal from '../../components/FavoriteModal'
 import BookItemModal from '../../components/BookItemModal'
 import { useNavigation } from '@react-navigation/native'
+import { useFavorites } from '../../components/FavoritesContext'
 
 const Home = () => {
   const navigation = useNavigation()
@@ -12,21 +13,11 @@ const Home = () => {
   const [searchTerm, setSearchTerm] = useState("")
   const [categories, setCategories] = useState([])
   const [selectedCategoryId, setSelectedCategoryId] = useState("")
-  const [favorites, setFavorites] = useState([])
-  const [currentUser, setCurrentUser] = useState(null)
+  const { favorites, currentUser, toggleFavorite: contextToggleFavorite, isFavorited } = useFavorites()
   const [favoritesModalVisible, setFavoritesModalVisible] = useState(false)
   const [bookModalVisible, setBookModalVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
-
-  // Get current user
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser()
-      setCurrentUser(user)
-    }
-    getCurrentUser()
-  }, [])
 
   // Fetch user's bookings - SHARED FUNCTION
   const fetchUserBookings = useCallback(async () => {
@@ -76,7 +67,7 @@ const Home = () => {
     const bookingStatus = getUserBookingStatus(item.item_id)
     if (bookingStatus) {
       Alert.alert(
-        'Already Booked', 
+        'Already Booked',
         `You already have a ${bookingStatus} booking for this item.`
       )
       return
@@ -135,46 +126,10 @@ const Home = () => {
   }, [currentUser])
 
   // Toggle favorite
-  const toggleFavorite = async (itemId) => {
-    if (!currentUser) {
-      Alert.alert('Login Required', 'Please log in to add items to favorites')
-      return
-    }
-
-    const isFavorited = favorites.includes(itemId)
-
-    try {
-      if (isFavorited) {
-        // Remove from favorites
-        const { error } = await supabase
-          .from('favorites')
-          .delete()
-          .eq('user_id', currentUser.id)
-          .eq('item_id', itemId)
-
-        if (!error) {
-          setFavorites(prev => prev.filter(id => id !== itemId))
-        } else {
-          console.error('Error removing favorite:', error)
-        }
-      } else {
-        // Add to favorites
-        const { error } = await supabase
-          .from('favorites')
-          .insert([{
-            user_id: currentUser.id,
-            item_id: itemId
-          }])
-
-        if (!error) {
-          setFavorites(prev => [...prev, itemId])
-        } else {
-          console.error('Error adding favorite:', error)
-        }
-      }
-    } catch (error) {
-      console.error('Toggle favorite error:', error)
-      Alert.alert('Error', 'Failed to update favorites')
+  const handleToggleFavorite = async (itemId) => {
+    const result = await contextToggleFavorite(itemId)
+    if (!result.success && result.message) {
+      Alert.alert('Error', result.message)
     }
   }
 
@@ -444,7 +399,7 @@ const Home = () => {
   const renderItem = (item) => {
     const isOwner = isUserItem(item)
     const buttonInfo = getButtonInfo(item)
-    
+
     return (
       <View style={styles.itemContainer}>
         <View style={styles.itemImageContainer}>
@@ -482,19 +437,18 @@ const Home = () => {
                     <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
                   </TouchableOpacity>
                 )}
-                <TouchableOpacity onPress={() => toggleFavorite(item.item_id)}>
+                <TouchableOpacity onPress={() => handleToggleFavorite(item.item_id)}>
                   <Image
-                    source={favorites.includes(item.item_id)
+                    source={isFavorited(item.item_id)
                       ? require('../../../assets/liked.png')
-                      : require('../../../assets/like.png')
-                    }
+                      : require('../../../assets/like.png')}
                     style={styles.likeImage}
                   />
                 </TouchableOpacity>
               </View>
             </View>
             <View style={styles.rentNowContainer}>
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.buttonContainer,
                   buttonInfo.style === 'disabled' && styles.disabledButtonContainer,
