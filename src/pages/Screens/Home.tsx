@@ -19,6 +19,8 @@ const Home = () => {
   const [selectedItem, setSelectedItem] = useState(null)
   const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
 
+  // REMOVED - getCurrentUser useEffect (currentUser now comes from context)
+
   // Fetch user's bookings - SHARED FUNCTION
   const fetchUserBookings = useCallback(async () => {
     if (!currentUser) {
@@ -110,20 +112,6 @@ const Home = () => {
       style: 'normal'
     }
   }, [getUserBookingStatus])
-
-  // Fetch user's favorites
-  const fetchFavorites = useCallback(async () => {
-    if (!currentUser) return
-
-    const { data, error } = await supabase
-      .from('favorites')
-      .select('item_id')
-      .eq('user_id', currentUser.id)
-
-    if (!error) {
-      setFavorites(data.map(fav => fav.item_id))
-    }
-  }, [currentUser])
 
   // Toggle favorite
   const handleToggleFavorite = async (itemId) => {
@@ -317,13 +305,12 @@ const Home = () => {
     fetchItems()
   }, [fetchItems])
 
-  // Load user data when user is available
+  // Load user bookings when user is available - FIXED
   useEffect(() => {
     if (currentUser) {
-      fetchFavorites()
       fetchUserBookings()
     }
-  }, [currentUser, fetchFavorites, fetchUserBookings])
+  }, [currentUser, fetchUserBookings])
 
   // Real-time updates for items
   useEffect(() => {
@@ -343,38 +330,13 @@ const Home = () => {
     }
   }, [fetchItems])
 
-  // Real-time updates for favorites
-  useEffect(() => {
-    if (!currentUser) return
-
-    const channel = supabase
-      .channel("favorites_changes")
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "favorites",
-          filter: `user_id=eq.${currentUser.id}`
-        },
-        () => {
-          fetchFavorites()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [currentUser, fetchFavorites])
-
   // Real-time updates for rental transactions - SINGLE SOURCE OF TRUTH
   useEffect(() => {
     if (!currentUser) return
 
     console.log('Setting up rental transactions real-time subscription') // Debug log
     const channel = supabase
-      .channel("home_rental_transactions_changes")
+      .channel("rental_transactions_changes") // Use same channel name as Profile.tsx
       .on(
         "postgres_changes",
         {
@@ -554,7 +516,8 @@ const Home = () => {
         getButtonInfo={getButtonInfo} // PASS SHARED FUNCTION
         onBookingUpdate={fetchUserBookings} // PASS REFRESH FUNCTION
         onFavoriteRemoved={(itemId) => {
-          setFavorites(prev => prev.filter(id => id !== itemId))
+          // This callback is no longer needed since we're using context
+          // The context will handle the state update automatically
         }}
       />
 
