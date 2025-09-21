@@ -62,7 +62,7 @@ const Inbox = () => {
       }
 
       // Get user IDs to fetch user details
-      const otherUserIds = convData.map(conv => 
+      const otherUserIds = convData.map(conv =>
         conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id
       )
 
@@ -72,7 +72,7 @@ const Inbox = () => {
       // Fetch user details
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, first_name, last_name')
+        .select('id, first_name, last_name, face_image_url')
         .in('id', otherUserIds)
 
       if (usersError) {
@@ -104,6 +104,7 @@ const Inbox = () => {
           ...conv,
           otherUserId,
           otherUserName: otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User',
+          otherUserImage: otherUser?.face_image_url || null, // 👈 attach image here
           itemTitle: item?.title || 'Item not found',
           formattedTime: formatMessageTime(conv.last_message_at),
           preview: conv.last_message || 'No messages yet'
@@ -121,7 +122,7 @@ const Inbox = () => {
   // Format message time
   const formatMessageTime = (timestamp) => {
     if (!timestamp) return ''
-    
+
     const messageTime = new Date(timestamp)
     const now = new Date()
     const diffInHours = (now - messageTime) / (1000 * 60 * 60)
@@ -293,13 +294,19 @@ const Inbox = () => {
               activeOpacity={0.7}
             >
               <View style={styles.avatarContainer}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>
-                    {conversation.otherUserName.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
+                {conversation.otherUserImage ? (
+                  <Image
+                    source={{ uri: conversation.otherUserImage }}
+                    style={styles.avatarImage}
+                  />
+                ) : (
+                  <View style={styles.avatar}>
+                    <Text style={styles.avatarText}>
+                      {conversation.otherUserName.charAt(0).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
               </View>
-
               <View style={styles.conversationContent}>
                 <View style={styles.conversationHeader}>
                   <Text style={styles.userName} numberOfLines={1}>
@@ -338,7 +345,7 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: 30,
     paddingBottom: 20,
     backgroundColor: '#FAF5EF',
     borderBottomWidth: 1,
@@ -377,6 +384,13 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     marginRight: 15,
+  },
+  avatarImage: {
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   avatar: {
     width: 50,
