@@ -14,37 +14,46 @@ const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
 
 const InboxStack = () => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="InboxMain" component={Inbox} />
-      <Stack.Screen name="Chat" component={Chat} />
-    </Stack.Navigator>
-  );
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="InboxMain" component={Inbox} />
+            <Stack.Screen name="Chat" component={Chat} />
+        </Stack.Navigator>
+    );
 };
 
 const HomeStack = () => {
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      <Stack.Screen name="HomeMain" component={Home} />
-      <Stack.Screen name="Chat" component={Chat} />
-    </Stack.Navigator>
-  );
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="HomeMain" component={Home} />
+            <Stack.Screen name="Chat" component={Chat} />
+        </Stack.Navigator>
+    );
 };
+
+const ProfileStack = () => {
+    return (
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="ProfileMain" component={Profile} />
+            <Stack.Screen name="Chat" component={Chat} />
+        </Stack.Navigator>
+    )
+}
 
 // Helper function to determine if tab bar should be shown
 const getTabBarVisibility = (route) => {
-  const routeName = getFocusedRouteNameFromRoute(route);
-  
-  if (routeName === 'Chat') {
-    return { display: 'none' };
-  }
-  
-  return {
-    backgroundColor: '#FFF4E6',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    height: 80,
-  };
+    const routeName = getFocusedRouteNameFromRoute(route);
+
+    if (routeName === 'Chat') {
+        return { display: 'none' };
+    }
+
+    return {
+        backgroundColor: '#FFF4E6',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        height: 80,
+    };
 };
 
 const Dashboard = () => {
@@ -111,15 +120,15 @@ const Dashboard = () => {
                 tabBarInactiveTintColor: 'gray',
             })}
         >
-            <Tab.Screen 
-                name="Home" 
+            <Tab.Screen
+                name="Home"
                 component={HomeStack}
                 options={({ route }) => ({
                     tabBarStyle: getTabBarVisibility(route),
                 })}
             />
-            <Tab.Screen 
-                name="Inbox" 
+            <Tab.Screen
+                name="Inbox"
                 component={InboxStack}
                 options={({ route }) => ({
                     tabBarStyle: getTabBarVisibility(route),
@@ -133,7 +142,7 @@ const Dashboard = () => {
                 }}
             />
             <Tab.Screen name="Notification" component={Notification} />
-            <Tab.Screen name="Profile" component={Profile} />
+            <Tab.Screen name="Profile" component={ProfileStack} />
         </Tab.Navigator>
     );
 };
