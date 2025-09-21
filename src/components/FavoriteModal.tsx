@@ -12,6 +12,7 @@ import {
 import React, { useState, useEffect } from 'react'
 import { supabase } from '../../supbaseClient'
 import BookItemModal from './BookItemModal'
+import { useFavorites } from './FavoritesContext'
 
 const FavoritesModal = ({
     visible,
@@ -23,10 +24,18 @@ const FavoritesModal = ({
     onBookingUpdate, // RECEIVE REFRESH FUNCTION
     onFavoriteRemoved
 }) => {
-    const [favorites, setFavorites] = useState([])
+    const { favorites, toggleFavorite, fetchFavorites } = useFavorites()
+    const [favoriteItems, setFavoriteItems] = useState([])
     const [loading, setLoading] = useState(false)
     const [bookModalVisible, setBookModalVisible] = useState(false)
     const [selectedItem, setSelectedItem] = useState(null)
+
+    useEffect(() => {
+        if (visible) {
+            setLoading(true)
+            fetchFavorites().finally(() => setLoading(false))
+        }
+    }, [visible, fetchFavorites])
 
     // Handle rent now button
     const handleRentNow = (item) => {
@@ -86,10 +95,8 @@ const FavoritesModal = ({
 
     const fetchFavoriteItems = async () => {
         if (!currentUser) return
-
         setLoading(true)
         try {
-            // Get user's favorite item IDs
             const { data: favoriteIds, error: favError } = await supabase
                 .from('favorites')
                 .select('item_id')
@@ -97,14 +104,12 @@ const FavoritesModal = ({
                 .order('created_at', { ascending: false })
 
             if (favError) throw favError
-
             if (!favoriteIds || favoriteIds.length === 0) {
-                setFavorites([])
+                setFavoriteItems([])
                 setLoading(false)
                 return
             }
 
-            // Get the actual items data
             const itemIds = favoriteIds.map(fav => fav.item_id)
             const { data: items, error: itemsError } = await supabase
                 .from('items')
@@ -114,25 +119,21 @@ const FavoritesModal = ({
 
             if (itemsError) throw itemsError
 
-            // Sort items by the order they were favorited
-            const sortedItems = itemIds.map(id =>
-                items.find(item => item.item_id === id)
-            ).filter(Boolean)
+            const sortedItems = itemIds.map(id => items.find(item => item.item_id === id)).filter(Boolean)
 
-            // Fetch images for each item
             const withImages = await Promise.all(
                 sortedItems.map(async (item) => {
                     const imageUrl = await getImageUrl(item.user_id, item.item_id)
                     return {
                         ...item,
-                        imageUrl: imageUrl,
+                        imageUrl,
                         formattedPrice: `₱${item.price_per_day}`,
                         formattedDate: new Date(item.created_at).toLocaleDateString()
                     }
                 })
             )
 
-            setFavorites(withImages)
+            setFavoriteItems(withImages) // <-- store full objects in local state
         } catch (error) {
             console.error('Error fetching favorites:', error)
             Alert.alert('Error', 'Failed to load favorite items')
@@ -142,41 +143,34 @@ const FavoritesModal = ({
     }
 
     const removeFavorite = async (itemId) => {
-        if (!currentUser) return
-
         Alert.alert(
-            'Remove from Favorites',
+            'Remove Favorite',
             'Are you sure you want to remove this item from your favorites?',
             [
-                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Cancel',
+                    style: 'cancel',
+                },
                 {
                     text: 'Remove',
                     style: 'destructive',
                     onPress: async () => {
+                        // 1️⃣ Remove locally for instant UI
+                        setFavoriteItems(prev => prev.filter(item => item.item_id !== itemId))
+
+                        // 2️⃣ Remove from global context / database
                         try {
-                            const { error } = await supabase
-                                .from('favorites')
-                                .delete()
-                                .eq('user_id', currentUser.id)
-                                .eq('item_id', itemId)
-
-                            if (error) throw error
-
-                            setFavorites(prev => prev.filter(item => item.item_id !== itemId))
-
-                            // Notify parent component immediately
-                            if (onFavoriteRemoved) {
-                                onFavoriteRemoved(itemId)
-                            }
+                            await toggleFavorite(itemId)
                         } catch (error) {
                             console.error('Error removing favorite:', error)
-                            Alert.alert('Error', 'Failed to remove from favorites')
+                            Alert.alert('Error', 'Failed to remove favorite. Please try again.')
                         }
                     }
                 }
             ]
         )
     }
+
 
     useEffect(() => {
         if (visible && currentUser) {
@@ -290,7 +284,7 @@ const FavoritesModal = ({
                             <Text style={styles.countText}>
                                 {favorites.length} item{favorites.length !== 1 ? 's' : ''} in your favorites
                             </Text>
-                            {favorites.map(renderFavoriteItem)}
+                            {favoriteItems.map(item => renderFavoriteItem(item))}
                         </ScrollView>
                     )}
                 </View>
