@@ -8,6 +8,7 @@ import Face from '../pages/Register/Face';
 import { RegistrationProvider } from '../hooks/RegistrationContext';
 import Home from '../pages/Screens/Home';
 import Dashboard from '../pages/Dashboard/Dashboard';
+import FavoriteModal from './FavoriteModal';
 
 const Stack = createNativeStackNavigator();
 
@@ -23,6 +24,7 @@ export default function AppNavigator() {
                     <Stack.Screen name="Face" component={Face} />
                     <Stack.Screen name="Home" component={Home} />
                     <Stack.Screen name="Dashboard" component={Dashboard} />
+                    <Stack.Screen name="Favorites" component={FavoriteModal} />
                 </Stack.Navigator>
             </NavigationContainer>
         </RegistrationProvider>
