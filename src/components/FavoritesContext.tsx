@@ -4,12 +4,12 @@ import { supabase } from '../../supbaseClient'
 
 const FavoritesContext = createContext()
 
-export const useFavorites = () => { 
-    const context = useContext(FavoritesContext) 
-    if (!context) { 
-        throw new Error('useFavorites must be used within a FavoritesProvider') 
-    } 
-    return context 
+export const useFavorites = () => {
+    const context = useContext(FavoritesContext)
+    if (!context) {
+        throw new Error('useFavorites must be used within a FavoritesProvider')
+    }
+    return context
 }
 
 export const FavoritesProvider = ({ children }) => {
@@ -45,6 +45,29 @@ export const FavoritesProvider = ({ children }) => {
             console.error('Error fetching favorites:', error)
         }
     }, [currentUser])
+
+    const logout = async () => {
+        if (!currentUser) return
+
+        try {
+            // Optional: remove FCM tokens
+            await supabase
+                .from('user_fcm_tokens')
+                .delete()
+                .eq('user_id', currentUser.id)
+
+            // Sign out from Supabase
+            const { error } = await supabase.auth.signOut()
+            if (error) throw error
+
+            // Clear user & favorites
+            setCurrentUser(null)
+            setFavorites([])
+        } catch (err) {
+            console.error('Logout failed:', err)
+            throw err
+        }
+    }
 
     // Toggle favorite - SINGLE SOURCE OF TRUTH
     const toggleFavorite = useCallback(async (itemId) => {
@@ -143,12 +166,13 @@ export const FavoritesProvider = ({ children }) => {
         toggleFavorite,
         isFavorited,
         fetchFavorites,
-        favoritesCount: favorites.length
+        favoritesCount: favorites.length,
+        logout, // <-- add this
     }
 
     return (
-        <FavoritesContext.Provider value= { value } >
-        { children }
+        <FavoritesContext.Provider value={value} >
+            {children}
         </FavoritesContext.Provider>
-  )
+    )
 }
