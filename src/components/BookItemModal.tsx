@@ -12,6 +12,7 @@ import {
 import React, { useState, useEffect, useMemo } from 'react'
 import { Calendar } from 'react-native-calendars'
 import { supabase } from '../../supbaseClient'
+import { handleBookingStatusChange } from '../notifications/notifications'
 
 const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   const [loading, setLoading] = useState(false)
@@ -19,6 +20,8 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   const [selectedDates, setSelectedDates] = useState({})
   const [imageUrl, setImageUrl] = useState()
   const [errorMsg, setErrorMsg] = useState("")
+
+  const sentNotifications = new Set<string>();
 
   const today = new Date().toISOString().split('T')[0]
 
@@ -224,6 +227,62 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   const isOwner = currentUserId && item?.user_id && currentUserId === item.user_id
   const canSubmit = !loading && !isOwner && daysCount > 0 && !!currentUserId
 
+  // const submit = async () => {
+  //   setErrorMsg("")
+
+  //   if (!currentUserId) {
+  //     setErrorMsg("Please sign in to request a booking.")
+  //     return
+  //   }
+
+  //   if (!item?.item_id) return
+
+  //   if (daysCount === 0) {
+  //     setErrorMsg("Select rental dates to continue.")
+  //     return
+  //   }
+
+  //   if (isOwner) {
+  //     setErrorMsg("You can't rent your own item.")
+  //     return
+  //   }
+
+  //   try {
+  //     setLoading(true)
+
+  //     const payload = {
+  //       item_id: item.item_id,
+  //       renter_id: currentUserId,
+  //       start_date: startDate,
+  //       end_date: endDate,
+  //       total_cost: total,
+  //     }
+
+  //     const { error } = await supabase
+  //       .from("rental_transactions")
+  //       .insert([payload])
+
+  //     if (error) throw error
+
+  //     Alert.alert(
+  //       'Booking Requested',
+  //       'Your rental request has been submitted successfully!',
+  //       [{
+  //         text: 'OK', onPress: () => {
+  //           onBooked?.()
+  //           onClose()
+  //         }
+  //       }]
+  //     )
+
+  //   } catch (e) {
+  //     console.error('Booking error:', e)
+  //     setErrorMsg("Failed to submit booking. Please try again.")
+  //   } finally {
+  //     setLoading(false)
+  //   }
+  // }
+
   const submit = async () => {
     setErrorMsg("")
 
@@ -253,17 +312,37 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
         start_date: startDate,
         end_date: endDate,
         total_cost: total,
+        status: 'pending' // Explicitly set status
       }
 
-      const { error } = await supabase
+      const { data: newBooking, error } = await supabase
         .from("rental_transactions")
         .insert([payload])
+        .select()
+        .single()
 
       if (error) throw error
 
+      // Send notification to lessor about new booking request
+      try {
+        await handleBookingStatusChange(
+          {
+            rental_id: newBooking.rental_id,
+            renter_id: currentUserId,
+            item_id: item.item_id
+          },
+          null, // no old status
+          'pending'
+        )
+        console.log('Notification sent successfully')
+      } catch (notificationError) {
+        console.error('Error sending notification:', notificationError)
+        // Don't fail the booking if notification fails
+      }
+
       Alert.alert(
         'Booking Requested',
-        'Your rental request has been submitted successfully!',
+        'Your rental request has been submitted successfully! The owner will be notified.',
         [{
           text: 'OK', onPress: () => {
             onBooked?.()
