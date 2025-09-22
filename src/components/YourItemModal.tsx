@@ -1,608 +1,4 @@
-// import React, { useState, useEffect, useCallback } from 'react';
-// import {
-//   Modal,
-//   View,
-//   Text,
-//   ScrollView,
-//   TouchableOpacity,
-//   Image,
-//   StyleSheet,
-//   ActivityIndicator,
-//   Alert,
-//   RefreshControl
-// } from 'react-native';
-// import { supabase } from '../../supbaseClient';
-// import { handleBookingStatusChange } from '../notifications/notifications';
-
-// const PendingModal = ({ visible, onClose, currentUser }) => {
-//   const [pendingBookings, setPendingBookings] = useState([]);
-//   const [loading, setLoading] = useState(false);
-//   const [refreshing, setRefreshing] = useState(false);
-//   const [processingIds, setProcessingIds] = useState(new Set());
-
-//   // Fetch pending bookings where current user is the lessor (owner)
-//   const fetchPendingBookings = useCallback(async (showLoading = true) => {
-//     if (!currentUser) return;
-
-//     if (showLoading) setLoading(true);
-
-//     try {
-//       // Get pending transactions where current user owns the item
-//       const { data: transactions, error } = await supabase
-//         .from('rental_transactions')
-//         .select(`
-//           rental_id,
-//           item_id,
-//           renter_id,
-//           start_date,
-//           end_date,
-//           total_cost,
-//           created_at,
-//           items!inner(
-//             title,
-//             price_per_day,
-//             user_id,
-//             location
-//           ),
-//           users!rental_transactions_renter_id_fkey(
-//             first_name,
-//             last_name,
-//             face_image_url
-//           )
-//         `)
-//         .eq('status', 'pending')
-//         .eq('items.user_id', currentUser.id)
-//         .order('created_at', { ascending: false });
-
-//       if (error) throw error;
-
-//       // Fetch images for each item
-//       const bookingsWithImages = await Promise.all(
-//         (transactions || []).map(async (booking) => {
-//           const imageUrl = await getItemImage(booking.items.user_id, booking.item_id);
-//           return {
-//             ...booking,
-//             item_image: imageUrl,
-//             renter_name: `${booking.users.first_name} ${booking.users.last_name}`,
-//             formatted_dates: {
-//               start: new Date(booking.start_date).toLocaleDateString(),
-//               end: new Date(booking.end_date).toLocaleDateString(),
-//               created: new Date(booking.created_at).toLocaleDateString()
-//             }
-//           };
-//         })
-//       );
-
-//       setPendingBookings(bookingsWithImages);
-//     } catch (error) {
-//       console.error('Error fetching pending bookings:', error);
-//       Alert.alert('Error', 'Failed to load pending bookings');
-//     } finally {
-//       if (showLoading) setLoading(false);
-//     }
-//   }, [currentUser]);
-
-//   // Get item image
-//   const getItemImage = async (userId, itemId) => {
-//     try {
-//       const dir = `${userId}/${itemId}`;
-//       const { data: files, error } = await supabase.storage
-//         .from('Items-photos')
-//         .list(dir, {
-//           limit: 1,
-//           sortBy: { column: 'name', order: 'desc' }
-//         });
-
-//       if (error || !files || files.length === 0) return null;
-
-//       const fullPath = `${dir}/${files[0].name}`;
-//       const { data: pub } = supabase.storage
-//         .from('Items-photos')
-//         .getPublicUrl(fullPath);
-
-//       return pub?.publicUrl;
-//     } catch (error) {
-//       console.error('Error getting item image:', error);
-//       return null;
-//     }
-//   };
-
-//   // Handle accept booking
-//   const handleAccept = async (booking) => {
-//     const rentalId = booking.rental_id;
-
-//     if (processingIds.has(rentalId)) return; // Prevent double processing
-
-//     Alert.alert(
-//       'Accept Booking',
-//       `Accept ${booking.renter_name}'s request to rent "${booking.items.title}"?`,
-//       [
-//         { text: 'Cancel', style: 'cancel' },
-//         {
-//           text: 'Accept',
-//           style: 'default',
-//           onPress: async () => {
-//             setProcessingIds(prev => new Set([...prev, rentalId]));
-
-//             try {
-//               // Update status to confirmed
-//               const { error } = await supabase
-//                 .from('rental_transactions')
-//                 .update({ status: 'confirmed' })
-//                 .eq('rental_id', rentalId);
-
-//               if (error) throw error;
-
-//               // Send notification
-//               await handleBookingStatusChange(
-//                 booking,
-//                 'pending',
-//                 'confirmed'
-//               );
-
-//               // Remove from pending list
-//               setPendingBookings(prev => 
-//                 prev.filter(b => b.rental_id !== rentalId)
-//               );
-
-//               Alert.alert('Success', 'Booking accepted successfully!');
-//             } catch (error) {
-//               console.error('Error accepting booking:', error);
-//               Alert.alert('Error', 'Failed to accept booking. Please try again.');
-//             } finally {
-//               setProcessingIds(prev => {
-//                 const newSet = new Set(prev);
-//                 newSet.delete(rentalId);
-//                 return newSet;
-//               });
-//             }
-//           }
-//         }
-//       ]
-//     );
-//   };
-
-//   // Handle decline booking
-//   const handleDecline = async (booking) => {
-//     const rentalId = booking.rental_id;
-
-//     if (processingIds.has(rentalId)) return;
-
-//     Alert.alert(
-//       'Decline Booking',
-//       `Decline ${booking.renter_name}'s request to rent "${booking.items.title}"?`,
-//       [
-//         { text: 'Cancel', style: 'cancel' },
-//         {
-//           text: 'Decline',
-//           style: 'destructive',
-//           onPress: async () => {
-//             setProcessingIds(prev => new Set([...prev, rentalId]));
-
-//             try {
-//               // Update status to cancelled
-//               const { error } = await supabase
-//                 .from('rental_transactions')
-//                 .update({ status: 'cancelled' })
-//                 .eq('rental_id', rentalId);
-
-//               if (error) throw error;
-
-//               // Send notification
-//               await handleBookingStatusChange(
-//                 booking,
-//                 'pending',
-//                 'cancelled'
-//               );
-
-//               // Remove from pending list
-//               setPendingBookings(prev => 
-//                 prev.filter(b => b.rental_id !== rentalId)
-//               );
-
-//               Alert.alert('Booking Declined', 'The renter has been notified.');
-//             } catch (error) {
-//               console.error('Error declining booking:', error);
-//               Alert.alert('Error', 'Failed to decline booking. Please try again.');
-//             } finally {
-//               setProcessingIds(prev => {
-//                 const newSet = new Set(prev);
-//                 newSet.delete(rentalId);
-//                 return newSet;
-//               });
-//             }
-//           }
-//         }
-//       ]
-//     );
-//   };
-
-//   // Handle refresh
-//   const onRefresh = useCallback(async () => {
-//     setRefreshing(true);
-//     await fetchPendingBookings(false);
-//     setRefreshing(false);
-//   }, [fetchPendingBookings]);
-
-//   // Fetch data when modal opens
-//   useEffect(() => {
-//     if (visible && currentUser) {
-//       fetchPendingBookings();
-//     }
-//   }, [visible, currentUser, fetchPendingBookings]);
-
-//   // Real-time subscription for rental transactions
-//   useEffect(() => {
-//     if (!visible || !currentUser) return;
-
-//     const channel = supabase
-//       .channel('pending_rentals_changes')
-//       .on(
-//         'postgres_changes',
-//         {
-//           event: '*',
-//           schema: 'public',
-//           table: 'rental_transactions'
-//         },
-//         (payload) => {
-//           console.log('Rental transaction change in PendingModal:', payload);
-//           // Refresh data on any changes
-//           fetchPendingBookings(false);
-//         }
-//       )
-//       .subscribe();
-
-//     return () => {
-//       supabase.removeChannel(channel);
-//     };
-//   }, [visible, currentUser, fetchPendingBookings]);
-
-//   const renderBookingItem = (booking) => {
-//     const isProcessing = processingIds.has(booking.rental_id);
-
-//     return (
-//       <View key={booking.rental_id} style={styles.bookingCard}>
-//         <View style={styles.cardHeader}>
-//           <View style={styles.renterInfo}>
-//             <Image
-//               source={
-//                 booking.users.face_image_url
-//                   ? { uri: booking.users.face_image_url }
-//                   : require('../../assets/splash-icon.png')
-//               }
-//               style={styles.renterImage}
-//             />
-//             <View style={styles.renterDetails}>
-//               <Text style={styles.renterName}>{booking.renter_name}</Text>
-//               <Text style={styles.requestDate}>
-//                 Requested on {booking.formatted_dates.created}
-//               </Text>
-//             </View>
-//           </View>
-//           <View style={styles.statusBadge}>
-//             <Text style={styles.statusText}>PENDING</Text>
-//           </View>
-//         </View>
-
-//         <View style={styles.itemInfo}>
-//           <Image
-//             source={
-//               booking.item_image
-//                 ? { uri: booking.item_image }
-//                 : require('../../assets/splash-icon.png')
-//             }
-//             style={styles.itemImage}
-//           />
-//           <View style={styles.itemDetails}>
-//             <Text style={styles.itemTitle}>{booking.items.title}</Text>
-//             <Text style={styles.itemLocation}>{booking.items.location}</Text>
-//             <View style={styles.rentalPeriod}>
-//               <Text style={styles.dateText}>
-//                 {booking.formatted_dates.start} - {booking.formatted_dates.end}
-//               </Text>
-//               <Text style={styles.totalCost}>
-//                 Total: ₱{Number(booking.total_cost).toFixed(2)}
-//               </Text>
-//             </View>
-//           </View>
-//         </View>
-
-//         <View style={styles.actionButtons}>
-//           <TouchableOpacity
-//             style={[styles.button, styles.declineButton]}
-//             onPress={() => handleDecline(booking)}
-//             disabled={isProcessing}
-//           >
-//             {isProcessing ? (
-//               <ActivityIndicator size="small" color="#FF6B6B" />
-//             ) : (
-//               <Text style={styles.declineButtonText}>Decline</Text>
-//             )}
-//           </TouchableOpacity>
-
-//           <TouchableOpacity
-//             style={[styles.button, styles.acceptButton]}
-//             onPress={() => handleAccept(booking)}
-//             disabled={isProcessing}
-//           >
-//             {isProcessing ? (
-//               <ActivityIndicator size="small" color="#FFF" />
-//             ) : (
-//               <Text style={styles.acceptButtonText}>Accept</Text>
-//             )}
-//           </TouchableOpacity>
-//         </View>
-//       </View>
-//     );
-//   };
-
-//   return (
-//     <Modal
-//       visible={visible}
-//       animationType="slide"
-//       presentationStyle="pageSheet"
-//       onRequestClose={onClose}
-//     >
-//       <View style={styles.container}>
-//         {/* Header */}
-//         <View style={styles.header}>
-//           <Text style={styles.headerTitle}>Pending Bookings</Text>
-//           <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-//             <Text style={styles.closeButtonText}>✕</Text>
-//           </TouchableOpacity>
-//         </View>
-
-//         {/* Content */}
-//         {loading ? (
-//           <View style={styles.loadingContainer}>
-//             <ActivityIndicator size="large" color="#FFAB00" />
-//             <Text style={styles.loadingText}>Loading pending bookings...</Text>
-//           </View>
-//         ) : (
-//           <ScrollView 
-//             style={styles.content}
-//             showsVerticalScrollIndicator={false}
-//             refreshControl={
-//               <RefreshControl
-//                 refreshing={refreshing}
-//                 onRefresh={onRefresh}
-//                 colors={['#FFAB00']}
-//                 tintColor="#FFAB00"
-//               />
-//             }
-//           >
-//             {pendingBookings.length === 0 ? (
-//               <View style={styles.emptyContainer}>
-//                 <Image 
-//                   source={require('../../assets/pending.png')} 
-//                   style={styles.emptyImage}
-//                 />
-//                 <Text style={styles.emptyTitle}>No Pending Bookings</Text>
-//                 <Text style={styles.emptyText}>
-//                   You don't have any pending booking requests at the moment.
-//                 </Text>
-//               </View>
-//             ) : (
-//               <View style={styles.bookingsList}>
-//                 {pendingBookings.map(renderBookingItem)}
-//               </View>
-//             )}
-//           </ScrollView>
-//         )}
-//       </View>
-//     </Modal>
-//   );
-// };
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: '#FAF5EF',
-//   },
-//   header: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     paddingHorizontal: 20,
-//     paddingTop: 60,
-//     paddingBottom: 20,
-//     backgroundColor: '#FAF5EF',
-//     borderBottomWidth: 1,
-//     borderBottomColor: '#E5E5E5',
-//   },
-//   headerTitle: {
-//     fontSize: 20,
-//     fontFamily: 'DM-Bold',
-//     color: '#333',
-//     flex: 1,
-//   },
-//   closeButton: {
-//     width: 32,
-//     height: 32,
-//     borderRadius: 16,
-//     backgroundColor: '#FFF',
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     elevation: 2,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.1,
-//     shadowRadius: 3,
-//   },
-//   closeButtonText: {
-//     fontSize: 18,
-//     color: '#666',
-//     fontWeight: 'bold',
-//   },
-//   content: {
-//     flex: 1,
-//     paddingHorizontal: 20,
-//   },
-//   loadingContainer: {
-//     flex: 1,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//   },
-//   loadingText: {
-//     marginTop: 10,
-//     color: '#666',
-//     fontSize: 16,
-//   },
-//   emptyContainer: {
-//     flex: 1,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     paddingVertical: 60,
-//   },
-//   emptyImage: {
-//     width: 80,
-//     height: 80,
-//     marginBottom: 20,
-//     opacity: 0.5,
-//   },
-//   emptyTitle: {
-//     fontSize: 18,
-//     fontFamily: 'DM-Bold',
-//     color: '#333',
-//     marginBottom: 10,
-//   },
-//   emptyText: {
-//     fontSize: 14,
-//     color: '#666',
-//     textAlign: 'center',
-//     lineHeight: 20,
-//     paddingHorizontal: 40,
-//   },
-//   bookingsList: {
-//     paddingVertical: 20,
-//   },
-//   bookingCard: {
-//     backgroundColor: '#FFF',
-//     borderRadius: 12,
-//     padding: 16,
-//     marginBottom: 16,
-//     elevation: 2,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 2 },
-//     shadowOpacity: 0.1,
-//     shadowRadius: 4,
-//   },
-//   cardHeader: {
-//     flexDirection: 'row',
-//     justifyContent: 'space-between',
-//     alignItems: 'center',
-//     marginBottom: 16,
-//   },
-//   renterInfo: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     flex: 1,
-//   },
-//   renterImage: {
-//     width: 40,
-//     height: 40,
-//     borderRadius: 20,
-//     marginRight: 12,
-//   },
-//   renterDetails: {
-//     flex: 1,
-//   },
-//   renterName: {
-//     fontSize: 16,
-//     fontFamily: 'DM-Bold',
-//     color: '#333',
-//   },
-//   requestDate: {
-//     fontSize: 12,
-//     color: '#666',
-//     marginTop: 2,
-//   },
-//   statusBadge: {
-//     backgroundColor: '#FF8C00',
-//     paddingHorizontal: 8,
-//     paddingVertical: 4,
-//     borderRadius: 12,
-//   },
-//   statusText: {
-//     fontSize: 10,
-//     fontFamily: 'DM-Bold',
-//     color: '#FFF',
-//   },
-//   itemInfo: {
-//     flexDirection: 'row',
-//     marginBottom: 16,
-//   },
-//   itemImage: {
-//     width: 80,
-//     height: 80,
-//     borderRadius: 8,
-//     marginRight: 12,
-//   },
-//   itemDetails: {
-//     flex: 1,
-//     justifyContent: 'space-between',
-//   },
-//   itemTitle: {
-//     fontSize: 16,
-//     fontFamily: 'DM-Bold',
-//     color: '#333',
-//     marginBottom: 4,
-//   },
-//   itemLocation: {
-//     fontSize: 12,
-//     color: '#666',
-//     marginBottom: 8,
-//   },
-//   rentalPeriod: {
-//     gap: 4,
-//   },
-//   dateText: {
-//     fontSize: 14,
-//     fontFamily: 'DM-Medium',
-//     color: '#333',
-//   },
-//   totalCost: {
-//     fontSize: 16,
-//     fontFamily: 'DM-Bold',
-//     color: '#FFAB00',
-//   },
-//   actionButtons: {
-//     flexDirection: 'row',
-//     gap: 12,
-//   },
-//   button: {
-//     flex: 1,
-//     paddingVertical: 12,
-//     borderRadius: 8,
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     minHeight: 44,
-//   },
-//   declineButton: {
-//     backgroundColor: '#FFF',
-//     borderWidth: 1,
-//     borderColor: '#FF6B6B',
-//   },
-//   acceptButton: {
-//     backgroundColor: '#28A745',
-//   },
-//   declineButtonText: {
-//     color: '#FF6B6B',
-//     fontSize: 14,
-//     fontFamily: 'DM-Bold',
-//   },
-//   acceptButtonText: {
-//     color: '#FFF',
-//     fontSize: 14,
-//     fontFamily: 'DM-Bold',
-//   },
-// });
-
-// export default PendingModal;
-
-"use client"
-
-import { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Modal,
   View,
@@ -613,318 +9,411 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  RefreshControl,
-} from "react-native"
-import { supabase } from "../../supbaseClient"
-import { handleBookingStatusChange } from "../notifications/notifications"
+  RefreshControl
+} from 'react-native';
+import { supabase } from '../../supbaseClient';
+import { handleBookingStatusChange } from '../notifications/notifications';
 
 const YourItemsModal = ({ visible, onClose, currentUser }) => {
-  const [bookings, setBookings] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [refreshing, setRefreshing] = useState(false)
-  const [processingIds, setProcessingIds] = useState(new Set())
-  const [activeTab, setActiveTab] = useState("pending") // 'pending', 'active', 'completed'
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [processingIds, setProcessingIds] = useState(new Set());
+  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'active', 'completed'
 
   // Fetch bookings based on status
-  const fetchBookings = useCallback(
-    async (showLoading = true) => {
-      if (!currentUser) return
+  const fetchBookings = useCallback(async (showLoading = true) => {
+    if (!currentUser) return;
 
-      if (showLoading) setLoading(true)
+    if (showLoading) setLoading(true);
 
-      try {
-        let statusFilter
-        if (activeTab === "pending") {
-          statusFilter = ["pending"]
-        } else if (activeTab === "active") {
-          statusFilter = ["confirmed", "ongoing"]
-        } else {
-          statusFilter = ["completed", "completed"]
-        }
-
-        // Get transactions where current user owns the item
-        const { data: transactions, error } = await supabase
-          .from("rental_transactions")
-          .select(
-            `rental_id, item_id, renter_id, start_date, end_date, total_cost, status, created_at, items!inner(title, price_per_day, user_id, location), users!rental_transactions_renter_id_fkey(first_name, last_name, face_image_url)`,
-          )
-          .eq("items.user_id", currentUser.id)
-          .in("status", statusFilter)
-          .order("created_at", { ascending: false })
-
-        if (error) throw error
-
-        // For active rentals, check if any should be moved to ongoing status
-        if (activeTab === "active") {
-          const now = new Date()
-          const toUpdate = transactions.filter(
-            (booking) => booking.status === "confirmed" && new Date(booking.start_date) <= now,
-          )
-
-          // Update confirmed bookings to ongoing if start date has passed
-          for (const booking of toUpdate) {
-            await supabase.from("rental_transactions").update({ status: "ongoing" }).eq("rental_id", booking.rental_id)
-
-            booking.status = "ongoing" // Update local state
-          }
-        }
-
-        // Fetch images for each item
-        const bookingsWithImages = await Promise.all(
-          (transactions || []).map(async (booking) => {
-            const imageUrl = await getItemImage(booking.items.user_id, booking.item_id)
-            return {
-              ...booking,
-              item_image: imageUrl,
-              renter_name: `${booking.users.first_name} ${booking.users.last_name}`,
-              formatted_dates: {
-                start: new Date(booking.start_date).toLocaleDateString(),
-                end: new Date(booking.end_date).toLocaleDateString(),
-                created: new Date(booking.created_at).toLocaleDateString(),
-              },
-              is_overdue: activeTab === "active" && new Date(booking.end_date) < new Date(),
-            }
-          }),
-        )
-
-        setBookings(bookingsWithImages)
-      } catch (error) {
-        console.error("Error fetching bookings:", error)
-        Alert.alert("Error", "Failed to load bookings")
-      } finally {
-        if (showLoading) setLoading(false)
+    try {
+      let statusFilter;
+      if (activeTab === 'pending') {
+        statusFilter = ['pending'];
+      } else if (activeTab === 'active') {
+        statusFilter = ['confirmed', 'ongoing'];
+      } else {
+        statusFilter = ['completed', 'completed'];
       }
-    },
-    [currentUser, activeTab],
-  )
+
+      // Get transactions where current user owns the item
+      // In the fetchBookings function, update the select query to include quantity:
+      const { data: transactions, error } = await supabase
+        .from('rental_transactions')
+        .select(`
+    rental_id,
+    item_id,
+    renter_id,
+    start_date,
+    end_date,
+    total_cost,
+    status,
+    created_at,
+    items!inner(
+      title,
+      price_per_day,
+      user_id,
+      location,
+      quantity
+    ),
+    users!rental_transactions_renter_id_fkey(
+      first_name,
+      last_name,
+      face_image_url
+    )
+  `)
+        .eq('items.user_id', currentUser.id)
+        .in('status', statusFilter)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // For active rentals, check if any should be moved to ongoing status
+      if (activeTab === 'active') {
+        const now = new Date();
+        const toUpdate = transactions.filter(booking =>
+          booking.status === 'confirmed' && new Date(booking.start_date) <= now
+        );
+
+        // Update confirmed bookings to ongoing if start date has passed
+        for (const booking of toUpdate) {
+          await supabase
+            .from('rental_transactions')
+            .update({ status: 'ongoing' })
+            .eq('rental_id', booking.rental_id);
+
+          booking.status = 'ongoing'; // Update local state
+        }
+      }
+
+      // Fetch images for each item
+      const bookingsWithImages = await Promise.all(
+        (transactions || []).map(async (booking) => {
+          const imageUrl = await getItemImage(booking.items.user_id, booking.item_id);
+          return {
+            ...booking,
+            item_image: imageUrl,
+            renter_name: `${booking.users.first_name} ${booking.users.last_name}`,
+            formatted_dates: {
+              start: new Date(booking.start_date).toLocaleDateString(),
+              end: new Date(booking.end_date).toLocaleDateString(),
+              created: new Date(booking.created_at).toLocaleDateString()
+            },
+            is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date()
+          };
+        })
+      );
+
+      setBookings(bookingsWithImages);
+    } catch (error) {
+      console.error('Error fetching bookings:', error);
+      Alert.alert('Error', 'Failed to load bookings');
+    } finally {
+      if (showLoading) setLoading(false);
+    }
+  }, [currentUser, activeTab]);
 
   // Get item image
   const getItemImage = async (userId, itemId) => {
     try {
-      const dir = `${userId}/${itemId}`
-      const { data: files, error } = await supabase.storage.from("Items-photos").list(dir, {
-        limit: 1,
-        sortBy: { column: "name", order: "desc" },
-      })
+      const dir = `${userId}/${itemId}`;
+      const { data: files, error } = await supabase.storage
+        .from('Items-photos')
+        .list(dir, {
+          limit: 1,
+          sortBy: { column: 'name', order: 'desc' }
+        });
 
-      if (error || !files || files.length === 0) return null
+      if (error || !files || files.length === 0) return null;
 
-      const fullPath = `${dir}/${files[0].name}`
-      const { data: pub } = supabase.storage.from("Items-photos").getPublicUrl(fullPath)
+      const fullPath = `${dir}/${files[0].name}`;
+      const { data: pub } = supabase.storage
+        .from('Items-photos')
+        .getPublicUrl(fullPath);
 
-      return pub?.publicUrl
+      return pub?.publicUrl;
     } catch (error) {
-      console.error("Error getting item image:", error)
-      return null
+      console.error('Error getting item image:', error);
+      return null;
     }
-  }
+  };
 
-  // Handle accept booking (for pending)
+  // Handle accept booking (for pending) - WITHOUT quantity in rental_transactions
   const handleAccept = async (booking) => {
-    const rentalId = booking.rental_id
+    const rentalId = booking.rental_id;
 
-    if (processingIds.has(rentalId)) return
+    if (processingIds.has(rentalId)) return;
 
-    Alert.alert("Accept Booking", `Accept ${booking.renter_name}'s request to rent "${booking.items.title}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Accept",
-        style: "default",
-        onPress: async () => {
-          setProcessingIds((prev) => new Set([...prev, rentalId]))
+    Alert.alert(
+      'Accept Booking',
+      `Accept ${booking.renter_name}'s request to rent "${booking.items.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Accept',
+          style: 'default',
+          onPress: async () => {
+            setProcessingIds(prev => new Set([...prev, rentalId]));
 
-          try {
-            const { error } = await supabase
-              .from("rental_transactions")
-              .update({ status: "confirmed" })
-              .eq("rental_id", rentalId)
+            try {
+              // First, get the current item quantity
+              const { data: itemData, error: itemError } = await supabase
+                .from('items')
+                .select('quantity')
+                .eq('item_id', booking.item_id)
+                .single();
 
-            if (error) throw error
+              if (itemError) throw itemError;
 
-            await handleBookingStatusChange(booking, "pending", "confirmed")
+              const currentQuantity = itemData.quantity;
+              const requestedQuantity = 1; // Default to 1 since quantity isn't stored in rental_transactions
 
-            setBookings((prev) => prev.filter((b) => b.rental_id !== rentalId))
+              // Check if there's enough quantity available
+              if (currentQuantity < requestedQuantity) {
+                Alert.alert('Error', `Not enough quantity available. Only ${currentQuantity} item(s) left.`);
+                return;
+              }
 
-            Alert.alert("Success", "Booking accepted successfully!")
-          } catch (error) {
-            console.error("Error accepting booking:", error)
-            Alert.alert("Error", "Failed to accept booking. Please try again.")
-          } finally {
-            setProcessingIds((prev) => {
-              const newSet = new Set(prev)
-              newSet.delete(rentalId)
-              return newSet
-            })
+              // Calculate new quantity
+              const newQuantity = currentQuantity - requestedQuantity;
+
+              // Update the rental transaction status
+              const { error: transactionError } = await supabase
+                .from('rental_transactions')
+                .update({ status: 'confirmed' })
+                .eq('rental_id', rentalId);
+
+              if (transactionError) throw transactionError;
+
+              // Update the item quantity
+              const { error: quantityError } = await supabase
+                .from('items')
+                .update({ quantity: newQuantity })
+                .eq('item_id', booking.item_id);
+
+              if (quantityError) throw quantityError;
+
+              await handleBookingStatusChange(
+                booking,
+                'pending',
+                'confirmed'
+              );
+
+              setBookings(prev =>
+                prev.filter(b => b.rental_id !== rentalId)
+              );
+
+              Alert.alert('Success', 'Booking accepted successfully! Quantity updated.');
+            } catch (error) {
+              console.error('Error accepting booking:', error);
+              Alert.alert('Error', 'Failed to accept booking. Please try again.');
+            } finally {
+              setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(rentalId);
+                return newSet;
+              });
+            }
           }
-        },
-      },
-    ])
-  }
+        }
+      ]
+    );
+  };
 
   // Handle decline booking (for pending)
   const handleDecline = async (booking) => {
-    const rentalId = booking.rental_id
+    const rentalId = booking.rental_id;
 
-    if (processingIds.has(rentalId)) return
+    if (processingIds.has(rentalId)) return;
 
-    Alert.alert("Decline Booking", `Decline ${booking.renter_name}'s request to rent "${booking.items.title}"?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Decline",
-        style: "destructive",
-        onPress: async () => {
-          setProcessingIds((prev) => new Set([...prev, rentalId]))
+    Alert.alert(
+      'Decline Booking',
+      `Decline ${booking.renter_name}'s request to rent "${booking.items.title}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Decline',
+          style: 'destructive',
+          onPress: async () => {
+            setProcessingIds(prev => new Set([...prev, rentalId]));
 
-          try {
-            const { error } = await supabase
-              .from("rental_transactions")
-              .update({ status: "cancelled" })
-              .eq("rental_id", rentalId)
+            try {
+              const { error } = await supabase
+                .from('rental_transactions')
+                .update({ status: 'cancelled' })
+                .eq('rental_id', rentalId);
 
-            if (error) throw error
+              if (error) throw error;
 
-            await handleBookingStatusChange(booking, "pending", "cancelled")
+              await handleBookingStatusChange(
+                booking,
+                'pending',
+                'cancelled'
+              );
 
-            setBookings((prev) => prev.filter((b) => b.rental_id !== rentalId))
+              setBookings(prev =>
+                prev.filter(b => b.rental_id !== rentalId)
+              );
 
-            Alert.alert("Booking Declined", "The renter has been notified.")
-          } catch (error) {
-            console.error("Error declining booking:", error)
-            Alert.alert("Error", "Failed to decline booking. Please try again.")
-          } finally {
-            setProcessingIds((prev) => {
-              const newSet = new Set(prev)
-              newSet.delete(rentalId)
-              return newSet
-            })
+              Alert.alert('Booking Declined', 'The renter has been notified.');
+            } catch (error) {
+              console.error('Error declining booking:', error);
+              Alert.alert('Error', 'Failed to decline booking. Please try again.');
+            } finally {
+              setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(rentalId);
+                return newSet;
+              });
+            }
           }
-        },
-      },
-    ])
-  }
+        }
+      ]
+    );
+  };
 
   // Handle returned (for active rentals)
+  // Handle returned (for active rentals)
   const handleReturned = async (booking) => {
-    const rentalId = booking.rental_id
+    const rentalId = booking.rental_id;
 
-    if (processingIds.has(rentalId)) return
+    if (processingIds.has(rentalId)) return;
 
-    Alert.alert("Mark as Returned", `Mark "${booking.items.title}" as returned by ${booking.renter_name}?`, [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Returned",
-        style: "default",
-        onPress: async () => {
-          setProcessingIds((prev) => new Set([...prev, rentalId]))
+    Alert.alert(
+      'Mark as Returned',
+      `Mark "${booking.items.title}" as returned by ${booking.renter_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Returned',
+          style: 'default',
+          onPress: async () => {
+            setProcessingIds(prev => new Set([...prev, rentalId]));
 
-          try {
-            const { error } = await supabase
-              .from("rental_transactions")
-              .update({ status: "completed" })
-              .eq("rental_id", rentalId)
+            try {
+              // Get the original quantity that was rented
+              const rentedQuantity = booking.quantity || 1;
 
-            if (error) throw error
+              // Get current item quantity
+              const { data: itemData, error: itemError } = await supabase
+                .from('items')
+                .select('quantity')
+                .eq('item_id', booking.item_id)
+                .single();
 
-            await handleBookingStatusChange(booking, booking.status, "returned")
+              if (itemError) throw itemError;
 
-            setBookings((prev) => prev.filter((b) => b.rental_id !== rentalId))
+              const currentQuantity = itemData.quantity;
+              const newQuantity = currentQuantity + rentedQuantity;
 
-            Alert.alert("Success", "Item marked as returned!")
-          } catch (error) {
-            console.error("Error marking as returned:", error)
-            Alert.alert("Error", "Failed to mark as returned. Please try again.")
-          } finally {
-            setProcessingIds((prev) => {
-              const newSet = new Set(prev)
-              newSet.delete(rentalId)
-              return newSet
-            })
+              // Update the rental transaction status
+              const { error: transactionError } = await supabase
+                .from('rental_transactions')
+                .update({ status: 'returned' })
+                .eq('rental_id', rentalId);
+
+              if (transactionError) throw transactionError;
+
+              // Update the item quantity (add back the rented quantity)
+              const { error: quantityError } = await supabase
+                .from('items')
+                .update({ quantity: newQuantity })
+                .eq('item_id', booking.item_id);
+
+              if (quantityError) throw quantityError;
+
+              await handleBookingStatusChange(
+                booking,
+                booking.status,
+                'returned'
+              );
+
+              setBookings(prev =>
+                prev.filter(b => b.rental_id !== rentalId)
+              );
+
+              Alert.alert('Success', 'Item marked as returned! Quantity updated.');
+            } catch (error) {
+              console.error('Error marking as returned:', error);
+              Alert.alert('Error', 'Failed to mark as returned. Please try again.');
+            } finally {
+              setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(rentalId);
+                return newSet;
+              });
+            }
           }
-        },
-      },
-    ])
-  }
+        }
+      ]
+    );
+  };
 
   // Handle refresh
   const onRefresh = useCallback(async () => {
-    setRefreshing(true)
-    await fetchBookings(false)
-    setRefreshing(false)
-  }, [fetchBookings])
+    setRefreshing(true);
+    await fetchBookings(false);
+    setRefreshing(false);
+  }, [fetchBookings]);
 
   // Fetch data when modal opens or tab changes
   useEffect(() => {
     if (visible && currentUser) {
-      fetchBookings()
+      fetchBookings();
     }
-  }, [visible, currentUser, activeTab, fetchBookings])
+  }, [visible, currentUser, activeTab, fetchBookings]);
 
   // Real-time subscription
   useEffect(() => {
-    if (!visible || !currentUser) return
+    if (!visible || !currentUser) return;
 
     const channel = supabase
-      .channel("your_items_changes")
+      .channel('your_items_changes')
       .on(
-        "postgres_changes",
+        'postgres_changes',
         {
-          event: "*",
-          schema: "public",
-          table: "rental_transactions",
+          event: '*',
+          schema: 'public',
+          table: 'rental_transactions'
         },
         (payload) => {
-          console.log("Rental transaction change in YourItemsModal:", payload)
-          fetchBookings(false)
-        },
+          console.log('Rental transaction change in YourItemsModal:', payload);
+          fetchBookings(false);
+        }
       )
-      .subscribe()
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [visible, currentUser, fetchBookings])
+      supabase.removeChannel(channel);
+    };
+  }, [visible, currentUser, fetchBookings]);
 
   const getStatusText = (status) => {
     switch (status) {
-      case "pending":
-        return "PENDING"
-      case "confirmed":
-        return "CONFIRMED"
-      case "ongoing":
-        return "ONGOING"
-      case "completed":
-        return "COMPLETED"
-      case "returned":
-        return "RETURNED"
-      default:
-        return status.toUpperCase()
+      case 'pending': return 'PENDING';
+      case 'confirmed': return 'CONFIRMED';
+      case 'ongoing': return 'ONGOING';
+      case 'completed': return 'COMPLETED';
+      case 'returned': return 'RETURNED';
+      default: return status.toUpperCase();
     }
-  }
+  };
 
   const getStatusColor = (status, isOverdue = false) => {
-    if (isOverdue) return "#FF0000" // Red for overdue
+    if (isOverdue) return '#FF0000'; // Red for overdue
     switch (status) {
-      case "pending":
-        return "#FF8C00"
-      case "confirmed":
-        return "#4CAF50"
-      case "ongoing":
-        return "#2196F3"
-      case "completed":
-        return "#9E9E9E"
-      case "returned":
-        return "#4CAF50"
-      default:
-        return "#FF8C00"
+      case 'pending': return '#FF8C00';
+      case 'confirmed': return '#4CAF50';
+      case 'ongoing': return '#2196F3';
+      case 'completed': return '#9E9E9E';
+      case 'returned': return '#4CAF50';
+      default: return '#FF8C00';
     }
-  }
+  };
 
   const renderBookingItem = (booking) => {
-    const isProcessing = processingIds.has(booking.rental_id)
-
-    const today = new Date().toDateString()
-    const endDate = new Date(booking.end_date).toDateString()
-    const isReturnDate = today === endDate
+    const isProcessing = processingIds.has(booking.rental_id);
 
     return (
       <View key={booking.rental_id} style={styles.bookingCard}>
@@ -934,28 +423,36 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               source={
                 booking.users.face_image_url
                   ? { uri: booking.users.face_image_url }
-                  : require("../../assets/splash-icon.png")
+                  : require('../../assets/splash-icon.png')
               }
               style={styles.renterImage}
             />
             <View style={styles.renterDetails}>
               <Text style={styles.renterName}>{booking.renter_name}</Text>
               <Text style={styles.requestDate}>
-                {activeTab === "pending" && `Requested on ${booking.formatted_dates.created}`}
-                {activeTab === "active" &&
-                  `${booking.status === "confirmed" ? "Starts" : "Started"} on ${booking.formatted_dates.start}`}
-                {activeTab === "completed" && `Completed on ${booking.formatted_dates.end}`}
+                {activeTab === 'pending' && `Requested on ${booking.formatted_dates.created}`}
+                {activeTab === 'active' && `${booking.status === 'confirmed' ? 'Starts' : 'Started'} on ${booking.formatted_dates.start}`}
+                {activeTab === 'completed' && `Completed on ${booking.formatted_dates.end}`}
               </Text>
             </View>
           </View>
-          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status, booking.is_overdue) }]}>
-            <Text style={styles.statusText}>{booking.is_overdue ? "OVERDUE" : getStatusText(booking.status)}</Text>
+          <View style={[
+            styles.statusBadge,
+            { backgroundColor: getStatusColor(booking.status, booking.is_overdue) }
+          ]}>
+            <Text style={styles.statusText}>
+              {booking.is_overdue ? 'OVERDUE' : getStatusText(booking.status)}
+            </Text>
           </View>
         </View>
 
         <View style={styles.itemInfo}>
           <Image
-            source={booking.item_image ? { uri: booking.item_image } : require("../../assets/splash-icon.png")}
+            source={
+              booking.item_image
+                ? { uri: booking.item_image }
+                : require('../../assets/splash-icon.png')
+            }
             style={styles.itemImage}
           />
           <View style={styles.itemDetails}>
@@ -965,13 +462,15 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               <Text style={styles.dateText}>
                 {booking.formatted_dates.start} - {booking.formatted_dates.end}
               </Text>
-              <Text style={styles.totalCost}>Total: ₱{Number(booking.total_cost).toFixed(2)}</Text>
+              <Text style={styles.totalCost}>
+                Total: ₱{Number(booking.total_cost).toFixed(2)}
+              </Text>
             </View>
           </View>
         </View>
 
         {/* Action buttons based on tab */}
-        {activeTab === "pending" && (
+        {activeTab === 'pending' && (
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.button, styles.declineButton]}
@@ -999,12 +498,12 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
           </View>
         )}
 
-        {activeTab === "active" && (
+        {activeTab === 'active' && (
           <View style={styles.actionButtons}>
             <TouchableOpacity
-              style={[styles.button, isReturnDate ? styles.returnedButton : styles.returnedButtonGray]}
+              style={[styles.button, styles.returnedButton]}
               onPress={() => handleReturned(booking)}
-              disabled={!isReturnDate || isProcessing}
+              disabled={isProcessing}
             >
               {isProcessing ? (
                 <ActivityIndicator size="small" color="#FFF" />
@@ -1015,38 +514,43 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
           </View>
         )}
       </View>
-    )
-  }
+    );
+  };
 
   const getEmptyStateText = () => {
     switch (activeTab) {
-      case "pending":
+      case 'pending':
         return {
-          title: "No Pending Bookings",
-          subtitle: "You don't have any pending booking requests at the moment.",
-        }
-      case "active":
+          title: 'No Pending Bookings',
+          subtitle: "You don't have any pending booking requests at the moment."
+        };
+      case 'active':
         return {
-          title: "No Active Rentals",
-          subtitle: "You don't have any active rentals at the moment.",
-        }
-      case "completed":
+          title: 'No Active Rentals',
+          subtitle: "You don't have any active rentals at the moment."
+        };
+      case 'completed':
         return {
-          title: "No Completed Rentals",
-          subtitle: "You don't have any completed rentals yet.",
-        }
+          title: 'No Completed Rentals',
+          subtitle: "You don't have any completed rentals yet."
+        };
       default:
         return {
-          title: "No Items",
-          subtitle: "No items found.",
-        }
+          title: 'No Items',
+          subtitle: 'No items found.'
+        };
     }
-  }
+  };
 
-  const emptyState = getEmptyStateText()
+  const emptyState = getEmptyStateText();
 
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={onClose}
+    >
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
@@ -1089,7 +593,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
         {/* Search Bar */}
         <View style={styles.searchContainer}>
           <View style={styles.searchBar}>
-            <Image source={require("../../assets/search.png")} style={styles.searchIcon} />
+            <Image source={require('../../assets/search.png')} style={styles.searchIcon} />
             <Text style={styles.searchPlaceholder}>Search Items...</Text>
           </View>
         </View>
@@ -1105,67 +609,77 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             style={styles.content}
             showsVerticalScrollIndicator={false}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#FFAB00"]} tintColor="#FFAB00" />
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#FFAB00']}
+                tintColor="#FFAB00"
+              />
             }
           >
             {bookings.length === 0 ? (
               <View style={styles.emptyContainer}>
-                <Image source={require("../../assets/pending.png")} style={styles.emptyImage} />
+                <Image
+                  source={require('../../assets/pending.png')}
+                  style={styles.emptyImage}
+                />
                 <Text style={styles.emptyTitle}>{emptyState.title}</Text>
                 <Text style={styles.emptyText}>{emptyState.subtitle}</Text>
               </View>
             ) : (
-              <View style={styles.bookingsList}>{bookings.map(renderBookingItem)}</View>
+              <View style={styles.bookingsList}>
+                {bookings.map(renderBookingItem)}
+              </View>
             )}
           </ScrollView>
         )}
       </View>
     </Modal>
-  )
-}
+  );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#FAF5EF",
+    backgroundColor: '#FAF5EF',
   },
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: "#FAF5EF",
+    backgroundColor: '#FAF5EF',
   },
   headerTitle: {
     fontSize: 20,
-    fontFamily: "DM-Bold",
-    color: "#333",
+    fontFamily: 'DM-Bold',
+    color: '#333',
     flex: 1,
   },
   closeButton: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: "#FFF",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
     elevation: 2,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
   },
   closeButtonText: {
     fontSize: 18,
-    color: "#666",
-    fontWeight: "bold",
+    color: '#666',
+    fontWeight: 'bold',
   },
   // Login-style method selector
   methodSelector: {
-    flexDirection: "row",
-    backgroundColor: "#ffffffff",
+    flexDirection: 'row',
+    backgroundColor: '#ffffffff',
     borderRadius: 25,
     padding: 4,
     marginHorizontal: 20,
@@ -1175,33 +689,33 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 20,
     borderRadius: 30,
-    alignItems: "center",
+    alignItems: 'center',
   },
   methodButtonActive: {
-    backgroundColor: "#FFE1BE",
+    backgroundColor: '#FFE1BE',
   },
   methodButtonText: {
     fontSize: 14,
-    fontFamily: "DM-Medium",
-    color: "#666",
+    fontFamily: 'DM-Medium',
+    color: '#666',
   },
   methodButtonTextActive: {
-    color: "black",
-    fontFamily: "DM-Bold",
+    color: 'black',
+    fontFamily: 'DM-Bold',
   },
   searchContainer: {
     paddingHorizontal: 20,
     marginBottom: 20,
   },
   searchBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#FFF",
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
     borderRadius: 25,
     paddingHorizontal: 16,
     paddingVertical: 12,
     elevation: 2,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 3,
@@ -1210,11 +724,11 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     marginRight: 10,
-    tintColor: "#999",
+    tintColor: '#999',
   },
   searchPlaceholder: {
     fontSize: 16,
-    color: "#999",
+    color: '#999',
   },
   content: {
     flex: 1,
@@ -1222,18 +736,18 @@ const styles = StyleSheet.create({
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   loadingText: {
     marginTop: 10,
-    color: "#666",
+    color: '#666',
     fontSize: 16,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     paddingVertical: 60,
   },
   emptyImage: {
@@ -1244,14 +758,14 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 18,
-    fontFamily: "DM-Bold",
-    color: "#333",
+    fontFamily: 'DM-Bold',
+    color: '#333',
     marginBottom: 10,
   },
   emptyText: {
     fontSize: 14,
-    color: "#666",
-    textAlign: "center",
+    color: '#666',
+    textAlign: 'center',
     lineHeight: 20,
     paddingHorizontal: 40,
   },
@@ -1259,25 +773,25 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   bookingCard: {
-    backgroundColor: "#FFF",
+    backgroundColor: '#FFF',
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
     elevation: 2,
-    shadowColor: "#000",
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   cardHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
   },
   renterInfo: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'center',
     flex: 1,
   },
   renterImage: {
@@ -1291,27 +805,27 @@ const styles = StyleSheet.create({
   },
   renterName: {
     fontSize: 16,
-    fontFamily: "DM-Bold",
-    color: "#333",
+    fontFamily: 'DM-Bold',
+    color: '#333',
   },
   requestDate: {
     fontSize: 12,
-    color: "#666",
+    color: '#666',
     marginTop: 2,
   },
   statusBadge: {
-    backgroundColor: "#FF8C00",
+    backgroundColor: '#FF8C00',
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 12,
   },
   statusText: {
     fontSize: 10,
-    fontFamily: "DM-Bold",
-    color: "#FFF",
+    fontFamily: 'DM-Bold',
+    color: '#FFF',
   },
   itemInfo: {
-    flexDirection: "row",
+    flexDirection: 'row',
     marginBottom: 16,
   },
   itemImage: {
@@ -1322,17 +836,17 @@ const styles = StyleSheet.create({
   },
   itemDetails: {
     flex: 1,
-    justifyContent: "space-between",
+    justifyContent: 'space-between',
   },
   itemTitle: {
     fontSize: 16,
-    fontFamily: "DM-Bold",
-    color: "#333",
+    fontFamily: 'DM-Bold',
+    color: '#333',
     marginBottom: 4,
   },
   itemLocation: {
     fontSize: 12,
-    color: "#666",
+    color: '#666',
     marginBottom: 8,
   },
   rentalPeriod: {
@@ -1340,55 +854,52 @@ const styles = StyleSheet.create({
   },
   dateText: {
     fontSize: 14,
-    fontFamily: "DM-Medium",
-    color: "#333",
+    fontFamily: 'DM-Medium',
+    color: '#333',
   },
   totalCost: {
     fontSize: 16,
-    fontFamily: "DM-Bold",
-    color: "#FFAB00",
+    fontFamily: 'DM-Bold',
+    color: '#FFAB00',
   },
   actionButtons: {
-    flexDirection: "row",
+    flexDirection: 'row',
     gap: 12,
   },
   button: {
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
     minHeight: 44,
   },
   declineButton: {
-    backgroundColor: "#FFF",
+    backgroundColor: '#FFF',
     borderWidth: 1,
-    borderColor: "#FF6B6B",
+    borderColor: '#FF6B6B',
   },
   acceptButton: {
-    backgroundColor: "#28A745",
+    backgroundColor: '#28A745',
   },
   returnedButton: {
-    backgroundColor: "#2196F3",
-  },
-  returnedButtonGray: {
-    backgroundColor: "#9E9E9E",
+    backgroundColor: '#2196F3',
   },
   declineButtonText: {
-    color: "#FF6B6B",
+    color: '#FF6B6B',
     fontSize: 14,
-    fontFamily: "DM-Bold",
+    fontFamily: 'DM-Bold',
   },
   acceptButtonText: {
-    color: "#FFF",
+    color: '#FFF',
     fontSize: 14,
-    fontFamily: "DM-Bold",
+    fontFamily: 'DM-Bold',
   },
   returnedButtonText: {
-    color: "#FFF",
+    color: '#FFF',
     fontSize: 14,
-    fontFamily: "DM-Bold",
+    fontFamily: 'DM-Bold',
   },
-})
+});
 
-export default YourItemsModal
+export default YourItemsModal;
