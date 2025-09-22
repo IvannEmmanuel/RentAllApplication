@@ -25,6 +25,15 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
 
   const today = new Date().toISOString().split('T')[0]
 
+  const [selectedQuantity, setSelectedQuantity] = useState(1);
+
+  // Reset when modal closes
+  useEffect(() => {
+    if (!visible) {
+      setSelectedQuantity(1); // reset back to 1 on close
+    }
+  }, [visible]);
+
   // Get busy dates from database
   useEffect(() => {
     if (!visible || !item?.item_id) return
@@ -135,7 +144,14 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
     const days = dates.length
     const price = Number(item?.price_per_day || 0)
     const deposit = Number(item?.deposit_fee || 0)
-    const totalCost = price * days + deposit
+
+    // Multiply price by days and quantity
+    const subtotal = price * days * selectedQuantity
+
+    // Multiply deposit by quantity * days (as per your example)
+    const depositTotal = deposit * days * selectedQuantity
+
+    const totalCost = subtotal + depositTotal
 
     return {
       daysCount: days,
@@ -143,7 +159,7 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
       startDate: start,
       endDate: end
     }
-  }, [selectedDates, item?.price_per_day, item?.deposit_fee])
+  }, [selectedDates, item?.price_per_day, item?.deposit_fee, selectedQuantity])
 
   const onDayPress = (day) => {
     const dateStr = day.dateString
@@ -311,8 +327,9 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
         renter_id: currentUserId,
         start_date: startDate,
         end_date: endDate,
-        total_cost: total,
-        status: 'pending' // Explicitly set status
+        total_cost: total * selectedQuantity,
+        quantity: selectedQuantity,
+        status: 'pending'
       }
 
       const { data: newBooking, error } = await supabase
@@ -401,6 +418,33 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
                   <Text style={styles.priceValue}>₱{Number(item?.deposit_fee || 0).toFixed(2)}</Text>
                 </View>
               </View>
+              <View style={styles.quantityRow}>
+                <Text style={styles.priceLabel}>Quantity: {item?.quantity}</Text>
+                <View style={styles.quantityControls}>
+                  <TouchableOpacity
+                    style={[styles.qtyButton, selectedQuantity <= 1 && styles.qtyDisabled]}
+                    disabled={selectedQuantity <= 1}
+                    onPress={() => setSelectedQuantity(prev => Math.max(1, prev - 1))}
+                  >
+                    <Text style={styles.qtyButtonText}>−</Text>
+                  </TouchableOpacity>
+
+                  <Text style={styles.priceValue}>{selectedQuantity}</Text>
+
+                  <TouchableOpacity
+                    style={[
+                      styles.qtyButton,
+                      selectedQuantity >= (item?.quantity || 1) && styles.qtyDisabled
+                    ]}
+                    disabled={selectedQuantity >= (item?.quantity || 1)}
+                    onPress={() =>
+                      setSelectedQuantity(prev => Math.min(item?.quantity || 1, prev + 1))
+                    }
+                  >
+                    <Text style={styles.qtyButtonText}>＋</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
 
               {item?.location && (
                 <View style={styles.locationContainer}>
@@ -474,18 +518,25 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
               <Text style={styles.summaryValue}>{daysCount}</Text>
             </View>
 
+            <View style={styles.summaryRow}>
+              <Text style={styles.summaryLabel}>Quantity</Text>
+              <Text style={styles.summaryValue}>{selectedQuantity}</Text>
+            </View>
+
             <View style={styles.separator} />
 
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Subtotal</Text>
+              <Text style={styles.summaryLabel}>Subtotal x {selectedQuantity}</Text>
               <Text style={styles.summaryValue}>
-                ₱{(Number(item?.price_per_day || 0) * daysCount).toFixed(2)}
+                ₱{(Number(item?.price_per_day || 0) * daysCount * selectedQuantity).toFixed(2)}
               </Text>
             </View>
 
             <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Deposit</Text>
-              <Text style={styles.summaryValue}>₱{Number(item?.deposit_fee || 0).toFixed(2)}</Text>
+              <Text style={styles.summaryLabel}>Deposit x {selectedQuantity}</Text>
+              <Text style={styles.summaryValue}>
+                ₱{(Number(item?.deposit_fee || 0) * daysCount * selectedQuantity).toFixed(2)}
+              </Text>
             </View>
 
             <View style={[styles.summaryRow, styles.totalRow]}>
@@ -615,7 +666,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   locationContainer: {
-    marginTop: 8,
+    marginTop: 10
   },
   locationLabel: {
     fontSize: 12,
@@ -756,4 +807,32 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: 'DM-Bold',
   },
+  quantityRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 12,
+  },
+  quantityControls: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  qtyButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#FFAB00",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  qtyDisabled: {
+    backgroundColor: "#DDD",
+  },
+  qtyButtonText: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#FFF",
+  },
+
 })
