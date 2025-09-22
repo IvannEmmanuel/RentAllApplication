@@ -9,6 +9,7 @@ import { RegistrationProvider } from '../hooks/RegistrationContext';
 import Home from '../pages/Screens/Home';
 import Dashboard from '../pages/Dashboard/Dashboard';
 import FavoriteModal from './FavoriteModal';
+import ActiveRental from './ActiveRentalModal';
 import { FavoritesProvider } from './FavoritesContext';
 
 const Stack = createNativeStackNavigator();
@@ -27,6 +28,7 @@ export default function AppNavigator() {
                         <Stack.Screen name="Home" component={Home} />
                         <Stack.Screen name="Dashboard" component={Dashboard} />
                         <Stack.Screen name="Favorites" component={FavoriteModal} />
+                        <Stack.Screen name="ActiveRental" component={ActiveRental} />
                     </Stack.Navigator>
                 </NavigationContainer>
             </RegistrationProvider>
