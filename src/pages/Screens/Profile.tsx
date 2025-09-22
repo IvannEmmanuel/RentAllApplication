@@ -5,6 +5,9 @@ import { useNavigation } from '@react-navigation/native'
 import { useFavorites } from '../../components/FavoritesContext'
 import BookItemModal from '../../components/BookItemModal' // Import BookItemModal
 import YourItemModal from '../../components/YourItemModal'
+import ActiveRentalModal from '../../components/ActiveRentalModal'
+import PendingRentalModal from '../../components/PendingRentalModal'
+import CompletedRentalModal from '../../components/CompletedRentalModal'
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -13,8 +16,10 @@ const Profile = () => {
   const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
   const [bookModalVisible, setBookModalVisible] = useState(false) // Add modal state
   const [selectedItem, setSelectedItem] = useState(null) // Add selected item state
-  const [isPendingModalVisible, setIsPendingModalVisible] = useState(false)
   const [isYourItemModalVisible, setIsYourItemModalVisible] = useState(false)
+  const [showActiveRental, setShowActiveRental] = useState(false);
+  const [showPendingModal, setShowPendingModal] = useState(false);
+  const [showCompletedModal, setShowCompletedModal] = useState(false);
 
   // Use shared favorites context instead of local state
   const { favorites, currentUser, toggleFavorite, isFavorited, logout } = useFavorites()
@@ -447,21 +452,21 @@ const Profile = () => {
 
           <View style={styles.mainActivitiesContainer}>
             <View style={styles.firstActivitiesContainer}>
-              <TouchableOpacity style={styles.subActivitiesContainer}>
-                <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
-                <Text>Active Rental</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesContainer}>
               <TouchableOpacity
-                style={styles.subActivitiesContainer}
+                style={styles.subActivitiesContainer} onPress={() => setShowPendingModal(true)}
               >
                 <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
                 <Text>Pending</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.activitiesContainer}>
-              <TouchableOpacity style={styles.subActivitiesContainer}>
+              <TouchableOpacity onPress={() => setShowActiveRental(true)} style={styles.subActivitiesContainer}>
+                <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
+                <Text>Active Rental</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity style={styles.subActivitiesContainer} onPress={() => setShowCompletedModal(true)}>
                 <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
                 <Text>Completed</Text>
               </TouchableOpacity>
@@ -511,6 +516,21 @@ const Profile = () => {
         visible={isYourItemModalVisible}
         onClose={() => setIsYourItemModalVisible(false)}
         currentUser={currentUser}
+      />
+
+      <ActiveRentalModal
+        visible={showActiveRental}
+        onClose={() => setShowActiveRental(false)}
+      />
+
+      <PendingRentalModal
+        visible={showPendingModal}
+        onClose={() => setShowPendingModal(false)}
+      />
+
+      <CompletedRentalModal
+        visible={showCompletedModal}
+        onClose={() => setShowCompletedModal(false)}
       />
     </>
   )
