@@ -483,7 +483,7 @@ const Profile = () => {
   const [selectedItem, setSelectedItem] = useState(null) // Add selected item state
 
   // Use shared favorites context instead of local state
-  const { favorites, currentUser, toggleFavorite, isFavorited } = useFavorites()
+  const { favorites, currentUser, toggleFavorite, isFavorited, logout } = useFavorites()
 
   // Fetch user's bookings - SHARED FUNCTION
   const fetchUserBookings = useCallback(async () => {
@@ -787,6 +787,28 @@ const Profile = () => {
     }
   }, [fetchRecommendedItems])
 
+  // const handleLogout = async () => {
+  //   if (!currentUser) return
+
+  //   try {
+  //     await logout() // logs out and clears context
+
+  //     // Clear local state if needed
+  //     setUserProfile(null)
+  //     setUserBookings([])
+  //     setSelectedItem(null)
+
+  //     // Navigate to LandingPage
+  //     navigation.reset({
+  //       index: 0,
+  //       routes: [{ name: 'LandingPage' }],
+  //     })
+  //   } catch (err) {
+  //     console.error('Logout error:', err)
+  //     Alert.alert('Error', 'Failed to logout. Please try again.')
+  //   }
+  // }
+
   const renderItem = (item) => {
     const isOwner = isUserItem(item)
     const buttonInfo = getButtonInfo(item)
@@ -882,6 +904,12 @@ const Profile = () => {
                     : 'Birthdate not available'}
                 </Text>
               </View>
+              {/* <TouchableOpacity
+                style={styles.logoutButton}
+                onPress={handleLogout}
+              >
+                <Text style={styles.logoutText}>Logout</Text>
+              </TouchableOpacity> */}
             </View>
           </View>
 
@@ -1119,5 +1147,20 @@ const styles = StyleSheet.create({
   },
   pendingRentText: {
     color: '#FFF',
+  },
+  logoutButton: {
+    marginTop: 20,
+    backgroundColor: '#FF3B30',
+    paddingVertical: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: 20,
+  },
+  logoutText: {
+    color: '#FFF',
+    fontFamily: 'DM-Bold',
+    fontSize: 16,
   }
+
 })
