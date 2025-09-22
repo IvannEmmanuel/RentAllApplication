@@ -251,135 +251,221 @@ export async function storeNotification(userId: string, title: string, message: 
 }
 
 // Handle booking status changes and send appropriate notifications
+// export async function handleBookingStatusChange(
+//   rental: any,
+//   oldStatus: string | null,
+//   newStatus: string
+// ) {
+//   try {
+//     // Get item details
+//     const { data: item, error: itemError } = await supabase
+//       .from('items')
+//       .select('title, user_id')
+//       .eq('item_id', rental.item_id)
+//       .single();
+
+//     if (itemError) throw itemError;
+
+//     // Get user details
+//     const { data: renter, error: renterError } = await supabase
+//       .from('users')
+//       .select('first_name, last_name')
+//       .eq('id', rental.renter_id)
+//       .single();
+
+//     const { data: lessor, error: lessorError } = await supabase
+//       .from('users')
+//       .select('first_name, last_name')
+//       .eq('id', item.user_id)
+//       .single();
+
+//     if (renterError || lessorError) throw new Error('Error fetching user details');
+
+//     const renterName = `${renter.first_name} ${renter.last_name}`;
+//     const lessorName = `${lessor.first_name} ${lessor.last_name}`;
+
+//     // Send notifications based on status change
+//     switch (newStatus) {
+//       case 'pending':
+//         // Notify lessor about new booking request
+//         await sendNotificationToUser(
+//           item.user_id,
+//           'New Booking Request',
+//           `${renterName} wants to rent your "${item.title}"`,
+//           {
+//             type: 'booking_request',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+//         break;
+
+//       case 'confirmed':
+//         // Notify renter that booking is confirmed
+//         await sendNotificationToUser(
+//           rental.renter_id,
+//           'Booking Confirmed!',
+//           `${lessorName} has confirmed your booking for "${item.title}"`,
+//           {
+//             type: 'booking_confirmed',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+//         break;
+
+//       case 'ongoing':
+//         // Notify both parties
+//         await sendNotificationToUser(
+//           rental.renter_id,
+//           'Rental Started',
+//           `Your rental of "${item.title}" has started. Enjoy!`,
+//           {
+//             type: 'booking_started',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+
+//         await sendNotificationToUser(
+//           item.user_id,
+//           'Rental Started',
+//           `${renterName}'s rental of your "${item.title}" has started`,
+//           {
+//             type: 'booking_started',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+//         break;
+
+//       case 'completed':
+//         // Notify both parties
+//         await sendNotificationToUser(
+//           rental.renter_id,
+//           'Rental Completed',
+//           `Your rental of "${item.title}" is complete. Please rate your experience!`,
+//           {
+//             type: 'booking_completed',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+
+//         await sendNotificationToUser(
+//           item.user_id,
+//           'Rental Completed',
+//           `${renterName}'s rental of your "${item.title}" is complete`,
+//           {
+//             type: 'booking_completed',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+//         break;
+
+//       case 'cancelled':
+//         // Determine who to notify (the other party)
+//         const isLessorCancelling = oldStatus === 'pending';
+//         const notifyUserId = isLessorCancelling ? rental.renter_id : item.user_id;
+//         const cancellerName = isLessorCancelling ? lessorName : renterName;
+
+//         await sendNotificationToUser(
+//           notifyUserId,
+//           'Booking Cancelled',
+//           `${cancellerName} has cancelled the booking for "${item.title}"`,
+//           {
+//             type: 'booking_cancelled',
+//             rental_id: rental.rental_id,
+//             item_id: rental.item_id
+//           }
+//         );
+//         break;
+//     }
+
+//     return true;
+//   } catch (error) {
+//     console.error('Error handling booking status change:', error);
+//     return false;
+//   }
+// }
+
 export async function handleBookingStatusChange(
   rental: any,
   oldStatus: string | null,
   newStatus: string
 ) {
   try {
-    // Get item details
+    // 1. Get item details
     const { data: item, error: itemError } = await supabase
       .from('items')
       .select('title, user_id')
       .eq('item_id', rental.item_id)
       .single();
+    if (itemError || !item) throw itemError || new Error('Item not found');
 
-    if (itemError) throw itemError;
-
-    // Get user details
+    // 2. Get renter details
     const { data: renter, error: renterError } = await supabase
       .from('users')
       .select('first_name, last_name')
       .eq('id', rental.renter_id)
       .single();
 
+    // 3. Get lessor details
     const { data: lessor, error: lessorError } = await supabase
       .from('users')
       .select('first_name, last_name')
       .eq('id', item.user_id)
       .single();
 
-    if (renterError || lessorError) throw new Error('Error fetching user details');
+    if (renterError || lessorError || !renter || !lessor) throw new Error('Error fetching user details');
 
     const renterName = `${renter.first_name} ${renter.last_name}`;
     const lessorName = `${lessor.first_name} ${lessor.last_name}`;
 
-    // Send notifications based on status change
+    // 4. Send notifications based on new status
     switch (newStatus) {
       case 'pending':
-        // Notify lessor about new booking request
+        // Notify lessor
         await sendNotificationToUser(
           item.user_id,
           'New Booking Request',
           `${renterName} wants to rent your "${item.title}"`,
-          {
-            type: 'booking_request',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
+          { type: 'booking_request', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
       case 'confirmed':
-        // Notify renter that booking is confirmed
-        await sendNotificationToUser(
-          rental.renter_id,
-          'Booking Confirmed!',
-          `${lessorName} has confirmed your booking for "${item.title}"`,
-          {
-            type: 'booking_confirmed',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
-        );
-        break;
-
       case 'ongoing':
-        // Notify both parties
+      case 'cancelled':
+        // Notify renter about status update
         await sendNotificationToUser(
           rental.renter_id,
-          'Rental Started',
-          `Your rental of "${item.title}" has started. Enjoy!`,
-          {
-            type: 'booking_started',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
-        );
-
-        await sendNotificationToUser(
-          item.user_id,
-          'Rental Started',
-          `${renterName}'s rental of your "${item.title}" has started`,
-          {
-            type: 'booking_started',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
+          `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
+          `${lessorName} has ${newStatus} your booking for "${item.title}"`,
+          { type: `booking_${newStatus}`, rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
       case 'completed':
-        // Notify both parties
+        // Notify both renter and lessor
         await sendNotificationToUser(
           rental.renter_id,
           'Rental Completed',
           `Your rental of "${item.title}" is complete. Please rate your experience!`,
-          {
-            type: 'booking_completed',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
+          { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
         );
 
         await sendNotificationToUser(
           item.user_id,
           'Rental Completed',
           `${renterName}'s rental of your "${item.title}" is complete`,
-          {
-            type: 'booking_completed',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
+          { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
-      case 'cancelled':
-        // Determine who to notify (the other party)
-        const isLessorCancelling = oldStatus === 'pending';
-        const notifyUserId = isLessorCancelling ? rental.renter_id : item.user_id;
-        const cancellerName = isLessorCancelling ? lessorName : renterName;
-
-        await sendNotificationToUser(
-          notifyUserId,
-          'Booking Cancelled',
-          `${cancellerName} has cancelled the booking for "${item.title}"`,
-          {
-            type: 'booking_cancelled',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
-        );
+      default:
+        // No notification for other statuses
         break;
     }
 
