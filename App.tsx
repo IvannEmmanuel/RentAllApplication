@@ -26,7 +26,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { View, StyleSheet } from 'react-native';
 import * as SplashScreen from 'expo-splash-screen';
-import { useNotification } from './src/notifications/notifications';
 import AppNavigator from './src/components/AppNavigator';
 import { loadFonts } from './src/utils/fontLoader';
 
@@ -35,7 +34,7 @@ SplashScreen.preventAutoHideAsync();
 export default function App() {
   const [fontsLoaded, setFontsLoaded] = useState(false);
 
-  useNotification(); // ✅ Notification setup
+  // useNotification(); // ✅ Notification setup
 
   useEffect(() => {
     const prepare = async () => {
