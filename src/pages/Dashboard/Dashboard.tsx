@@ -9,6 +9,8 @@ import Profile from '../Screens/Profile';
 import AddItem from '../Screens/AddItem';
 import Chat from '../Screens/Chat';
 import { createStackNavigator } from '@react-navigation/stack';
+import { useNotification } from '../../notifications/notifications';
+import { useFavorites } from '../../components/FavoritesContext';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -57,6 +59,9 @@ const getTabBarVisibility = (route) => {
 };
 
 const Dashboard = () => {
+    const { currentUser } = useFavorites();
+    useNotification(currentUser); // now it gets the user
+    
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
