@@ -32,9 +32,10 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       if (activeTab === 'pending') {
         statusFilter = ['pending'];
       } else if (activeTab === 'active') {
-        statusFilter = ['confirmed', 'ongoing'];
+        // Lessor should only see rentals awaiting their confirmation
+        statusFilter = ['awaiting_owner_confirmation'];
       } else {
-        statusFilter = ['completed', 'completed'];
+        statusFilter = ['completed'];
       }
 
       // Get transactions where current user owns the item
@@ -49,6 +50,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
     end_date,
     total_cost,
     status,
+    quantity,
     created_at,
     items!inner(
       title,
@@ -167,7 +169,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               if (itemError) throw itemError;
 
               const currentQuantity = itemData.quantity;
-              const requestedQuantity = 1; // Default to 1 since quantity isn't stored in rental_transactions
+              const requestedQuantity = booking.quantity || 1;
 
               // Check if there's enough quantity available
               if (currentQuantity < requestedQuantity) {
@@ -310,7 +312,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               // Update the rental transaction status
               const { error: transactionError } = await supabase
                 .from('rental_transactions')
-                .update({ status: 'returned' })
+                .update({ status: 'completed' })
                 .eq('rental_id', rentalId);
 
               if (transactionError) throw transactionError;
@@ -326,7 +328,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               await handleBookingStatusChange(
                 booking,
                 booking.status,
-                'returned'
+                'completed'
               );
 
               setBookings(prev =>
@@ -394,6 +396,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       case 'pending': return 'PENDING';
       case 'confirmed': return 'CONFIRMED';
       case 'ongoing': return 'ONGOING';
+      case 'awaiting_owner_confirmation': return 'AWAITING CONFIRMATION';
       case 'completed': return 'COMPLETED';
       case 'returned': return 'RETURNED';
       default: return status.toUpperCase();
@@ -406,6 +409,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       case 'pending': return '#FF8C00';
       case 'confirmed': return '#4CAF50';
       case 'ongoing': return '#2196F3';
+      case 'awaiting_owner_confirmation': return '#2196F3';
       case 'completed': return '#9E9E9E';
       case 'returned': return '#4CAF50';
       default: return '#FF8C00';
@@ -458,6 +462,9 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
           <View style={styles.itemDetails}>
             <Text style={styles.itemTitle}>{booking.items.title}</Text>
             <Text style={styles.itemLocation}>{booking.items.location}</Text>
+            <Text style={styles.itemLocation}>
+              Quantity: {booking.quantity || 1}
+            </Text>
             <View style={styles.rentalPeriod}>
               <Text style={styles.dateText}>
                 {booking.formatted_dates.start} - {booking.formatted_dates.end}
