@@ -12,7 +12,6 @@ import CompletedRentalModal from '../../components/CompletedRentalModal'
 const Profile = () => {
   const navigation = useNavigation()
   const [recommendedItems, setRecommendedItems] = useState([])
-  const [userProfile, setUserProfile] = useState(null)
   const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
   const [bookModalVisible, setBookModalVisible] = useState(false) // Add modal state
   const [selectedItem, setSelectedItem] = useState(null) // Add selected item state
@@ -22,7 +21,21 @@ const Profile = () => {
   const [showCompletedModal, setShowCompletedModal] = useState(false);
 
   // Use shared favorites context instead of local state
-  const { favorites, currentUser, toggleFavorite, isFavorited, logout } = useFavorites()
+  const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
+
+  useEffect(() => {
+    if (!currentUser) {
+      // optional fallback fetch if not set (e.g. refresh or deep link)
+      supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .maybeSingle()
+        .then(({ data }) => {
+          if (data) setCurrentUser({ ...authUser, ...data })
+        })
+    }
+  }, [])
 
   // Fetch user's bookings - SHARED FUNCTION
   const fetchUserBookings = useCallback(async () => {
@@ -116,25 +129,6 @@ const Profile = () => {
     setSelectedItem(item)
     setBookModalVisible(true)
   }
-
-  useEffect(() => {
-    const fetchUserProfile = async () => {
-      // currentUser now comes from context
-      if (currentUser) {
-        const { data, error } = await supabase
-          .from('users')
-          .select('first_name, last_name, dob, face_image_url')
-          .eq('id', currentUser.id)
-          .single()
-
-        if (!error) {
-          setUserProfile(data)
-        }
-      }
-    }
-
-    fetchUserProfile()
-  }, [currentUser]) // currentUser from context
 
   // Toggle favorites - SIMPLIFIED (now uses context)
   const handleToggleFavorite = async (itemId) => {
@@ -332,8 +326,6 @@ const Profile = () => {
     try {
       await logout() // logs out and clears context
 
-      // Clear local state if needed
-      setUserProfile(null)
       setUserBookings([])
       setSelectedItem(null)
 
@@ -424,22 +416,22 @@ const Profile = () => {
             <View style={styles.subprofileContainer}>
               <Image
                 source={
-                  userProfile?.face_image_url
-                    ? { uri: userProfile.face_image_url }
+                  currentUser?.face_image_url
+                    ? { uri: currentUser.face_image_url }
                     : require('../../../assets/splash-icon.png') // fallback
                 }
                 style={styles.profileImage}
               />
               <View style={styles.informationContainer}>
                 <Text style={styles.nameText}>
-                  {userProfile
-                    ? `${userProfile.first_name} ${userProfile.last_name}`
+                  {currentUser
+                    ? `${currentUser.first_name} ${currentUser.last_name}`
                     : 'Loading...'}
                 </Text>
 
                 <Text style={styles.birthdayText}>
-                  {userProfile?.dob
-                    ? new Date(userProfile.dob).toLocaleDateString()
+                  {currentUser?.dob
+                    ? new Date(currentUser.dob).toLocaleDateString()
                     : 'Birthdate not available'}
                 </Text>
               </View>
@@ -486,7 +478,9 @@ const Profile = () => {
             {recommendedItems.length === 0 ? (
               <ActivityIndicator size="large" color="#FFAB00" style={{ marginTop: 20 }} />
             ) : (
-              recommendedItems.map(renderItem)
+              <View style={styles.itemsGrid}>
+                {recommendedItems.map(renderItem)}
+              </View>
             )}
           </View>
         </View>
@@ -625,7 +619,13 @@ const styles = StyleSheet.create({
     marginBottom: 10
   },
   itemContainer: {
+    width: '49%',
     marginBottom: 20
+  },
+  itemsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
   },
   itemImageContainer: {
     backgroundColor: '#FFFFFF',
