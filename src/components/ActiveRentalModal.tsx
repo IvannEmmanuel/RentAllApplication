@@ -76,27 +76,26 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   };
 
   const handleReturnNow = async (rentalId: string) => {
+    // Disable button while processing
     setReturningIds((prev) => [...prev, rentalId]);
 
-    const { data, error } = await supabase
-      .from("rental_transactions")
-      .update({ status: "awaiting_owner_confirmation" })
-      .eq("rental_id", rentalId)
-      .select(
-        `
-      rental_id,
-      item_id,
-      renter_id,
-      items!inner(user_id, title)
-    `
-      )
-      .single();
+    try {
+      // Update rental status in Supabase
+      const { data, error } = await supabase
+        .from("rental_transactions")
+        .update({ status: "awaiting_owner_confirmation" })
+        .eq("rental_id", rentalId)
+        .select(`
+        rental_id,
+        item_id,
+        renter_id,
+        items!inner(user_id, title)
+      `)
+        .single();
 
-    if (error) {
-      console.error("Error updating rental status:", error);
-      setReturningIds((prev) => prev.filter((id) => id !== rentalId));
-    } else {
-      // Update local state
+      if (error) throw error;
+
+      // Update local state to reflect new status immediately
       setRentals((prev) =>
         prev.map((r) =>
           r.rental_id === rentalId
@@ -105,7 +104,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
         )
       );
 
-      // ✅ Notify lessor
+      // Notify the item owner / lessor
       try {
         await handleBookingStatusChange(
           {
@@ -119,6 +118,12 @@ const ActiveRentalModal = ({ visible, onClose }) => {
       } catch (notifyErr) {
         console.error("Error sending notification:", notifyErr);
       }
+
+    } catch (err) {
+      console.error("Error updating rental status:", err);
+    } finally {
+      // Re-enable button
+      setReturningIds((prev) => prev.filter((id) => id !== rentalId));
     }
   };
 
@@ -220,7 +225,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                           {rental.items?.location}
                         </Text>
                       </View>
-                      {remainingDays <= 0 && rental.status === 'ongoing' && (
+                      {rental.status === 'ongoing' && getRemainingDays(rental.end_date) <= 0 && (
                         <TouchableOpacity
                           style={[
                             styles.returnButton,
