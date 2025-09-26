@@ -255,10 +255,17 @@ const Home = () => {
           .eq("available", true)
           .eq("item_status", "approved")
           .order("created_at", { ascending: false })
-          .range((pageNum - 1) * LIMIT, pageNum * LIMIT - 1) // 👈 paginate
+          .range((pageNum - 1) * LIMIT, pageNum * LIMIT - 1)
 
         if (selectedCategoryId) {
           query = query.eq("category_id", Number(selectedCategoryId))
+        }
+
+        // 👇 add this for searching
+        if (searchTerm.trim() !== "") {
+          query = query.or(
+            `title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%`
+          )
         }
 
         let { data, error } = await query
@@ -277,8 +284,6 @@ const Home = () => {
         )
 
         setItems((prev) => (append ? [...prev, ...withImages] : withImages))
-
-        // If fewer than LIMIT returned → no more pages
         setHasMore((data || []).length === LIMIT)
       } catch (e) {
         console.error("Fetch items failed:", e.message)
@@ -286,7 +291,7 @@ const Home = () => {
         if (pageNum === 1) setLoading(false)
       }
     },
-    [selectedCategoryId, searchTerm],
+    [selectedCategoryId, searchTerm], // 👈 searchTerm dependency added
   )
 
   // SMART UPDATE: Handle real-time payload intelligently
