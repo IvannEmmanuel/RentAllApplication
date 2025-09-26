@@ -18,6 +18,7 @@ import FavoritesModal from "../../components/FavoriteModal"
 import BookItemModal from "../../components/BookItemModal"
 import { useNavigation } from "@react-navigation/native"
 import { useFavorites } from "../../components/FavoritesContext"
+import { useFocusEffect } from '@react-navigation/native'
 
 const Home = () => {
   const navigation = useNavigation()
@@ -34,6 +35,20 @@ const Home = () => {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const LIMIT = 6
+
+  useFocusEffect(
+    useCallback(() => {
+      console.log("Home screen focused, fetching items")
+      setPage(1)
+      fetchItems(1, false)
+    }, [fetchItems])
+  )
+
+  const dedupeItems = (itemsArray) => {
+    const map = new Map()
+    itemsArray.forEach((i) => map.set(i.item_id, i))
+    return Array.from(map.values())
+  }
 
   useEffect(() => {
     setPage(1)
@@ -123,6 +138,14 @@ const Home = () => {
           text: statusText,
           disabled: true,
           style: "pending",
+        }
+      }
+
+      if (item.quantity === 0) {
+        return {
+          text: "Out of Stock",
+          disabled: true,
+          style: "disabled",
         }
       }
 
@@ -283,7 +306,10 @@ const Home = () => {
           }),
         )
 
-        setItems((prev) => (append ? [...prev, ...withImages] : withImages))
+        setItems((prev) => {
+          const merged = append ? [...prev, ...withImages] : withImages
+          return dedupeItems(merged)
+        })
         setHasMore((data || []).length === LIMIT)
       } catch (e) {
         console.error("Fetch items failed:", e.message)
@@ -306,56 +332,63 @@ const Home = () => {
           if (newRecord.item_status === "approved" && newRecord.available) {
             const imageUrl = await getImageUrl(newRecord.user_id, newRecord.item_id)
 
-            setItems((prevItems) => [
-              {
-                ...newRecord,
-                imageUrl, // 👈 match what renderItem expects
-                formattedPrice: `₱${newRecord.price_per_day}`,
-                formattedDate: new Date(newRecord.created_at).toLocaleDateString(),
-                quantity: newRecord.quantity,
-              },
-              ...prevItems,
-            ])
+            setItems((prevItems) => {
+              const merged = [
+                {
+                  ...newRecord,
+                  imageUrl,
+                  formattedPrice: `₱${newRecord.price_per_day}`,
+                  formattedDate: new Date(newRecord.created_at).toLocaleDateString(),
+                  quantity: newRecord.quantity,
+                },
+                ...prevItems,
+              ]
+              return dedupeItems(merged)
+            })
           }
           break
 
-        case "UPDATE":
-          {
-            const imageUrl = await getImageUrl(newRecord.user_id, newRecord.item_id)
+        case "UPDATE": {
+          const imageUrl = await getImageUrl(newRecord.user_id, newRecord.item_id)
 
-            setItems((prevItems) => {
-              const exists = prevItems.some((item) => item.item_id === newRecord.item_id)
+          setItems((prevItems) => {
+            const exists = prevItems.some((item) => item.item_id === newRecord.item_id)
 
-              if (newRecord.item_status !== "approved" || !newRecord.available) {
-                return prevItems.filter((item) => item.item_id !== newRecord.item_id)
-              }
+            if (newRecord.item_status !== "approved" || !newRecord.available) {
+              return prevItems.filter((item) => item.item_id !== newRecord.item_id)
+            }
 
-              if (exists) {
-                return prevItems.map((item) =>
-                  item.item_id === newRecord.item_id
-                    ? {
-                      ...item,
-                      ...newRecord,
-                      imageUrl, // 👈 update correctly
-                      formattedPrice: `₱${newRecord.price_per_day}`,
-                      formattedDate: new Date(newRecord.created_at).toLocaleDateString(),
-                    }
-                    : item,
-                )
-              }
-
+            let merged
+            if (exists) {
+              // Update existing
+              merged = prevItems.map((item) =>
+                item.item_id === newRecord.item_id
+                  ? {
+                    ...item,
+                    ...newRecord,
+                    imageUrl,
+                    formattedPrice: `₱${newRecord.price_per_day}`,
+                    formattedDate: new Date(newRecord.created_at).toLocaleDateString(),
+                  }
+                  : item,
+              )
+            } else {
               // If was pending → approved
-              return [
+              merged = [
                 {
                   ...newRecord,
-                  imageUrl, // 👈 match fetchItems
+                  imageUrl,
                   formattedPrice: `₱${newRecord.price_per_day}`,
                   formattedDate: new Date(newRecord.created_at).toLocaleDateString(),
                 },
                 ...prevItems,
               ]
-            })
-          }
+            }
+
+            // ✅ Ensure no duplicates sneak in
+            return dedupeItems(merged)
+          })
+        }
           break
 
         case "DELETE":
@@ -448,7 +481,7 @@ const Home = () => {
           <View style={{ alignSelf: "baseline", width: "100%" }}>
             <Text style={styles.text}>{item.location || "Location not specified"}</Text>
             <Text style={styles.text}>{item.formattedDate}</Text>
-            <Text style={styles.text}>Quantity: {item.quantity || 1}</Text>
+            <Text style={styles.text}>Quantity: {item.quantity ?? 1}</Text>
             <View style={styles.moneyRateContainer}>
               <Text style={styles.moneyText}>{item.formattedPrice}</Text>
               <View style={{ justifyContent: "flex-end", flexDirection: "row" }}>
@@ -593,8 +626,9 @@ const Home = () => {
         currentUserId={currentUser?.id}
         onBooked={() => {
           console.log("Booking completed, refreshing data...")
+          setPage(1)             // reset page
           fetchUserBookings()
-          fetchItems(false) // Silent refresh without loading spinner
+          fetchItems(1, false)   // fetch first page
         }}
       />
     </>
