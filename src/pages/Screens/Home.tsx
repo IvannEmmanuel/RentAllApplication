@@ -35,6 +35,51 @@ const Home = () => {
   const [page, setPage] = useState(1)
   const [hasMore, setHasMore] = useState(true)
   const LIMIT = 6
+  const [itemRatings, setItemRatings] = useState({}) // Add this line
+
+  useEffect(() => {
+    if (items.length > 0) {
+      const itemIds = items.map(item => item.item_id)
+      fetchItemRatings(itemIds)
+    }
+  }, [items, fetchItemRatings])
+
+  const fetchItemRatings = useCallback(async (itemIds) => {
+    if (!itemIds || itemIds.length === 0) return
+
+    try {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("item_id, rating")
+        .in("item_id", itemIds)
+
+      if (error) {
+        console.error("Error fetching ratings:", error)
+        return
+      }
+
+      // Calculate average ratings for each item
+      const ratingsMap = {}
+      data.forEach(review => {
+        if (!ratingsMap[review.item_id]) {
+          ratingsMap[review.item_id] = { total: 0, count: 0 }
+        }
+        ratingsMap[review.item_id].total += review.rating
+        ratingsMap[review.item_id].count += 1
+      })
+
+      // Convert to average ratings
+      const averageRatings = {}
+      Object.keys(ratingsMap).forEach(itemId => {
+        const { total, count } = ratingsMap[itemId]
+        averageRatings[itemId] = count > 0 ? (total / count).toFixed(1) : null
+      })
+
+      setItemRatings(prev => ({ ...prev, ...averageRatings }))
+    } catch (error) {
+      console.error("Error calculating ratings:", error)
+    }
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
@@ -308,7 +353,13 @@ const Home = () => {
 
         setItems((prev) => {
           const merged = append ? [...prev, ...withImages] : withImages
-          return dedupeItems(merged)
+          const deduped = dedupeItems(merged)
+
+          // Fetch ratings for the items
+          const itemIds = deduped.map(item => item.item_id)
+          fetchItemRatings(itemIds)
+
+          return deduped
         })
         setHasMore((data || []).length === LIMIT)
       } catch (e) {
@@ -475,7 +526,7 @@ const Home = () => {
             <Text style={styles.itemName}>{item.title}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 10 }}>
               <Image source={require("../../../assets/rate.png")} style={styles.rateImage} />
-              <Text> 5.0</Text>
+              <Text> {itemRatings[item.item_id] || "No rating"}</Text>
             </View>
           </View>
           <View style={{ alignSelf: "baseline", width: "100%" }}>
