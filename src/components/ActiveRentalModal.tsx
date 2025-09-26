@@ -13,11 +13,13 @@ import {
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supbaseClient';
 import { useFavorites } from './FavoritesContext';
+import { handleBookingStatusChange } from '../notifications/notifications';
 
 const ActiveRentalModal = ({ visible, onClose }) => {
   const { currentUser } = useFavorites();
   const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [returningIds, setReturningIds] = useState<string[]>([]);
 
   useEffect(() => {
     if (!currentUser || !visible) return;
@@ -73,13 +75,60 @@ const ActiveRentalModal = ({ visible, onClose }) => {
     return diffDays;
   };
 
+  const handleReturnNow = async (rentalId: string) => {
+    setReturningIds((prev) => [...prev, rentalId]);
+
+    const { data, error } = await supabase
+      .from("rental_transactions")
+      .update({ status: "awaiting_owner_confirmation" })
+      .eq("rental_id", rentalId)
+      .select(
+        `
+      rental_id,
+      item_id,
+      renter_id,
+      items!inner(user_id, title)
+    `
+      )
+      .single();
+
+    if (error) {
+      console.error("Error updating rental status:", error);
+      setReturningIds((prev) => prev.filter((id) => id !== rentalId));
+    } else {
+      // Update local state
+      setRentals((prev) =>
+        prev.map((r) =>
+          r.rental_id === rentalId
+            ? { ...r, status: "awaiting_owner_confirmation" }
+            : r
+        )
+      );
+
+      // ✅ Notify lessor
+      try {
+        await handleBookingStatusChange(
+          {
+            rental_id: rentalId,
+            item_id: data.item_id,
+            renter_id: data.renter_id,
+          },
+          "ongoing",
+          "awaiting_owner_confirmation"
+        );
+      } catch (notifyErr) {
+        console.error("Error sending notification:", notifyErr);
+      }
+    }
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
         {/* Header - Keep unchanged */}
         <View style={styles.header}>
           <Text style={styles.headerText}>Active Rentals</Text>
-          <TouchableOpacity onPress={onClose} style={{width: 30, height: 30, backgroundColor: '#FFF', justifyContent: 'center', borderRadius: 20}}>
+          <TouchableOpacity onPress={onClose} style={{ width: 30, height: 30, backgroundColor: '#FFF', justifyContent: 'center', borderRadius: 20 }}>
             <Text style={styles.closeButton}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -171,6 +220,20 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                           {rental.items?.location}
                         </Text>
                       </View>
+                      {remainingDays <= 0 && rental.status === 'ongoing' && (
+                        <TouchableOpacity
+                          style={[
+                            styles.returnButton,
+                            returningIds.includes(rental.rental_id) && { backgroundColor: '#ccc' },
+                          ]}
+                          disabled={returningIds.includes(rental.rental_id)}
+                          onPress={() => handleReturnNow(rental.rental_id)}
+                        >
+                          <Text style={styles.returnButtonText}>
+                            {returningIds.includes(rental.rental_id) ? 'Returning...' : 'Return Now'}
+                          </Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
                   </View>
                 </View>
@@ -355,5 +418,17 @@ const styles = StyleSheet.create({
     color: '#7F8C8D',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  returnButton: {
+    marginTop: 12,
+    backgroundColor: '#FF7043',
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  returnButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
