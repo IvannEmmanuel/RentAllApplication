@@ -464,6 +464,16 @@ export async function handleBookingStatusChange(
         );
         break;
 
+      case 'awaiting_owner_confirmation':
+        // Notify lessor that renter marked the item as returned
+        await sendNotificationToUser(
+          item.user_id,
+          'Return Pending Confirmation',
+          `${renterName} has returned your "${item.title}". Please confirm.`,
+          { type: 'booking_return', rental_id: rental.rental_id, item_id: rental.item_id }
+        );
+        break;
+
       default:
         // No notification for other statuses
         break;
