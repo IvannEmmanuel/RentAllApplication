@@ -25,6 +25,7 @@ const FavoritesModal = ({
   getButtonInfo, // RECEIVE SHARED FUNCTION
   onBookingUpdate, // RECEIVE REFRESH FUNCTION
   onFavoriteRemoved,
+  onMessage
 }) => {
   const { favorites, toggleFavorite, fetchFavorites } = useFavorites() // Add updateItemQuantity from context
   const [favoriteItems, setFavoriteItems] = useState([])
@@ -172,10 +173,10 @@ const FavoritesModal = ({
     const buttonInfo = getButtonInfo
       ? getButtonInfo(item)
       : {
-          text: "Rent Now",
-          disabled: false,
-          style: "normal",
-        }
+        text: "Rent Now",
+        disabled: false,
+        style: "normal",
+      }
 
     return (
       <View key={item.item_id} style={styles.favoriteItem}>
@@ -223,9 +224,20 @@ const FavoritesModal = ({
           </TouchableOpacity>
         </View>
 
-        <TouchableOpacity style={styles.removeButton} onPress={() => removeFavorite(item.item_id)}>
-          <Text style={styles.removeButtonText}>✕</Text>
-        </TouchableOpacity>
+        <View style={styles.sideButtons}>
+          {/* Remove favorite button */}
+          <TouchableOpacity style={styles.removeButton} onPress={() => removeFavorite(item.item_id)}>
+            <Text style={styles.removeButtonText}>✕</Text>
+          </TouchableOpacity>
+
+          {/* Message button */}
+          <TouchableOpacity
+            style={styles.messageButton}
+            onPress={() => onMessage && onMessage(item)}
+          >
+            <Image source={require("../../assets/message.png")} style={styles.messageIcon} />
+          </TouchableOpacity>
+        </View>
       </View>
     )
   }
@@ -478,5 +490,28 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: "DM-Bold",
     color: "#333",
+  },
+  sideButtons: {
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  messageButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: "#FFF",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 8,
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  messageIcon: {
+    width: 16,
+    height: 16,
+    tintColor: "#FFAB00",
   },
 })

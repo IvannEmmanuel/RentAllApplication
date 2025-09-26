@@ -589,6 +589,7 @@ const Home = () => {
         getButtonInfo={getButtonInfo}
         onBookingUpdate={fetchUserBookings}
         onFavoriteRemoved={(itemId) => { }}
+        onMessage={(item) => handleMessage(item)} // ✅ added
       />
 
       <BookItemModal
