@@ -1,18 +1,188 @@
-import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
-import React, { useEffect, useState } from 'react';
+// import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
+// import React, { useEffect, useState } from 'react';
+// import { supabase } from '../../../supbaseClient';
+// import { useFavorites } from '../../components/FavoritesContext';
+
+// const Notification = () => {
+//   const { currentUser } = useFavorites(); // Assuming you already have the currentUser
+//   const [notifications, setNotifications] = useState([]);
+//   const [loading, setLoading] = useState(true);
+
+//   // Fetch notifications from Supabase
+//   const fetchNotifications = async () => {
+//     if (!currentUser?.id) return;
+
+//     setLoading(true);
+//     try {
+//       const { data, error } = await supabase
+//         .from('notifications')
+//         .select('*')
+//         .eq('user_id', currentUser.id)
+//         .order('created_at', { ascending: false });
+
+//       if (error) throw error;
+//       setNotifications(data || []);
+//     } catch (error) {
+//       console.error('Error fetching notifications:', error);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
+
+//   useEffect(() => {
+//     fetchNotifications();
+
+//     // Optional: set up realtime listener
+//     const channel = supabase
+//       .channel(`notifications_user_${currentUser?.id}`)
+//       .on(
+//         'postgres_changes',
+//         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser?.id}` },
+//         (payload) => {
+//           console.log('New notification:', payload.new);
+//           setNotifications(prev => [payload.new, ...prev]); // prepend new notification
+//         }
+//       )
+//       .subscribe();
+
+//     return () => supabase.removeChannel(channel);
+//   }, [currentUser?.id]);
+
+//   if (loading) {
+//     return (
+//       <View style={styles.loadingContainer}>
+//         <ActivityIndicator size="large" color="#FFAB00" />
+//       </View>
+//     );
+//   }
+
+//   if (!notifications.length) {
+//     return (
+//       <View style={styles.emptyContainer}>
+//         <Text style={styles.emptyText}>No notifications yet</Text>
+//       </View>
+//     );
+//   }
+
+//   const renderItem = ({ item }) => (
+//     <View style={styles.notificationItem}>
+//       <Text style={styles.title}>{item.title}</Text>
+//       <Text style={styles.message}>{item.message}</Text>
+//       <Text style={styles.date}>{new Date(item.created_at).toLocaleString()}</Text>
+//     </View>
+//   );
+
+//   return (
+//     <FlatList
+//       data={notifications}
+//       keyExtractor={(item) => item.notification_id}
+//       renderItem={renderItem}
+//       contentContainerStyle={{ padding: 10 }}
+//     />
+//   );
+// };
+
+// export default Notification;
+
+// const styles = StyleSheet.create({
+//   notificationItem: {
+//     backgroundColor: '#fff',
+//     padding: 15,
+//     borderRadius: 10,
+//     marginBottom: 10,
+//     elevation: 2,
+//   },
+//   title: { fontWeight: 'bold', fontSize: 16, marginBottom: 5 },
+//   message: { fontSize: 14, marginBottom: 5 },
+//   date: { fontSize: 12, color: '#888' },
+//   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+//   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+//   emptyText: { fontSize: 16, color: '#888' },
+// });
+
+
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  FlatList, 
+  ActivityIndicator, 
+  TouchableOpacity, 
+  Image, 
+  RefreshControl 
+} from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../../supbaseClient';
 import { useFavorites } from '../../components/FavoritesContext';
+import { useNavigation } from '@react-navigation/native';
 
 const Notification = () => {
-  const { currentUser } = useFavorites(); // Assuming you already have the currentUser
+  const navigation = useNavigation();
+  const { currentUser } = useFavorites();
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+
+  // Format time ago function
+  const formatTimeAgo = (dateString) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return "Just now";
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    
+    const diffInHours = Math.floor(diffInMinutes / 60);
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    
+    const diffInDays = Math.floor(diffInHours / 24);
+    if (diffInDays < 7) return `${diffInDays}d ago`;
+    
+    return date.toLocaleDateString();
+  };
+
+  // Get notification icon based on type
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'booking_request':
+      case 'booking_confirmed':
+      case 'booking_cancelled':
+      case 'booking_completed':
+      case 'booking_started':
+      case 'booking_return':
+        return require("../../../assets/splash-icon.png"); // Using your existing asset
+      case 'message':
+        return require("../../../assets/message.png");
+      default:
+        return require("../../../assets/splash-icon.png");
+    }
+  };
+
+  // Get notification color based on type
+  const getNotificationColor = (type) => {
+    switch (type) {
+      case 'booking_confirmed':
+      case 'booking_completed':
+        return '#4CAF50'; // Green
+      case 'booking_cancelled':
+        return '#F44336'; // Red
+      case 'booking_request':
+      case 'booking_return':
+        return '#FFAB00'; // Your theme color
+      case 'booking_started':
+        return '#2196F3'; // Blue
+      case 'message':
+        return '#9C27B0'; // Purple
+      default:
+        return '#9C9894'; // Gray
+    }
+  };
 
   // Fetch notifications from Supabase
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async (showLoading = true) => {
     if (!currentUser?.id) return;
 
-    setLoading(true);
+    if (showLoading) setLoading(true);
     try {
       const { data, error } = await supabase
         .from('notifications')
@@ -25,77 +195,307 @@ const Notification = () => {
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
-      setLoading(false);
+      if (showLoading) setLoading(false);
+    }
+  }, [currentUser?.id]);
+
+  // Pull to refresh
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await fetchNotifications(false);
+    setRefreshing(false);
+  }, [fetchNotifications]);
+
+  // Mark notification as read
+  const markAsRead = async (notificationId) => {
+    try {
+      await supabase
+        .from('notifications')
+        .update({ read_at: new Date().toISOString() })
+        .eq('notification_id', notificationId);
+
+      // Update local state
+      setNotifications(prev => 
+        prev.map(notification => 
+          notification.notification_id === notificationId
+            ? { ...notification, read_at: new Date().toISOString() }
+            : notification
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
     }
   };
 
   useEffect(() => {
     fetchNotifications();
 
-    // Optional: set up realtime listener
+    // Real-time listener
+    if (!currentUser?.id) return;
+
     const channel = supabase
       .channel(`notifications_user_${currentUser?.id}`)
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser?.id}` },
+        { 
+          event: '*', 
+          schema: 'public', 
+          table: 'notifications', 
+          filter: `user_id=eq.${currentUser?.id}` 
+        },
         (payload) => {
-          console.log('New notification:', payload.new);
-          setNotifications(prev => [payload.new, ...prev]); // prepend new notification
+          console.log('Notification change:', payload);
+          if (payload.eventType === 'INSERT') {
+            setNotifications(prev => [payload.new, ...prev]);
+          } else if (payload.eventType === 'UPDATE') {
+            setNotifications(prev => 
+              prev.map(item => 
+                item.notification_id === payload.new.notification_id 
+                  ? payload.new 
+                  : item
+              )
+            );
+          }
         }
       )
       .subscribe();
 
     return () => supabase.removeChannel(channel);
-  }, [currentUser?.id]);
+  }, [currentUser?.id, fetchNotifications]);
 
   if (loading) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFAB00" />
-      </View>
-    );
-  }
+      <View style={styles.container}>
+        {/* Header */}
+        <View style={styles.headerContainer}>
+          <Text style={styles.headerTitle}>Notifications</Text>
+          <View style={styles.headerSpacer} />
+        </View>
 
-  if (!notifications.length) {
-    return (
-      <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>No notifications yet</Text>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#FFAB00" />
+          <Text style={styles.loadingText}>Loading notifications...</Text>
+        </View>
       </View>
     );
   }
 
   const renderItem = ({ item }) => (
-    <View style={styles.notificationItem}>
-      <Text style={styles.title}>{item.title}</Text>
-      <Text style={styles.message}>{item.message}</Text>
-      <Text style={styles.date}>{new Date(item.created_at).toLocaleString()}</Text>
-    </View>
+    <TouchableOpacity 
+      style={[
+        styles.notificationItem,
+        !item.read_at && styles.unreadNotificationItem
+      ]}
+      onPress={() => !item.read_at && markAsRead(item.notification_id)}
+    >
+      <View style={styles.notificationContent}>
+        <View style={[
+          styles.iconContainer, 
+          { backgroundColor: `${getNotificationColor(item.type)}20` }
+        ]}>
+          <View style={[
+            styles.iconDot, 
+            { backgroundColor: getNotificationColor(item.type) }
+          ]} />
+        </View>
+        
+        <View style={styles.textContainer}>
+          <View style={styles.headerRow}>
+            <Text style={[
+              styles.notificationTitle,
+              !item.read_at && styles.unreadTitle
+            ]}>
+              {item.title}
+            </Text>
+            <Text style={styles.timeText}>
+              {formatTimeAgo(item.created_at)}
+            </Text>
+          </View>
+          
+          <Text style={styles.notificationMessage} numberOfLines={2}>
+            {item.message}
+          </Text>
+          
+          {!item.read_at && <View style={styles.unreadIndicator} />}
+        </View>
+      </View>
+    </TouchableOpacity>
   );
 
   return (
-    <FlatList
-      data={notifications}
-      keyExtractor={(item) => item.notification_id}
-      renderItem={renderItem}
-      contentContainerStyle={{ padding: 10 }}
-    />
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.headerContainer}>
+        <Text style={styles.headerTitle}>Notifications</Text>
+        <View style={styles.headerSpacer} />
+      </View>
+
+      {notifications.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <Image 
+            source={require("../../../assets/splash-icon.png")} 
+            style={styles.emptyIcon}
+          />
+          <Text style={styles.emptyTitle}>No notifications yet</Text>
+          <Text style={styles.emptyMessage}>
+            You'll receive notifications about your rentals and messages here
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={notifications}
+          keyExtractor={(item) => item.notification_id?.toString() || Math.random().toString()}
+          renderItem={renderItem}
+          contentContainerStyle={styles.listContainer}
+          showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={['#FFAB00']}
+              tintColor="#FFAB00"
+            />
+          }
+        />
+      )}
+    </View>
   );
 };
 
 export default Notification;
 
 const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: "#FAF5EF",
+    marginTop: 40,
+  },
+  headerContainer: {
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingVertical: 15,
+    backgroundColor: "#FAF5EF",
+  },
+  headerTitle: {
+    flex: 1,
+    fontSize: 32,
+    fontFamily: "DM-Bold",
+    color: "#000",
+  },
+  listContainer: {
+    padding: 10,
+    paddingBottom: 50,
+  },
   notificationItem: {
-    backgroundColor: '#fff',
-    padding: 15,
+    backgroundColor: "#FFFFFF",
     borderRadius: 10,
     marginBottom: 10,
     elevation: 2,
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
   },
-  title: { fontWeight: 'bold', fontSize: 16, marginBottom: 5 },
-  message: { fontSize: 14, marginBottom: 5 },
-  date: { fontSize: 12, color: '#888' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { fontSize: 16, color: '#888' },
+  unreadNotificationItem: {
+    borderLeftWidth: 4,
+    borderLeftColor: "#FFAB00",
+  },
+  notificationContent: {
+    flexDirection: "row",
+    padding: 15,
+    alignItems: "flex-start",
+  },
+  iconContainer: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  iconDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+  },
+  textContainer: {
+    flex: 1,
+    position: "relative",
+  },
+  headerRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 4,
+  },
+  notificationTitle: {
+    fontSize: 14,
+    fontFamily: "DM-Medium",
+    color: "#000",
+    flex: 1,
+    marginRight: 10,
+  },
+  unreadTitle: {
+    fontFamily: "DM-Bold",
+  },
+  timeText: {
+    fontSize: 12,
+    color: "#9C9894",
+    fontFamily: "DM-Regular",
+  },
+  notificationMessage: {
+    fontSize: 13,
+    color: "#9C9894",
+    fontFamily: "DM-Regular",
+    lineHeight: 18,
+    marginTop: 2,
+  },
+  unreadIndicator: {
+    position: "absolute",
+    top: 0,
+    right: 0,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#FFAB00",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  loadingText: {
+    marginTop: 10,
+    color: "#9C9894",
+    fontSize: 16,
+    fontFamily: "DM-Regular",
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 40,
+  },
+  emptyIcon: {
+    width: 80,
+    height: 80,
+    marginBottom: 20,
+    opacity: 0.6,
+  },
+  emptyTitle: {
+    fontSize: 18,
+    fontFamily: "DM-Bold",
+    color: "#000",
+    marginBottom: 8,
+  },
+  emptyMessage: {
+    fontSize: 14,
+    color: "#9C9894",
+    textAlign: "center",
+    lineHeight: 20,
+    fontFamily: "DM-Regular",
+  },
 });
