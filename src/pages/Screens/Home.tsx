@@ -10,6 +10,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  FlatList
 } from "react-native"
 import { useEffect, useState, useCallback } from "react"
 import { supabase } from "../../../supbaseClient"
@@ -30,6 +31,14 @@ const Home = () => {
   const [bookModalVisible, setBookModalVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [userBookings, setUserBookings] = useState([])
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const LIMIT = 6
+
+  useEffect(() => {
+    setPage(1)
+    fetchItems(1, false)
+  }, [fetchItems, searchTerm, selectedCategoryId])
 
   // Fetch user's bookings - SHARED FUNCTION
   const fetchUserBookings = useCallback(async () => {
@@ -233,79 +242,51 @@ const Home = () => {
 
   // OPTIMIZED: fetchItems with loading control
   const fetchItems = useCallback(
-    async (showLoading = true) => {
-      if (showLoading) setLoading(true)
+    async (pageNum = 1, append = false) => {
+      if (pageNum === 1) setLoading(true)
 
       try {
         const baseSelect =
           "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,item_status,quantity"
+
         let query = supabase
           .from("items")
           .select(baseSelect)
           .eq("available", true)
           .eq("item_status", "approved")
           .order("created_at", { ascending: false })
+          .range((pageNum - 1) * LIMIT, pageNum * LIMIT - 1) // 👈 paginate
 
         if (selectedCategoryId) {
           query = query.eq("category_id", Number(selectedCategoryId))
         }
 
         let { data, error } = await query
-
-        // Fallback if item_status column does not exist
-        if (error && (error.code === "42703" || /item_status/i.test(error.message))) {
-          console.warn("item_status column missing; showing all available items.")
-          let fallbackQuery = supabase
-            .from("items")
-            .select(
-              "item_id,user_id,category_id,title,description,price_per_day,deposit_fee,location,available,created_at,quantity",
-            )
-            .eq("available", true)
-            .order("created_at", { ascending: false })
-
-          if (selectedCategoryId) {
-            fallbackQuery = fallbackQuery.eq("category_id", Number(selectedCategoryId))
-          }
-
-          const fallback = await fallbackQuery
-          data = fallback.data
-          error = fallback.error
-        }
-
         if (error) throw error
 
-        // Fetch images for each item
         const withImages = await Promise.all(
           (data || []).map(async (item) => {
             const imageUrl = await getImageUrl(item.user_id, item.item_id)
             return {
               ...item,
-              imageUrl: imageUrl,
+              imageUrl,
               formattedPrice: `₱${item.price_per_day}`,
               formattedDate: new Date(item.created_at).toLocaleDateString(),
             }
           }),
         )
 
-        // Filter based on search term
-        const filtered = withImages.filter((item) => {
-          if (!searchTerm) return true
-          const needle = searchTerm.toLowerCase()
-          return (
-            item.title.toLowerCase().includes(needle) ||
-            (item.description && item.description.toLowerCase().includes(needle)) ||
-            (item.location && item.location.toLowerCase().includes(needle))
-          )
-        })
+        setItems((prev) => (append ? [...prev, ...withImages] : withImages))
 
-        setItems(filtered)
+        // If fewer than LIMIT returned → no more pages
+        setHasMore((data || []).length === LIMIT)
       } catch (e) {
         console.error("Fetch items failed:", e.message)
       } finally {
-        if (showLoading) setLoading(false)
+        if (pageNum === 1) setLoading(false)
       }
     },
-    [searchTerm, selectedCategoryId],
+    [selectedCategoryId, searchTerm],
   )
 
   // SMART UPDATE: Handle real-time payload intelligently
@@ -512,73 +493,81 @@ const Home = () => {
 
   return (
     <>
-      <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-        <View style={styles.topMenuBar}>
-          <TextInput
-            placeholder="Search"
-            placeholderTextColor={"#000"}
-            style={styles.searchContainer}
-            value={searchTerm}
-            onChangeText={setSearchTerm}
-          />
-          <TouchableOpacity onPress={() => setFavoritesModalVisible(true)}>
-            <View style={styles.heartContainer}>
-              <Image source={require("../../../assets/heart.png")} style={styles.heartLogo} />
-              <Text>Likes({favorites.length})</Text>
-            </View>
-          </TouchableOpacity>
-        </View>
-
-        {/* Categories */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
-          <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
-            <Text style={[styles.categoriesText, selectedCategoryId === "" && styles.selectedCategoryText]}>All</Text>
-          </TouchableOpacity>
-          {categories.map((category) => (
-            <TouchableOpacity
-              key={category.category_id}
-              onPress={() =>
-                setSelectedCategoryId(
-                  selectedCategoryId === String(category.category_id) ? "" : String(category.category_id),
-                )
-              }
-            >
-              <Text
-                style={[
-                  styles.categoriesText,
-                  selectedCategoryId === String(category.category_id) && styles.selectedCategoryText,
-                ]}
-              >
-                {category.name}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-
-        <View style={styles.itemTextContainer}>
-          <Text style={styles.itemText}>Items</Text>
-        </View>
-
-        {/* Items Grid */}
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#FFAB00" />
-            <Text style={styles.loadingText}>Loading items...</Text>
-          </View>
-        ) : items.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No items found</Text>
-          </View>
-        ) : (
-          <View style={styles.itemsGrid}>
-            {items.map((item, index) => (
-              <View key={item.item_id.toString()} style={styles.itemWrapper}>
-                {renderItem(item)}
-              </View>
-            ))}
-          </View>
+      <FlatList
+        style={styles.container}
+        data={items}
+        keyExtractor={(item) => item.item_id.toString()}
+        renderItem={({ item }) => (
+          <View style={styles.itemWrapper}>{renderItem(item)}</View>
         )}
-      </ScrollView>
+        numColumns={2}
+        columnWrapperStyle={{ justifyContent: "space-between", paddingHorizontal: 10 }}
+        contentContainerStyle={{ paddingBottom: 50 }}
+        ListHeaderComponent={
+          <>
+            {/* Top menu bar & categories stay same */}
+            <View style={styles.topMenuBar}>
+              <TextInput
+                placeholder="Search"
+                placeholderTextColor={"#000"}
+                style={styles.searchContainer}
+                value={searchTerm}
+                onChangeText={setSearchTerm}
+              />
+              <TouchableOpacity onPress={() => setFavoritesModalVisible(true)}>
+                <View style={styles.heartContainer}>
+                  <Image source={require("../../../assets/heart.png")} style={styles.heartLogo} />
+                  <Text>Likes({favorites.length})</Text>
+                </View>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+              <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
+                <Text style={[styles.categoriesText, selectedCategoryId === "" && styles.selectedCategoryText]}>All</Text>
+              </TouchableOpacity>
+              {categories.map((category) => (
+                <TouchableOpacity
+                  key={category.category_id}
+                  onPress={() =>
+                    setSelectedCategoryId(
+                      selectedCategoryId === String(category.category_id) ? "" : String(category.category_id),
+                    )
+                  }
+                >
+                  <Text
+                    style={[
+                      styles.categoriesText,
+                      selectedCategoryId === String(category.category_id) && styles.selectedCategoryText,
+                    ]}
+                  >
+                    {category.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={styles.itemTextContainer}>
+              <Text style={styles.itemText}>Items</Text>
+            </View>
+          </>
+        }
+        ListFooterComponent={
+          hasMore ? (
+            <ActivityIndicator size="large" color="#FFAB00" style={{ marginVertical: 20 }} />
+          ) : (
+            <Text style={{ textAlign: "center", marginVertical: 20 }}>No more items</Text>
+          )
+        }
+        onEndReached={() => {
+          if (hasMore) {
+            const nextPage = page + 1
+            setPage(nextPage)
+            fetchItems(nextPage, true) // append new items
+          }
+        }}
+        onEndReachedThreshold={0.5}
+      />
 
       <FavoritesModal
         visible={favoritesModalVisible}
