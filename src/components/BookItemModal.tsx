@@ -27,6 +27,48 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
 
   const [selectedQuantity, setSelectedQuantity] = useState(1);
 
+  //Ratings
+  const [ratings, setRatings] = useState([])
+  const [averageRating, setAverageRating] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!visible || !item?.item_id) return;
+
+    const fetchReviews = async () => {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select(`
+        rating,
+        comment,
+        created_at,
+        reviewer_id,
+        users:reviewer_id (first_name, last_name)
+      `)
+        .eq("item_id", item.item_id)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching reviews:", error);
+        setRatings([]);
+        setAverageRating(null);
+        return;
+      }
+
+      setRatings(data || []);
+
+      if (data && data.length > 0) {
+        const total = data.reduce((sum, r) => sum + r.rating, 0);
+        const avg = total / data.length;
+        setAverageRating(avg);
+      } else {
+        setAverageRating(null);
+      }
+    };
+
+    fetchReviews();
+  }, [visible, item?.item_id]);
+
+
   // Reset when modal closes
   useEffect(() => {
     if (!visible) {
@@ -559,6 +601,33 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
 
             {errorMsg && <Text style={styles.errorText}>{errorMsg}</Text>}
           </View>
+
+          <View style={styles.ratingsContainer}>
+            <View style={styles.ratingsHeader}>
+              <Text style={styles.sectionTitle}>Ratings & Reviews</Text>
+
+              {averageRating !== null && (
+                <Text style={styles.ratingSummary}>
+                  ⭐ {averageRating.toFixed(1)} · {ratings.length} review{ratings.length > 1 ? "s" : ""}
+                </Text>
+              )}
+            </View>
+
+            {ratings.length === 0 ? (
+              <Text style={styles.noRatingsText}>No reviews yet for this item.</Text>
+            ) : (
+              ratings.map((r, idx) => (
+                <View key={idx} style={styles.ratingCard}>
+                  <Text style={styles.ratingScore}>⭐ {r.rating}/5</Text>
+                  {r.comment && <Text style={styles.ratingReview}>{r.comment}</Text>}
+                  <Text style={styles.ratingUser}>
+                    {r.users?.first_name} {r.users?.last_name} ·{" "}
+                    {new Date(r.created_at).toLocaleDateString()}
+                  </Text>
+                </View>
+              ))
+            )}
+          </View>
         </ScrollView>
 
         {/* Footer */}
@@ -834,5 +903,53 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     color: "#FFF",
   },
-
+  ratingsContainer: {
+    backgroundColor: "#FFF",
+    borderRadius: 8,
+    padding: 16,
+    marginBottom: 20,
+    elevation: 1,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  noRatingsText: {
+    fontSize: 13,
+    color: "#666",
+    marginTop: 6,
+    fontStyle: "italic",
+  },
+  ratingCard: {
+    marginTop: 12,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEE",
+  },
+  ratingScore: {
+    fontSize: 14,
+    fontFamily: "DM-Bold",
+    color: "#FFAB00",
+  },
+  ratingReview: {
+    fontSize: 13,
+    color: "#333",
+    marginTop: 4,
+  },
+  ratingUser: {
+    fontSize: 12,
+    color: "#666",
+    marginTop: 4,
+  },
+  ratingsHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  ratingSummary: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#333",
+  },
 })

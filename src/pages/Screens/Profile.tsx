@@ -8,6 +8,7 @@ import YourItemModal from '../../components/YourItemModal'
 import ActiveRentalModal from '../../components/ActiveRentalModal'
 import PendingRentalModal from '../../components/PendingRentalModal'
 import CompletedRentalModal from '../../components/CompletedRentalModal'
+import RatingsModal from '../../components/RatingsModal'
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -19,6 +20,7 @@ const Profile = () => {
   const [showActiveRental, setShowActiveRental] = useState(false);
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
+  const [showRatingsModal, setShowRatingsModal] = useState(false);
 
   // Use shared favorites context instead of local state
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
@@ -471,6 +473,15 @@ const Profile = () => {
                 <Text>Your Item</Text>
               </TouchableOpacity>
             </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity
+                style={styles.subActivitiesContainer}
+                onPress={() => setShowRatingsModal(true)} // new state
+              >
+                <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
+                <Text>Ratings</Text>
+              </TouchableOpacity>
+            </View>
           </View>
 
           <View style={styles.mainItemContainer}>
@@ -525,6 +536,12 @@ const Profile = () => {
       <CompletedRentalModal
         visible={showCompletedModal}
         onClose={() => setShowCompletedModal(false)}
+      />
+
+      <RatingsModal
+        visible={showRatingsModal}
+        onClose={() => setShowRatingsModal(false)}
+        currentUserId={currentUser?.id}
       />
     </>
   )
