@@ -32,7 +32,8 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       if (activeTab === 'pending') {
         statusFilter = ['pending'];
       } else if (activeTab === 'active') {
-        // Lessor should only see rentals awaiting their confirmation
+        statusFilter = ['confirmed', 'ongoing'];
+      } else if (activeTab === 'confirmationReturned') {
         statusFilter = ['awaiting_owner_confirmation'];
       } else {
         statusFilter = ['completed'];
@@ -71,21 +72,50 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
 
       if (error) throw error;
 
-      // For active rentals, check if any should be moved to ongoing status
+      // Inside your fetchBookings function, after fetching transactions
       if (activeTab === 'active') {
         const now = new Date();
-        const toUpdate = transactions.filter(booking =>
-          booking.status === 'confirmed' && new Date(booking.start_date) <= now
+
+        // Filter confirmed bookings that should start now
+        const toStart = transactions.filter(
+          booking => booking.status === 'confirmed' && new Date(booking.start_date) <= now
         );
 
-        // Update confirmed bookings to ongoing if start date has passed
-        for (const booking of toUpdate) {
-          await supabase
-            .from('rental_transactions')
-            .update({ status: 'ongoing' })
-            .eq('rental_id', booking.rental_id);
+        for (const booking of toStart) {
+          const rentedQuantity = booking.quantity || 1;
 
-          booking.status = 'ongoing'; // Update local state
+          try {
+            // Fetch current item stock
+            const { data: itemData, error: itemError } = await supabase
+              .from('items')
+              .select('quantity')
+              .eq('item_id', booking.item_id)
+              .single();
+
+            if (itemError) throw itemError;
+
+            if (itemData.quantity < rentedQuantity) {
+              console.warn(`Not enough stock for item ${booking.item_id}`);
+              continue; // skip if not enough stock
+            }
+
+            // Deduct rental quantity from item stock
+            await supabase
+              .from('items')
+              .update({ quantity: itemData.quantity - rentedQuantity })
+              .eq('item_id', booking.item_id);
+
+            // Update rental status to ongoing
+            await supabase
+              .from('rental_transactions')
+              .update({ status: 'ongoing' })
+              .eq('rental_id', booking.rental_id);
+
+            // Update local object for UI
+            booking.status = 'ongoing';
+          } catch (err) {
+            console.error('Error starting booking:', err);
+          }
         }
       }
 
@@ -159,54 +189,27 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             setProcessingIds(prev => new Set([...prev, rentalId]));
 
             try {
-              // First, get the current item quantity
-              const { data: itemData, error: itemError } = await supabase
-                .from('items')
-                .select('quantity')
-                .eq('item_id', booking.item_id)
-                .single();
-
-              if (itemError) throw itemError;
-
-              const currentQuantity = itemData.quantity;
-              const requestedQuantity = booking.quantity || 1;
-
-              // Check if there's enough quantity available
-              if (currentQuantity < requestedQuantity) {
-                Alert.alert('Error', `Not enough quantity available. Only ${currentQuantity} item(s) left.`);
-                return;
-              }
-
-              // Calculate new quantity
-              const newQuantity = currentQuantity - requestedQuantity;
-
-              // Update the rental transaction status
-              const { error: transactionError } = await supabase
+              // Update the rental transaction status only
+              const { error } = await supabase
                 .from('rental_transactions')
                 .update({ status: 'confirmed' })
                 .eq('rental_id', rentalId);
 
-              if (transactionError) throw transactionError;
+              if (error) throw error;
 
-              // Update the item quantity
-              const { error: quantityError } = await supabase
-                .from('items')
-                .update({ quantity: newQuantity })
-                .eq('item_id', booking.item_id);
-
-              if (quantityError) throw quantityError;
-
+              // Notify the renter
               await handleBookingStatusChange(
                 booking,
                 'pending',
                 'confirmed'
               );
 
+              // Remove booking from pending list
               setBookings(prev =>
                 prev.filter(b => b.rental_id !== rentalId)
               );
 
-              Alert.alert('Success', 'Booking accepted successfully! Quantity updated.');
+              Alert.alert('Success', 'Booking accepted successfully!');
             } catch (error) {
               console.error('Error accepting booking:', error);
               Alert.alert('Error', 'Failed to accept booking. Please try again.');
@@ -275,7 +278,67 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
     );
   };
 
-  // Handle returned (for active rentals)
+  const handleConfirmReturn = async (booking) => {
+    const rentalId = booking.rental_id;
+    if (processingIds.has(rentalId)) return;
+
+    Alert.alert(
+      'Confirm Return',
+      `Confirm "${booking.items.title}" has been returned by ${booking.renter_name}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Confirm',
+          onPress: async () => {
+            setProcessingIds(prev => new Set([...prev, rentalId]));
+            const returnedQuantity = booking.quantity || 1;
+
+            try {
+              // 1️⃣ Add the returned quantity back to the item stock
+              const { data: itemData, error: itemError } = await supabase
+                .from('items')
+                .select('quantity')
+                .eq('item_id', booking.item_id)
+                .single();
+
+              if (itemError) throw itemError;
+
+              await supabase
+                .from('items')
+                .update({ quantity: itemData.quantity + returnedQuantity })
+                .eq('item_id', booking.item_id);
+
+              // 2️⃣ Update rental status to 'completed'
+              const { error: updateError } = await supabase
+                .from('rental_transactions')
+                .update({ status: 'completed' })
+                .eq('rental_id', rentalId);
+
+              if (updateError) throw updateError;
+
+              // 3️⃣ Optional: notify the renter/owner
+              await handleBookingStatusChange(booking, 'awaiting_owner_confirmation', 'completed');
+
+              // 4️⃣ Remove from local state so UI updates
+              setBookings(prev => prev.filter(b => b.rental_id !== rentalId));
+
+              Alert.alert('Success', 'Return confirmed and stock updated!');
+            } catch (err) {
+              console.error(err);
+              Alert.alert('Error', 'Failed to confirm return.');
+            } finally {
+              setProcessingIds(prev => {
+                const newSet = new Set(prev);
+                newSet.delete(rentalId);
+                return newSet;
+              });
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Handle returned (for active rentals)
   const handleReturned = async (booking) => {
     const rentalId = booking.rental_id;
@@ -294,51 +357,24 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             setProcessingIds(prev => new Set([...prev, rentalId]));
 
             try {
-              // Get the original quantity that was rented
-              const rentedQuantity = booking.quantity || 1;
-
-              // Get current item quantity
-              const { data: itemData, error: itemError } = await supabase
-                .from('items')
-                .select('quantity')
-                .eq('item_id', booking.item_id)
-                .single();
-
-              if (itemError) throw itemError;
-
-              const currentQuantity = itemData.quantity;
-              const newQuantity = currentQuantity + rentedQuantity;
-
-              // Update the rental transaction status
-              const { error: transactionError } = await supabase
+              // Only update status to awaiting_owner_confirmation
+              const { error } = await supabase
                 .from('rental_transactions')
-                .update({ status: 'completed' })
+                .update({ status: 'awaiting_owner_confirmation' })
                 .eq('rental_id', rentalId);
 
-              if (transactionError) throw transactionError;
+              if (error) throw error;
 
-              // Update the item quantity (add back the rented quantity)
-              const { error: quantityError } = await supabase
-                .from('items')
-                .update({ quantity: newQuantity })
-                .eq('item_id', booking.item_id);
-
-              if (quantityError) throw quantityError;
-
-              await handleBookingStatusChange(
-                booking,
-                booking.status,
-                'completed'
-              );
+              await handleBookingStatusChange(booking, 'ongoing', 'awaiting_owner_confirmation');
 
               setBookings(prev =>
                 prev.filter(b => b.rental_id !== rentalId)
               );
 
-              Alert.alert('Success', 'Item marked as returned! Quantity updated.');
+              Alert.alert('Success', 'Return requested! Awaiting your confirmation.');
             } catch (error) {
               console.error('Error marking as returned:', error);
-              Alert.alert('Error', 'Failed to mark as returned. Please try again.');
+              Alert.alert('Error', 'Failed to mark return.');
             } finally {
               setProcessingIds(prev => {
                 const newSet = new Set(prev);
@@ -396,7 +432,6 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       case 'pending': return 'PENDING';
       case 'confirmed': return 'CONFIRMED';
       case 'ongoing': return 'ONGOING';
-      case 'awaiting_owner_confirmation': return 'AWAITING CONFIRMATION';
       case 'completed': return 'COMPLETED';
       case 'returned': return 'RETURNED';
       default: return status.toUpperCase();
@@ -409,7 +444,6 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       case 'pending': return '#FF8C00';
       case 'confirmed': return '#4CAF50';
       case 'ongoing': return '#2196F3';
-      case 'awaiting_owner_confirmation': return '#2196F3';
       case 'completed': return '#9E9E9E';
       case 'returned': return '#4CAF50';
       default: return '#FF8C00';
@@ -444,7 +478,12 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             styles.statusBadge,
             { backgroundColor: getStatusColor(booking.status, booking.is_overdue) }
           ]}>
-            <Text style={styles.statusText}>
+            <Text
+              style={[
+                styles.statusText,
+                activeTab === 'confirmationReturned' ? { fontSize: 7 } : { fontSize: 10 }
+              ]}
+            >
               {booking.is_overdue ? 'OVERDUE' : getStatusText(booking.status)}
             </Text>
           </View>
@@ -505,7 +544,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
           </View>
         )}
 
-        {activeTab === 'active' && (
+        {/* {activeTab === 'active' && (
           <View style={styles.actionButtons}>
             <TouchableOpacity
               style={[styles.button, styles.returnedButton]}
@@ -516,6 +555,22 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
                 <ActivityIndicator size="small" color="#FFF" />
               ) : (
                 <Text style={styles.returnedButtonText}>Returned</Text>
+              )}
+            </TouchableOpacity>
+          </View>
+        )} */}
+
+        {activeTab === 'confirmationReturned' && (
+          <View style={styles.actionButtons}>
+            <TouchableOpacity
+              style={[styles.button, styles.acceptButton]}
+              onPress={() => handleConfirmReturn(booking)}
+              disabled={isProcessing}
+            >
+              {isProcessing ? (
+                <ActivityIndicator size="small" color="#FFF" />
+              ) : (
+                <Text style={styles.acceptButtonText}>Confirm Return</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -540,6 +595,11 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
         return {
           title: 'No Completed Rentals',
           subtitle: "You don't have any completed rentals yet."
+        };
+      case 'confirmationReturned':
+        return {
+          title: 'No Confirmation Returned',
+          subtitle: "You don't have any bookings awaiting your confirmation."
         };
       default:
         return {
@@ -583,7 +643,16 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             onPress={() => setActiveTab("active")}
           >
             <Text style={[styles.methodButtonText, activeTab === "active" && styles.methodButtonTextActive]}>
-              Active Rental
+              Active
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.methodButton, activeTab === "confirmationReturned" && styles.methodButtonActive]}
+            onPress={() => setActiveTab("confirmationReturned")}
+          >
+            <Text style={[styles.methodButtonText, activeTab === "confirmationReturned" && styles.methodButtonTextActive]}>
+              Confirmation
             </Text>
           </TouchableOpacity>
 
@@ -702,7 +771,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE1BE',
   },
   methodButtonText: {
-    fontSize: 14,
+    fontSize: 12,
     fontFamily: 'DM-Medium',
     color: '#666',
   },
