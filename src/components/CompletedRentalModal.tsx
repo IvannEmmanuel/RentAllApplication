@@ -55,7 +55,11 @@ const CompletedRentalModal = ({ visible, onClose }) => {
             title,
             price_per_day,
             location,
-            main_image_url
+            main_image_url,
+            user: user_id (
+              first_name,
+              last_name
+            )
           )
         `
         )
@@ -166,6 +170,10 @@ const CompletedRentalModal = ({ visible, onClose }) => {
           <View style={styles.info}>
             <Text style={styles.title} numberOfLines={2}>
               {rental.items?.title}
+            </Text>
+
+            <Text style={styles.detailText}>
+              {rental.items?.user?.first_name} {rental.items?.user?.last_name}
             </Text>
 
             <View style={styles.detailRow}>
