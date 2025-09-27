@@ -424,12 +424,12 @@ const Profile = () => {
           </TouchableOpacity>
 
           <View style={styles.itemRateContainer}>
-            <Text style={styles.itemName}>{item.title}</Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
               <Image source={require('../../../assets/rate.png')} style={styles.rateImage} />
               <Text> {itemRatings[String(item.item_id)] ?? 'No rating'}</Text>
             </View>
           </View>
+          <Text style={styles.itemName}>{item.title}</Text>
           <Text style={styles.text}>{item.lessorName}</Text>
           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
           <Text style={styles.text}>{item.formattedDate}</Text>
