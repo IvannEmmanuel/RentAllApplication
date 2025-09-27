@@ -29,21 +29,26 @@ const ActiveRentalModal = ({ visible, onClose }) => {
       const { data, error } = await supabase
         .from('rental_transactions')
         .select(`
-          rental_id,
-          item_id,
-          start_date,
-          end_date,
-          status,
-          quantity,
-          total_cost,
-          created_at,
-          items (
-            title,
-            price_per_day,
-            location,
-            main_image_url
-          )
-        `)
+    rental_id,
+    item_id,
+    start_date,
+    end_date,
+    status,
+    quantity,
+    total_cost,
+    created_at,
+    items (
+      title,
+      price_per_day,
+      location,
+      main_image_url,
+      users:user_id (
+        first_name,
+        last_name,
+        face_image_url
+      )
+    )
+  `)
         .eq('renter_id', currentUser.id)
         .in('status', ['confirmed', 'ongoing'])
         .order('created_at', { ascending: false });
@@ -193,6 +198,20 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                     />
 
                     <View style={styles.info}>
+                      <View style={styles.lessorRow}>
+                        <Image
+                          source={
+                            rental.items?.users?.face_image_url
+                              ? { uri: rental.items.users.face_image_url }
+                              : require('../../assets/splash-icon.png')
+                          }
+                          style={styles.lessorImage}
+                        />
+                        <Text style={styles.lessorName}>
+                          {rental.items?.users?.first_name} {rental.items?.users?.last_name}
+                        </Text>
+                      </View>
+
                       <Text style={styles.title} numberOfLines={2}>
                         {rental.items?.title}
                       </Text>
@@ -435,5 +454,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     fontSize: 14,
+  },
+  lessorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  lessorImage: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    marginRight: 8,
+  },
+  lessorName: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#34495E',
   },
 });
