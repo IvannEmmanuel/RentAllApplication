@@ -388,7 +388,7 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
           {
             rental_id: newBooking.rental_id,
             renter_id: currentUserId,
-            item_id: item.item_id
+            item_id: item.item_id,
           },
           null, // no old status
           'pending'

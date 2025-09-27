@@ -93,6 +93,8 @@ import { Platform, PermissionsAndroid } from 'react-native';
 import messaging from '@react-native-firebase/messaging';
 import { supabase } from '../../supbaseClient';
 import { baseURL } from '../api/api';
+import { useNotificationModal } from '../components/NotificationModalContext';
+import { useNavigation } from '@react-navigation/native';
 
 // Expo notification handler (needed for foreground)
 Notifications.setNotificationHandler({
@@ -539,38 +541,40 @@ export async function initializeNotificationService(userId: string) {
 // ===== EXISTING HOOK (ENHANCED) =====
 
 export const useNotification = (currentUser?: any) => {
+  const { showModal } = useNotificationModal();
+
   useEffect(() => {
     requestUserPermission();
     registerNotificationChannel();
 
-    // Initialize notification service if user is logged in
-    if (currentUser?.id) {
-      initializeNotificationService(currentUser.id);
-    } else {
-      // Just get token for anonymous users
-      getFcmToken();
-    }
+    if (currentUser?.id) initializeNotificationService(currentUser.id);
+    else getFcmToken();
 
-    // Foreground FCM listener → trigger local heads-up
-    const unsubscribe = messaging().onMessage(async remoteMessage => {
-      console.log('Foreground FCM:', remoteMessage);
-
+    // Foreground listener → show heads-up notification
+    const unsubscribeOnMessage = messaging().onMessage(async remoteMessage => {
       await Notifications.scheduleNotificationAsync({
         content: {
           title: remoteMessage.notification?.title || 'New message',
           body: remoteMessage.notification?.body || 'You got something!',
-          sound: 'default',
-          android: {
-            channelId: 'urgent-channel-v2',
-            priority: Notifications.AndroidNotificationPriority.HIGH,
-          },
+          data: remoteMessage.data, // important: store data
+          android: { channelId: 'urgent-channel-v2', priority: Notifications.AndroidNotificationPriority.HIGH },
         },
-        trigger: null, // show immediately
+        trigger: null,
       });
     });
 
+    // Tap listener → open modal based on data.type
+    const unsubscribeOnResponse = Notifications.addNotificationResponseReceivedListener(response => {
+      const data = response.notification.request.content.data;
+      if (!data) return;
+
+      // Example: if type = booking_completed → open CompletedRentalModal
+      showModal(data.type, data.rental_id);
+    });
+
     return () => {
-      unsubscribe();
+      unsubscribeOnMessage();
+      unsubscribeOnResponse.remove();
     };
   }, [currentUser?.id]);
 };
