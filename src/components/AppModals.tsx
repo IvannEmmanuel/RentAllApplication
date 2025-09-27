@@ -3,6 +3,7 @@ import { useNotificationModal } from './NotificationModalContext';
 import RatingsModal from './RatingsModal';
 import YourItemsModal from './YourItemModal';
 import PendingRentalModal from './PendingRentalModal';
+import ActiveRentalModal from './ActiveRentalModal';
 import { supabase } from '../../supbaseClient';
 
 export default function AppModals({ currentUser }) {
@@ -77,8 +78,8 @@ export default function AppModals({ currentUser }) {
   return (
     <>
       {/* Booking request - show PendingRentalModal for renter */}
-      {modalData.visible && modalData.type === 'booking_request' && (
-        <PendingRentalModal 
+      {modalData.visible && modalData.type === 'booking_confirmed' && (
+        <ActiveRentalModal 
           visible={true}
           onClose={hideModal}
         />
@@ -111,7 +112,7 @@ export default function AppModals({ currentUser }) {
       {modalData.visible && (
         modalData.type === 'booking_return' ||
         modalData.type === 'booking_started' ||
-        modalData.type === 'booking_confirmed'
+        modalData.type === 'booking_request'
       ) && (
         <YourItemsModal 
           visible={true}

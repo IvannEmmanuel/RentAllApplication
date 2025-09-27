@@ -34,15 +34,24 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
 
   // Set initial tab based on rentalId when modal opens
   useEffect(() => {
-    if (visible && rentalId) {
-      setHighlightedRentalId(rentalId);
-      // If we have a specific rentalId, we might want to determine which tab it should be on
-      // For now, we'll assume it's a booking request (pending)
-      setActiveTab('pending');
-    } else if (visible) {
+    if (visible) {
+      if (rentalId) {
+        setHighlightedRentalId(rentalId);
+      }
+      // Always respect the initialTab prop
       setActiveTab(initialTab);
     }
   }, [visible, rentalId, initialTab]);
+  // useEffect(() => {
+  //   if (visible && rentalId) {
+  //     setHighlightedRentalId(rentalId);
+  //     // If we have a specific rentalId, we might want to determine which tab it should be on
+  //     // For now, we'll assume it's a booking request (pending)
+  //     setActiveTab('pending');
+  //   } else if (visible) {
+  //     setActiveTab(initialTab);
+  //   }
+  // }, [visible, rentalId, initialTab]);
 
   // Fetch bookings based on status
   const fetchBookings = useCallback(async (showLoading = true) => {
@@ -487,8 +496,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
     const isHighlighted = booking.is_highlighted;
 
     return (
-      <View 
-        key={booking.rental_id} 
+      <View
+        key={booking.rental_id}
         style={[
           styles.bookingCard,
           isHighlighted && styles.highlightedCard
@@ -499,7 +508,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
             <Text style={styles.highlightText}>🔔 New Request</Text>
           </View>
         )}
-        
+
         <View style={styles.cardHeader}>
           <View style={styles.renterInfo}>
             <Image
