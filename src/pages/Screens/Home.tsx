@@ -16,6 +16,7 @@ import { useEffect, useState, useCallback } from "react"
 import { supabase } from "../../../supbaseClient"
 import FavoritesModal from "../../components/FavoriteModal"
 import BookItemModal from "../../components/BookItemModal"
+import PictureModal from "../../components/PictureModal"
 import { useNavigation } from "@react-navigation/native"
 import { useFavorites } from "../../components/FavoritesContext"
 import { useFocusEffect } from '@react-navigation/native'
@@ -36,6 +37,8 @@ const Home = () => {
   const [hasMore, setHasMore] = useState(true)
   const LIMIT = 6
   const [itemRatings, setItemRatings] = useState({}) // Add this line
+  const [pictureModalVisible, setPictureModalVisible] = useState(false)
+  const [pictureItem, setPictureItem] = useState(null)
 
   useEffect(() => {
     if (items.length > 0) {
@@ -342,11 +345,19 @@ const Home = () => {
         const withImages = await Promise.all(
           (data || []).map(async (item) => {
             const imageUrl = await getImageUrl(item.user_id, item.item_id)
+            const { data: userData, error: userError } = await supabase
+              .from("users")
+              .select("first_name,last_name")
+              .eq("id", item.user_id)
+              .single()
+
+            const lessorName = userData ? `${userData.first_name} ${userData.last_name}` : "Unknown"
             return {
               ...item,
               imageUrl,
               formattedPrice: `₱${item.price_per_day}`,
               formattedDate: new Date(item.created_at).toLocaleDateString(),
+              lessorName
             }
           }),
         )
@@ -517,11 +528,18 @@ const Home = () => {
     return (
       <View style={styles.itemContainer}>
         <View style={styles.itemImageContainer}>
-          {item.imageUrl ? (
-            <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
-          ) : (
-            <Image source={require("../../../assets/splash-icon.png")} style={styles.itemImage} resizeMode="cover" />
-          )}
+          <TouchableOpacity
+            onPress={() => {
+              setPictureItem(item)
+              setPictureModalVisible(true)
+            }}
+          >
+            {item.imageUrl ? (
+              <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
+            ) : (
+              <Image source={require("../../../assets/splash-icon.png")} style={styles.itemImage} resizeMode="cover" />
+            )}
+          </TouchableOpacity>
           <View style={styles.itemRateContainer}>
             <Text style={styles.itemName}>{item.title}</Text>
             <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 10 }}>
@@ -529,6 +547,7 @@ const Home = () => {
               <Text> {itemRatings[item.item_id] || "No rating"}</Text>
             </View>
           </View>
+          <Text style={styles.lessorText}>{item.lessorName}</Text>
           <View style={{ alignSelf: "baseline", width: "100%" }}>
             <Text style={styles.text}>{item.location || "Location not specified"}</Text>
             <Text style={styles.text}>{item.formattedDate}</Text>
@@ -681,6 +700,12 @@ const Home = () => {
           fetchUserBookings()
           fetchItems(1, false)   // fetch first page
         }}
+      />
+
+      <PictureModal
+        visible={pictureModalVisible}
+        onClose={() => setPictureModalVisible(false)}
+        item={pictureItem}
       />
     </>
   )
@@ -867,5 +892,10 @@ const styles = StyleSheet.create({
   },
   pendingRentText: {
     color: "#FFF",
+  },
+  lessorText: {
+    fontSize: 12,
+    color: "#555",
+    marginBottom: 2,
   },
 })
