@@ -294,7 +294,17 @@ const Tabs = () => {
                 tabBarInactiveTintColor: 'gray',
             })}
         >
-            <Tab.Screen name="Home" component={HomeStack} options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })} />
+            <Tab.Screen
+                name="Home"
+                component={HomeStack}
+                options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })}
+                listeners={({ navigation }) => ({
+                    tabPress: (e) => {
+                        // Navigate to the nested HomeMain and pass a param instructing it to reset to "All"
+                        navigation.navigate('Home', { screen: 'HomeMain', params: { resetToAll: true } });
+                    },
+                })}
+            />
             <Tab.Screen name="Inbox" component={InboxStack} options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })} />
             <Tab.Screen name="AddItem" component={AddItem} options={{ tabBarLabel: () => null }} />
             <Tab.Screen name="Notification" component={Notification} />

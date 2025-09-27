@@ -21,7 +21,7 @@ import { useNavigation } from "@react-navigation/native"
 import { useFavorites } from "../../components/FavoritesContext"
 import { useFocusEffect } from '@react-navigation/native'
 
-const Home = () => {
+const Home = ({ route }) => {
   const navigation = useNavigation()
   const [items, setItems] = useState([])
   const [loading, setLoading] = useState(false)
@@ -84,12 +84,22 @@ const Home = () => {
     }
   }, [])
 
+  // When screen is focused, fetch items. If route param resetToAll is set, clear filters first.
   useFocusEffect(
     useCallback(() => {
       console.log("Home screen focused, fetching items")
+      if (route?.params?.resetToAll) {
+        // reset filters to "All"
+        setSelectedCategoryId("")
+        setSearchTerm("")
+        // clear the flag so it won't re-trigger repeatedly
+        if (navigation?.setParams) {
+          navigation.setParams({ resetToAll: false })
+        }
+      }
       setPage(1)
       fetchItems(1, false)
-    }, [fetchItems])
+    }, [fetchItems, route?.params?.resetToAll])
   )
 
   const dedupeItems = (itemsArray) => {
