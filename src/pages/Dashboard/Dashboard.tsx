@@ -61,7 +61,7 @@
 // const Dashboard = () => {
 //     const { currentUser } = useFavorites();
 //     useNotification(currentUser); // now it gets the user
-    
+
 //     return (
 //         <Tab.Navigator
 //             screenOptions={({ route }) => ({
@@ -169,7 +169,7 @@ import Chat from '../Screens/Chat';
 import { createStackNavigator } from '@react-navigation/stack';
 import { useNotification } from '../../notifications/notifications';
 import { useFavorites } from '../../components/FavoritesContext';
-import { useUnreadMessages } from '../../hooks/useUnreadMessages';
+import { UnreadMessagesProvider, useUnread } from '../../hooks/useUnreadMessages';
 
 const Tab = createBottomTabNavigator();
 const Stack = createStackNavigator();
@@ -201,14 +201,11 @@ const ProfileStack = () => {
     )
 }
 
-// Helper function to determine if tab bar should be shown
 const getTabBarVisibility = (route) => {
     const routeName = getFocusedRouteNameFromRoute(route);
-
     if (routeName === 'Chat') {
         return { display: 'none' };
     }
-
     return {
         backgroundColor: '#FFF4E6',
         borderTopLeftRadius: 20,
@@ -217,29 +214,29 @@ const getTabBarVisibility = (route) => {
     };
 };
 
-// Custom Badge Component
 const TabBarBadge = ({ count }) => {
-    if (count === 0) return null;
-
+    const num = Number(count) || 0;
+    if (num <= 0) return null;
     return (
         <View style={styles.badge}>
             <Text style={styles.badgeText}>
-                {count > 99 ? '99+' : count.toString()}
+                {num > 99 ? '99+' : num.toString()}
             </Text>
         </View>
     );
 };
 
-const Dashboard = () => {
+// Render Tabs inside a consumer so unreadCount updates cause re-render
+const Tabs = () => {
+    const { unreadCount } = useUnread();
     const { currentUser } = useFavorites();
-    const { unreadCount } = useUnreadMessages(currentUser?.id);
     useNotification(currentUser);
-    
+
     return (
         <Tab.Navigator
             screenOptions={({ route }) => ({
                 headerShown: false,
-                tabBarStyle: getTabBarVisibility(route),
+                tabBarStyle: getFocusedRouteNameFromRoute(route) ? getTabBarVisibility(route) : getTabBarVisibility(route),
                 tabBarIconStyle: {
                     marginTop: 10,
                     marginBottom: 10
@@ -250,39 +247,20 @@ const Dashboard = () => {
                 },
                 tabBarIcon: ({ focused, color, size }) => {
                     let iconSource;
-
-                    if (route.name === 'Home') {
-                        iconSource = require('../../../assets/home.png');
-                    } else if (route.name === 'Inbox') {
-                        iconSource = require('../../../assets/inboxM.png');
-                    } else if (route.name === 'AddItem') {
-                        iconSource = require('../../../assets/plus.png');
-                    } else if (route.name === 'Notification') {
-                        iconSource = require('../../../assets/notification.png');
-                    } else if (route.name === 'Profile') {
-                        iconSource = require('../../../assets/profile.png');
-                    }
+                    if (route.name === 'Home') iconSource = require('../../../assets/home.png');
+                    else if (route.name === 'Inbox') iconSource = require('../../../assets/inboxM.png');
+                    else if (route.name === 'AddItem') iconSource = require('../../../assets/plus.png');
+                    else if (route.name === 'Notification') iconSource = require('../../../assets/notification.png');
+                    else if (route.name === 'Profile') iconSource = require('../../../assets/profile.png');
 
                     if (route.name === 'AddItem') {
                         return (
-                            <View
-                                style={{
-                                    marginTop: 10
-                                }}
-                            >
-                                <Image
-                                    source={iconSource}
-                                    style={{
-                                        width: 60,
-                                        height: 60,
-                                    }}
-                                    resizeMode="contain"
-                                />
+                            <View style={{ marginTop: 10 }}>
+                                <Image source={iconSource} style={{ width: 60, height: 60 }} resizeMode="contain" />
                             </View>
                         );
                     }
 
-                    // Special handling for Inbox with badge
                     if (route.name === 'Inbox') {
                         return (
                             <View style={{ position: 'relative' }}>
@@ -316,30 +294,21 @@ const Dashboard = () => {
                 tabBarInactiveTintColor: 'gray',
             })}
         >
-            <Tab.Screen
-                name="Home"
-                component={HomeStack}
-                options={({ route }) => ({
-                    tabBarStyle: getTabBarVisibility(route),
-                })}
-            />
-            <Tab.Screen
-                name="Inbox"
-                component={InboxStack}
-                options={({ route }) => ({
-                    tabBarStyle: getTabBarVisibility(route),
-                })}
-            />
-            <Tab.Screen
-                name="AddItem"
-                component={AddItem}
-                options={{
-                    tabBarLabel: () => null,
-                }}
-            />
+            <Tab.Screen name="Home" component={HomeStack} options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })} />
+            <Tab.Screen name="Inbox" component={InboxStack} options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })} />
+            <Tab.Screen name="AddItem" component={AddItem} options={{ tabBarLabel: () => null }} />
             <Tab.Screen name="Notification" component={Notification} />
             <Tab.Screen name="Profile" component={ProfileStack} />
         </Tab.Navigator>
+    )
+}
+
+const Dashboard = () => {
+    // Wrap the tab navigator with provider so all tabs and screens share the same unread state
+    return (
+        <UnreadMessagesProvider>
+            <Tabs />
+        </UnreadMessagesProvider>
     );
 };
 

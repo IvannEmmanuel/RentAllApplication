@@ -19,7 +19,7 @@ import { supabase } from '../../../supbaseClient'
 import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFavorites } from '../../components/FavoritesContext'
-import { useUnreadMessages } from '../../hooks/useUnreadMessages'
+import { useUnread } from '../../hooks/useUnreadMessages'
 import * as ImagePicker from 'expo-image-picker'
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -48,7 +48,7 @@ const Chat = () => {
     const [selectedImage, setSelectedImage] = useState(null)
     const [showImageModal, setShowImageModal] = useState(false)
 
-    const { refreshUnreadCount } = useUnreadMessages(currentUser?.id);
+    const { refreshUnreadCount } = useUnread();
 
     console.log("Conversation ID:", conversationId)
     console.log("Current User ID:", currentUser?.id)

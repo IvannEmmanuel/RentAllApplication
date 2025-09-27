@@ -1,178 +1,189 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { supabase } from '../../supbaseClient';
+import React, { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react'
+import { supabase } from '../../supbaseClient'
+import { useFavorites } from '../components/FavoritesContext'
 
-export const useUnreadMessages = (userId) => {
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const fetchTimeoutRef = useRef(null);
+const UnreadMessagesContext = createContext({
+  unreadCount: 0,
+  refreshUnreadCount: async () => {}
+})
 
-  // Fetch unread count with improved error handling
-  const fetchUnreadCount = useCallback(async () => {
-    if (!userId) {
-      setUnreadCount(0);
-      setLoading(false);
-      return;
-    }
+export const UnreadMessagesProvider = ({ children }) => {
+  const { currentUser } = useFavorites()
+  const userId = currentUser?.id || null
 
+  const [unreadCount, setUnreadCount] = useState(0)
+  const convIdsRef = useRef([])
+  const channelRef = useRef(null)
+
+  const fetchConversationsIds = useCallback(async (uid) => {
+    if (!uid) return []
     try {
-      console.log('📩 Fetching unread count for user:', userId);
-
-      // Get all conversations for the user
-      const { data: conversations, error: convError } = await supabase
+      const { data: convData, error } = await supabase
         .from('conversations')
         .select('id')
-        .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+        .or(`user1_id.eq.${uid},user2_id.eq.${uid}`)
 
-      if (convError) throw convError;
+      if (error) {
+        console.warn('Error fetching conversations for unread count:', error)
+        return []
+      }
+      return convData ? convData.map(c => c.id) : []
+    } catch (err) {
+      console.error('Error in fetchConversationsIds:', err)
+      return []
+    }
+  }, [])
 
-      if (!conversations || conversations.length === 0) {
-        console.log('✅ No conversations found - unread count: 0');
-        setUnreadCount(0);
-        setLoading(false);
-        return;
+  const fetchUnreadCount = useCallback(async (uid) => {
+    if (!uid) {
+      setUnreadCount(0)
+      return 0
+    }
+    try {
+      const convIds = await fetchConversationsIds(uid)
+      convIdsRef.current = convIds
+
+      if (!convIds || convIds.length === 0) {
+        console.log(`📩 Fetching unread count for user: ${uid}`)
+        console.log('✅ Unread count fetched: 0 (no conversations)')
+        setUnreadCount(0)
+        return 0
       }
 
-      const conversationIds = conversations.map((conv) => conv.id);
-
-      // Count unread messages in these conversations
-      const { count, error } = await supabase
+      // Use head:true + count:'exact' to get an exact count without payload
+      const resp = await supabase
         .from('messages')
-        .select('*', { count: 'exact', head: true })
-        .in('conversation_id', conversationIds)
-        .neq('sender_id', userId)
-        .is('read_at', null);
+        .select('id', { count: 'exact', head: true })
+        .in('conversation_id', convIds)
+        .neq('sender_id', uid)
+        .is('read_at', null)
 
-      if (error) throw error;
+      if (resp.error) {
+        console.error('Error fetching unread count:', resp.error)
+        return unreadCount
+      }
 
-      const newCount = count || 0;
-      console.log('✅ Unread count fetched:', newCount);
-      
-      // Only update if the count actually changed
-      setUnreadCount(prevCount => {
-        if (prevCount !== newCount) {
-          console.log(`🔄 Unread count changed: ${prevCount} → ${newCount}`);
+      const count = resp.count || 0
+      console.log(`📩 Fetching unread count for user: ${uid}`)
+      console.log(`✅ Unread count fetched: ${count}`)
+      setUnreadCount(count)
+      return count
+    } catch (err) {
+      console.error('Error in fetchUnreadCount:', err)
+      return unreadCount
+    }
+  }, [fetchConversationsIds, unreadCount])
+
+  // Refresh function exposed to consumers
+  const refreshUnreadCount = useCallback(async () => {
+    if (!userId) return
+    // manual refresh log
+    console.log('🔄 Manual refresh triggered')
+    await fetchUnreadCount(userId)
+  }, [userId, fetchUnreadCount])
+
+  useEffect(() => {
+    let mounted = true
+
+    // initialize on mount and whenever user changes
+    ;(async () => {
+      if (!userId) {
+        if (mounted) setUnreadCount(0)
+        return
+      }
+
+      await fetchUnreadCount(userId)
+
+      // cleanup any previous channel
+      if (channelRef.current) {
+        try {
+          supabase.removeChannel(channelRef.current)
+        } catch (e) {
+          // ignore
         }
-        return newCount;
-      });
-      
-    } catch (error) {
-      console.error('❌ Error fetching unread count:', error);
-      setUnreadCount(0);
-    } finally {
-      setLoading(false);
-    }
-  }, [userId]);
+        channelRef.current = null
+      }
 
-  // Debounced refresh to prevent too many rapid calls
-  const debouncedRefresh = useCallback(() => {
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
-    
-    fetchTimeoutRef.current = setTimeout(() => {
-      fetchUnreadCount();
-    }, 200);
-  }, [fetchUnreadCount]);
+      // Setup realtime subscription for messages INSERT/UPDATE
+      const channel = supabase
+        .channel(`unread_changes_${userId}`)
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'messages' },
+          (payload) => {
+            try {
+              const newMsg = payload.new
+              // message concerns the user's conversations?
+              const convIds = convIdsRef.current
+              if (!newMsg || !convIds || convIds.length === 0) return
 
-  // Manual refresh function
-  const refreshUnreadCount = useCallback(() => {
-    console.log('🔄 Manual refresh triggered');
-    // Clear any pending debounced calls
-    if (fetchTimeoutRef.current) {
-      clearTimeout(fetchTimeoutRef.current);
-    }
-    // Fetch immediately
-    fetchUnreadCount();
-  }, [fetchUnreadCount]);
-
-  // Fetch on mount and when userId changes
-  useEffect(() => {
-    fetchUnreadCount();
-  }, [fetchUnreadCount]);
-
-  // Subscribe to relevant changes with improved filtering
-  useEffect(() => {
-    if (!userId) return;
-
-    console.log(`📡 Setting up real-time subscription for user: ${userId}`);
-
-    const channel = supabase
-      .channel(`unread_messages_${userId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*', // INSERT + UPDATE + DELETE
-          schema: 'public',
-          table: 'messages',
-        },
-        (payload) => {
-          console.log('🔔 Dashboard: Message table changed:', payload.eventType, payload.new?.id || payload.old?.id);
-          
-          const message = payload.new || payload.old;
-          if (message) {
-            // Special handling for UPDATE events (like marking as read)
-            if (payload.eventType === 'UPDATE') {
-              const oldReadAt = payload.old?.read_at;
-              const newReadAt = payload.new?.read_at;
-              
-              // If read_at changed from null to a timestamp, refresh immediately
-              if (oldReadAt === null && newReadAt !== null) {
-                console.log('🔔 Dashboard: Message marked as read, refreshing immediately');
-                // Force immediate refresh for read status changes
-                if (fetchTimeoutRef.current) {
-                  clearTimeout(fetchTimeoutRef.current);
+              if (convIds.includes(newMsg.conversation_id)) {
+                // only count messages not sent by the user and that are unread
+                if (newMsg.sender_id !== userId && (newMsg.read_at === null || newMsg.read_at === undefined)) {
+                  setUnreadCount(prev => {
+                    const next = prev + 1
+                    console.log(`LOG  🔄 Unread count changed: ${prev} → ${next}`)
+                    return next
+                  })
                 }
-                fetchUnreadCount();
-                return;
               }
+            } catch (err) {
+              console.error('Error handling message INSERT realtime:', err)
             }
-            
-            // For other changes, use debounced refresh
-            debouncedRefresh();
           }
-        }
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'conversations',
-        },
-        (payload) => {
-          console.log('🔔 Dashboard: Conversation table changed:', payload.eventType);
-          const conversation = payload.new || payload.old;
-          
-          // Only refresh if this conversation involves the current user
-          if (conversation && (conversation.user1_id === userId || conversation.user2_id === userId)) {
-            debouncedRefresh();
+        )
+        .on(
+          'postgres_changes',
+          { event: 'UPDATE', schema: 'public', table: 'messages' },
+          (payload) => {
+            try {
+              const oldMsg = payload.old
+              const newMsg = payload.new
+              const convIds = convIdsRef.current
+              if (!newMsg || !convIds || convIds.length === 0) return
+
+              // If a message changed read_at from null -> timestamp and it's in user's conversations and was not sent by the user,
+              // we should decrement unreadCount.
+              const wasUnread = oldMsg && (oldMsg.read_at === null || oldMsg.read_at === undefined)
+              const nowRead = newMsg && newMsg.read_at !== null && newMsg.read_at !== undefined
+
+              if (convIds.includes(newMsg.conversation_id) && newMsg.sender_id !== userId && wasUnread && nowRead) {
+                setUnreadCount(prev => {
+                  const next = Math.max(0, prev - 1)
+                  console.log(`LOG  🔄 Unread count changed: ${prev} → ${next}`)
+                  return next
+                })
+              }
+            } catch (err) {
+              console.error('Error handling message UPDATE realtime:', err)
+            }
           }
-        }
-      )
-      .subscribe();
+        )
+        .subscribe((status) => {
+          // optional: log subscription status
+          // console.log('Unread channel status', status)
+        })
+
+      channelRef.current = channel
+
+    })()
 
     return () => {
-      console.log('🔌 Cleaning up real-time subscription for unread messages');
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
+      mounted = false
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
       }
-      supabase.removeChannel(channel);
-    };
-  }, [userId, debouncedRefresh, fetchUnreadCount]);
+    }
+  }, [userId, fetchUnreadCount])
 
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-    };
-  }, []);
+  return (
+    <UnreadMessagesContext.Provider value={{ unreadCount, refreshUnreadCount }}>
+      {children}
+    </UnreadMessagesContext.Provider>
+  )
+}
 
-  return {
-    unreadCount,
-    loading,
-    refreshUnreadCount, // call this manually after marking read
-    debouncedRefresh, // for internal use
-  };
-};
+export const useUnread = () => {
+  return useContext(UnreadMessagesContext)
+}
