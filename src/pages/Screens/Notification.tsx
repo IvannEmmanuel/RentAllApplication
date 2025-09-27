@@ -1,115 +1,12 @@
-// import { StyleSheet, Text, View, FlatList, ActivityIndicator } from 'react-native';
-// import React, { useEffect, useState } from 'react';
-// import { supabase } from '../../../supbaseClient';
-// import { useFavorites } from '../../components/FavoritesContext';
-
-// const Notification = () => {
-//   const { currentUser } = useFavorites(); // Assuming you already have the currentUser
-//   const [notifications, setNotifications] = useState([]);
-//   const [loading, setLoading] = useState(true);
-
-//   // Fetch notifications from Supabase
-//   const fetchNotifications = async () => {
-//     if (!currentUser?.id) return;
-
-//     setLoading(true);
-//     try {
-//       const { data, error } = await supabase
-//         .from('notifications')
-//         .select('*')
-//         .eq('user_id', currentUser.id)
-//         .order('created_at', { ascending: false });
-
-//       if (error) throw error;
-//       setNotifications(data || []);
-//     } catch (error) {
-//       console.error('Error fetching notifications:', error);
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchNotifications();
-
-//     // Optional: set up realtime listener
-//     const channel = supabase
-//       .channel(`notifications_user_${currentUser?.id}`)
-//       .on(
-//         'postgres_changes',
-//         { event: '*', schema: 'public', table: 'notifications', filter: `user_id=eq.${currentUser?.id}` },
-//         (payload) => {
-//           console.log('New notification:', payload.new);
-//           setNotifications(prev => [payload.new, ...prev]); // prepend new notification
-//         }
-//       )
-//       .subscribe();
-
-//     return () => supabase.removeChannel(channel);
-//   }, [currentUser?.id]);
-
-//   if (loading) {
-//     return (
-//       <View style={styles.loadingContainer}>
-//         <ActivityIndicator size="large" color="#FFAB00" />
-//       </View>
-//     );
-//   }
-
-//   if (!notifications.length) {
-//     return (
-//       <View style={styles.emptyContainer}>
-//         <Text style={styles.emptyText}>No notifications yet</Text>
-//       </View>
-//     );
-//   }
-
-//   const renderItem = ({ item }) => (
-//     <View style={styles.notificationItem}>
-//       <Text style={styles.title}>{item.title}</Text>
-//       <Text style={styles.message}>{item.message}</Text>
-//       <Text style={styles.date}>{new Date(item.created_at).toLocaleString()}</Text>
-//     </View>
-//   );
-
-//   return (
-//     <FlatList
-//       data={notifications}
-//       keyExtractor={(item) => item.notification_id}
-//       renderItem={renderItem}
-//       contentContainerStyle={{ padding: 10 }}
-//     />
-//   );
-// };
-
-// export default Notification;
-
-// const styles = StyleSheet.create({
-//   notificationItem: {
-//     backgroundColor: '#fff',
-//     padding: 15,
-//     borderRadius: 10,
-//     marginBottom: 10,
-//     elevation: 2,
-//   },
-//   title: { fontWeight: 'bold', fontSize: 16, marginBottom: 5 },
-//   message: { fontSize: 14, marginBottom: 5 },
-//   date: { fontSize: 12, color: '#888' },
-//   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-//   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-//   emptyText: { fontSize: 16, color: '#888' },
-// });
-
-
-import { 
-  StyleSheet, 
-  Text, 
-  View, 
-  FlatList, 
-  ActivityIndicator, 
-  TouchableOpacity, 
-  Image, 
-  RefreshControl 
+import {
+  StyleSheet,
+  Text,
+  View,
+  FlatList,
+  ActivityIndicator,
+  TouchableOpacity,
+  Image,
+  RefreshControl
 } from 'react-native';
 import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../../supbaseClient';
@@ -123,21 +20,24 @@ const Notification = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  const LIMIT = 10
+  const [page, setPage] = useState(0);
+
   // Format time ago function
   const formatTimeAgo = (dateString) => {
     const now = new Date();
     const date = new Date(dateString);
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    
+
     if (diffInMinutes < 1) return "Just now";
     if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
-    
+
     const diffInHours = Math.floor(diffInMinutes / 60);
     if (diffInHours < 24) return `${diffInHours}h ago`;
-    
+
     const diffInDays = Math.floor(diffInHours / 24);
     if (diffInDays < 7) return `${diffInDays}d ago`;
-    
+
     return date.toLocaleDateString();
   };
 
@@ -179,19 +79,28 @@ const Notification = () => {
   };
 
   // Fetch notifications from Supabase
-  const fetchNotifications = useCallback(async (showLoading = true) => {
+  const fetchNotifications = useCallback(async (showLoading = true, page = 0) => {
     if (!currentUser?.id) return;
 
     if (showLoading) setLoading(true);
     try {
+      const from = page * LIMIT;
+      const to = from + LIMIT - 1; // Supabase range is inclusive
+
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', currentUser.id)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to); // limit & offset
 
       if (error) throw error;
-      setNotifications(data || []);
+
+      if (page === 0) {
+        setNotifications(data || []);
+      } else {
+        setNotifications(prev => [...prev, ...(data || [])]);
+      }
     } catch (error) {
       console.error('Error fetching notifications:', error);
     } finally {
@@ -215,8 +124,8 @@ const Notification = () => {
         .eq('notification_id', notificationId);
 
       // Update local state
-      setNotifications(prev => 
-        prev.map(notification => 
+      setNotifications(prev =>
+        prev.map(notification =>
           notification.notification_id === notificationId
             ? { ...notification, read_at: new Date().toISOString() }
             : notification
@@ -237,21 +146,21 @@ const Notification = () => {
       .channel(`notifications_user_${currentUser?.id}`)
       .on(
         'postgres_changes',
-        { 
-          event: '*', 
-          schema: 'public', 
-          table: 'notifications', 
-          filter: `user_id=eq.${currentUser?.id}` 
+        {
+          event: '*',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${currentUser?.id}`
         },
         (payload) => {
           console.log('Notification change:', payload);
           if (payload.eventType === 'INSERT') {
             setNotifications(prev => [payload.new, ...prev]);
           } else if (payload.eventType === 'UPDATE') {
-            setNotifications(prev => 
-              prev.map(item => 
-                item.notification_id === payload.new.notification_id 
-                  ? payload.new 
+            setNotifications(prev =>
+              prev.map(item =>
+                item.notification_id === payload.new.notification_id
+                  ? payload.new
                   : item
               )
             );
@@ -281,7 +190,7 @@ const Notification = () => {
   }
 
   const renderItem = ({ item }) => (
-    <TouchableOpacity 
+    <TouchableOpacity
       style={[
         styles.notificationItem,
         !item.read_at && styles.unreadNotificationItem
@@ -290,15 +199,15 @@ const Notification = () => {
     >
       <View style={styles.notificationContent}>
         <View style={[
-          styles.iconContainer, 
+          styles.iconContainer,
           { backgroundColor: `${getNotificationColor(item.type)}20` }
         ]}>
           <View style={[
-            styles.iconDot, 
+            styles.iconDot,
             { backgroundColor: getNotificationColor(item.type) }
           ]} />
         </View>
-        
+
         <View style={styles.textContainer}>
           <View style={styles.headerRow}>
             <Text style={[
@@ -311,11 +220,11 @@ const Notification = () => {
               {formatTimeAgo(item.created_at)}
             </Text>
           </View>
-          
+
           <Text style={styles.notificationMessage} numberOfLines={2}>
             {item.message}
           </Text>
-          
+
           {!item.read_at && <View style={styles.unreadIndicator} />}
         </View>
       </View>
@@ -332,8 +241,8 @@ const Notification = () => {
 
       {notifications.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <Image 
-            source={require("../../../assets/splash-icon.png")} 
+          <Image
+            source={require("../../../assets/splash-icon.png")}
             style={styles.emptyIcon}
           />
           <Text style={styles.emptyTitle}>No notifications yet</Text>
@@ -351,11 +260,22 @@ const Notification = () => {
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
-              onRefresh={onRefresh}
+              onRefresh={async () => {
+                setRefreshing(true);
+                setPage(0);
+                await fetchNotifications(false, 0);
+                setRefreshing(false);
+              }}
               colors={['#FFAB00']}
               tintColor="#FFAB00"
             />
           }
+          onEndReached={async () => {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            await fetchNotifications(false, nextPage);
+          }}
+          onEndReachedThreshold={0.5}
         />
       )}
     </View>

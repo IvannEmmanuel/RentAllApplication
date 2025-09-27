@@ -14,12 +14,35 @@ import {
 import { supabase } from '../../supbaseClient';
 import { handleBookingStatusChange } from '../notifications/notifications';
 
-const YourItemsModal = ({ visible, onClose, currentUser }) => {
+const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initialTab = 'pending' }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [processingIds, setProcessingIds] = useState(new Set());
-  const [activeTab, setActiveTab] = useState('pending'); // 'pending', 'active', 'completed'
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [highlightedRentalId, setHighlightedRentalId] = useState(rentalId);
+
+  // Reset highlighted rental after a few seconds
+  useEffect(() => {
+    if (highlightedRentalId) {
+      const timer = setTimeout(() => {
+        setHighlightedRentalId(null);
+      }, 5000); // Remove highlight after 5 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [highlightedRentalId]);
+
+  // Set initial tab based on rentalId when modal opens
+  useEffect(() => {
+    if (visible && rentalId) {
+      setHighlightedRentalId(rentalId);
+      // If we have a specific rentalId, we might want to determine which tab it should be on
+      // For now, we'll assume it's a booking request (pending)
+      setActiveTab('pending');
+    } else if (visible) {
+      setActiveTab(initialTab);
+    }
+  }, [visible, rentalId, initialTab]);
 
   // Fetch bookings based on status
   const fetchBookings = useCallback(async (showLoading = true) => {
@@ -40,7 +63,6 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
       }
 
       // Get transactions where current user owns the item
-      // In the fetchBookings function, update the select query to include quantity:
       const { data: transactions, error } = await supabase
         .from('rental_transactions')
         .select(`
@@ -126,7 +148,8 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               end: new Date(booking.end_date).toLocaleDateString(),
               created: new Date(booking.created_at).toLocaleDateString()
             },
-            is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date()
+            is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date(),
+            is_highlighted: booking.rental_id === highlightedRentalId
           };
         })
       );
@@ -138,7 +161,7 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
     } finally {
       if (showLoading) setLoading(false);
     }
-  }, [currentUser, activeTab]);
+  }, [currentUser, activeTab, highlightedRentalId]);
 
   // Get item image
   const getItemImage = async (userId, itemId) => {
@@ -203,6 +226,11 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
                 prev.filter(b => b.rental_id !== rentalId)
               );
 
+              // Clear highlight if this was the highlighted booking
+              if (rentalId === highlightedRentalId) {
+                setHighlightedRentalId(null);
+              }
+
               Alert.alert('Success', 'Booking accepted successfully!');
             } catch (error) {
               console.error('Error accepting booking:', error);
@@ -254,6 +282,11 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               setBookings(prev =>
                 prev.filter(b => b.rental_id !== rentalId)
               );
+
+              // Clear highlight if this was the highlighted booking
+              if (rentalId === highlightedRentalId) {
+                setHighlightedRentalId(null);
+              }
 
               Alert.alert('Booking Declined', 'The renter has been notified.');
             } catch (error) {
@@ -315,6 +348,11 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
 
               // 4️⃣ Remove from local state so UI updates
               setBookings(prev => prev.filter(b => b.rental_id !== rentalId));
+
+              // Clear highlight if this was the highlighted booking
+              if (rentalId === highlightedRentalId) {
+                setHighlightedRentalId(null);
+              }
 
               Alert.alert('Success', 'Return confirmed and stock updated!');
             } catch (err) {
@@ -446,9 +484,22 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
 
   const renderBookingItem = (booking) => {
     const isProcessing = processingIds.has(booking.rental_id);
+    const isHighlighted = booking.is_highlighted;
 
     return (
-      <View key={booking.rental_id} style={styles.bookingCard}>
+      <View 
+        key={booking.rental_id} 
+        style={[
+          styles.bookingCard,
+          isHighlighted && styles.highlightedCard
+        ]}
+      >
+        {isHighlighted && (
+          <View style={styles.highlightBanner}>
+            <Text style={styles.highlightText}>🔔 New Request</Text>
+          </View>
+        )}
+        
         <View style={styles.cardHeader}>
           <View style={styles.renterInfo}>
             <Image
@@ -537,22 +588,6 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
             </TouchableOpacity>
           </View>
         )}
-
-        {/* {activeTab === 'active' && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.button, styles.returnedButton]}
-              onPress={() => handleReturned(booking)}
-              disabled={isProcessing}
-            >
-              {isProcessing ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <Text style={styles.returnedButtonText}>Returned</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        )} */}
 
         {activeTab === 'confirmationReturned' && (
           <View style={styles.actionButtons}>
@@ -852,6 +887,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  highlightedCard: {
+    backgroundColor: '#FFF8E1',
+    borderWidth: 2,
+    borderColor: '#FFAB00',
+    elevation: 4,
+    shadowColor: '#FFAB00',
+    shadowOpacity: 0.3,
+  },
+  highlightBanner: {
+    position: 'absolute',
+    top: -1,
+    right: -1,
+    backgroundColor: '#FFAB00',
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderTopRightRadius: 12,
+    borderBottomLeftRadius: 12,
+    zIndex: 1,
+  },
+  highlightText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontFamily: 'DM-Bold',
   },
   cardHeader: {
     flexDirection: 'row',
