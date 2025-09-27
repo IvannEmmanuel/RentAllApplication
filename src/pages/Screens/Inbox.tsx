@@ -28,6 +28,7 @@ const Inbox = () => {
   }, [])
 
   // Fetch conversations
+  // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!currentUser) return
 
@@ -69,6 +70,9 @@ const Inbox = () => {
       // Get item IDs to fetch item details
       const itemIds = convData.map(conv => conv.item_id).filter(Boolean)
 
+      // Get conversation IDs to fetch last message details
+      const conversationIds = convData.map(conv => conv.id)
+
       // Fetch user details
       const { data: usersData, error: usersError } = await supabase
         .from('users')
@@ -94,20 +98,54 @@ const Inbox = () => {
         }
       }
 
+      // Fetch last message details to get message type
+      const { data: lastMessagesData, error: lastMessagesError } = await supabase
+        .from('messages')
+        .select('conversation_id, message_type, content, created_at')
+        .in('conversation_id', conversationIds)
+        .order('created_at', { ascending: false })
+
+      if (lastMessagesError) {
+        console.warn('Error fetching last messages:', lastMessagesError)
+      }
+
+      // Group messages by conversation and get the latest one for each
+      const lastMessagesByConv = {}
+      if (lastMessagesData) {
+        lastMessagesData.forEach(msg => {
+          if (!lastMessagesByConv[msg.conversation_id]) {
+            lastMessagesByConv[msg.conversation_id] = msg
+          }
+        })
+      }
+
       // Combine conversation data with user and item details
       const enrichedConversations = convData.map(conv => {
         const otherUserId = conv.user1_id === currentUser.id ? conv.user2_id : conv.user1_id
         const otherUser = usersData?.find(user => user.id === otherUserId)
         const item = itemsData.find(item => item.item_id === conv.item_id)
+        const lastMessage = lastMessagesByConv[conv.id]
+
+        // Determine preview text based on message type
+        let preview = 'No messages yet'
+        if (lastMessage) {
+          if (lastMessage.message_type === 'image') {
+            preview = '📷 Image'
+          } else {
+            preview = conv.last_message || lastMessage.content || 'No messages yet'
+          }
+        } else if (conv.last_message) {
+          preview = conv.last_message
+        }
 
         return {
           ...conv,
           otherUserId,
           otherUserName: otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User',
-          otherUserImage: otherUser?.face_image_url || null, // 👈 attach image here
+          otherUserImage: otherUser?.face_image_url || null,
           itemTitle: item?.title || 'Item not found',
           formattedTime: formatMessageTime(conv.last_message_at),
-          preview: conv.last_message || 'No messages yet'
+          preview
         }
       })
 

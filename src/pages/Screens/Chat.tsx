@@ -9,7 +9,9 @@ import {
     Platform,
     Alert,
     ActivityIndicator,
-    Image
+    Image,
+    Modal,
+    Dimensions
 } from 'react-native'
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../supbaseClient'
@@ -17,6 +19,17 @@ import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/nativ
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useFavorites } from '../../components/FavoritesContext'
 import { useUnreadMessages } from '../../hooks/useUnreadMessages'
+import * as ImagePicker from 'expo-image-picker'
+import * as FileSystem from "expo-file-system/legacy";
+
+function base64ToUint8Array(base64: string) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+}
 
 const Chat = () => {
     const route = useRoute()
@@ -30,6 +43,9 @@ const Chat = () => {
     const [newMessage, setNewMessage] = useState('')
     const [loading, setLoading] = useState(true)
     const [sending, setSending] = useState(false)
+    const [uploadingImage, setUploadingImage] = useState(false)
+    const [selectedImage, setSelectedImage] = useState(null)
+    const [showImageModal, setShowImageModal] = useState(false)
 
     const { refreshUnreadCount } = useUnreadMessages(currentUser?.id);
 
@@ -42,10 +58,7 @@ const Chat = () => {
 
         try {
             console.log('🔄 Attempting to mark messages as read...');
-            console.log('Current user ID:', currentUser.id);
-            console.log('Conversation ID:', conversationId);
-            
-            // First, let's check what messages need to be marked as read
+
             const { data: unreadMessages, error: checkError } = await supabase
                 .from('messages')
                 .select('id, sender_id, content, read_at, conversation_id')
@@ -58,26 +71,12 @@ const Chat = () => {
                 return;
             }
 
-            console.log(`📋 Found ${unreadMessages?.length || 0} unread messages to mark as read`);
-            
-            if (unreadMessages && unreadMessages.length > 0) {
-                console.log('📋 Unread messages details:', unreadMessages.map(m => ({
-                    id: m.id,
-                    sender_id: m.sender_id,
-                    conversation_id: m.conversation_id
-                })));
-            }
-
             if (!unreadMessages || unreadMessages.length === 0) {
-                console.log('✅ No messages to mark as read');
                 return;
             }
 
-            // Get the IDs of messages to mark as read
             const messageIds = unreadMessages.map(msg => msg.id);
-            console.log('📋 Message IDs to mark as read:', messageIds);
 
-            // Mark them as read using the specific IDs
             const { data, error } = await supabase
                 .from('messages')
                 .update({ read_at: new Date().toISOString() })
@@ -86,18 +85,12 @@ const Chat = () => {
 
             if (error) {
                 console.error('❌ Error marking messages as read:', error);
-                console.error('❌ Error details:', error.message);
                 return;
             }
 
             console.log(`✅ Successfully marked ${data?.length || 0} messages as read`);
-            if (data && data.length > 0) {
-                console.log('✅ Marked messages:', data.map(m => ({ id: m.id, read_at: m.read_at })));
-            }
 
-            // Force refresh unread count after a small delay
             setTimeout(() => {
-                console.log('🔄 Refreshing unread count...');
                 refreshUnreadCount();
             }, 300);
 
@@ -110,8 +103,6 @@ const Chat = () => {
     useFocusEffect(
         useCallback(() => {
             if (currentUser?.id && conversationId) {
-                console.log('👀 Screen focused - marking messages as read');
-                // Add a small delay to ensure the screen is fully loaded
                 setTimeout(() => {
                     markMessagesAsRead();
                 }, 100);
@@ -119,23 +110,147 @@ const Chat = () => {
         }, [currentUser?.id, conversationId, markMessagesAsRead])
     );
 
-    // --- Mark messages as read when messages are loaded (but only once) ---
+    // --- Mark messages as read when messages are loaded ---
     const [hasMarkedOnLoad, setHasMarkedOnLoad] = useState(false);
     useEffect(() => {
         if (messages.length > 0 && currentUser?.id && conversationId && !hasMarkedOnLoad && !loading) {
-            console.log('📨 Messages loaded - marking as read');
             setHasMarkedOnLoad(true);
             markMessagesAsRead();
         }
     }, [messages.length, currentUser?.id, conversationId, hasMarkedOnLoad, loading, markMessagesAsRead]);
+
+    // --- Request camera/gallery permissions ---
+    useEffect(() => {
+        (async () => {
+            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (status !== 'granted') {
+                Alert.alert('Permission needed', 'We need camera roll permissions to send images.');
+            }
+        })();
+    }, []);
+
+    // --- Upload image to Supabase Storage ---
+    const uploadImage = async (uri: string, fileName: string) => {
+        try {
+            console.log("📤 Uploading image...");
+
+            // Read file as base64
+            const base64 = await FileSystem.readAsStringAsync(uri, {
+                encoding: FileSystem.EncodingType.Base64,
+            });
+
+            // Convert base64 to binary
+            const fileBytes = base64ToUint8Array(base64);
+
+            // Upload to Supabase Storage
+            const { data, error } = await supabase.storage
+                .from("chat-images") // 👈 your bucket name
+                .upload(`public/${fileName}`, fileBytes, {
+                    contentType: "image/jpeg",
+                    upsert: true,
+                });
+
+            if (error) {
+                console.error("❌ Error uploading image:", error);
+                return null;
+            }
+
+            console.log("✅ Uploaded:", data);
+
+            // Get public URL
+            const { data: publicUrlData } = supabase.storage
+                .from("chat-images")
+                .getPublicUrl(`public/${fileName}`);
+
+            return publicUrlData.publicUrl;
+        } catch (err) {
+            console.error("❌ Error uploading image:", err);
+            return null;
+        }
+    };
+
+    // --- Pick image from gallery ---
+    const pickImage = async () => {
+        try {
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true, // enables cropping
+                aspect: [4, 3],      // cropping aspect ratio
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                const imageUri = result.assets[0].uri;
+                await sendImageMessage(imageUri); // auto-send after crop confirm
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to pick image');
+        }
+    };
+
+    // --- Take photo with camera ---
+    const takePhoto = async () => {
+        try {
+            const result = await ImagePicker.launchCameraAsync({
+                allowsEditing: true,
+                aspect: [4, 3],
+                quality: 0.8,
+            });
+
+            if (!result.canceled) {
+                const imageUri = result.assets[0].uri;
+                await sendImageMessage(imageUri); // auto-send after crop confirm
+            }
+        } catch (error) {
+            Alert.alert('Error', 'Failed to take photo');
+        }
+    };
+
+    // --- Send image message ---
+    const sendImageMessage = async (imageUri) => {
+        if (!currentUser || uploadingImage) return;
+
+        setUploadingImage(true);
+
+        try {
+            console.log('Uploading image...');
+            const imageUrl = await uploadImage(imageUri);
+
+            console.log('Sending image message...');
+            const { error: messageError } = await supabase
+                .from('messages')
+                .insert([{
+                    conversation_id: conversationId,
+                    sender_id: currentUser.id,
+                    content: '',
+                    image_url: imageUrl,
+                    message_type: 'image'
+                }]);
+
+            if (messageError) throw messageError;
+
+            await supabase
+                .from('conversations')
+                .update({
+                    last_message: '📷 Image',
+                    last_message_at: new Date().toISOString()
+                })
+                .eq('id', conversationId);
+
+            console.log('✅ Image message sent');
+        } catch (error) {
+            console.error('❌ Error sending image:', error);
+            Alert.alert('Error', 'Failed to send image. Please try again.');
+        } finally {
+            setUploadingImage(false);
+        }
+    };
 
     // --- Fetch messages ---
     const fetchMessages = useCallback(async () => {
         if (!conversationId) return
 
         try {
-            console.log('Fetching messages for conversation:', conversationId)
-
             const { data, error } = await supabase
                 .from('messages')
                 .select(`
@@ -143,6 +258,8 @@ const Chat = () => {
                     conversation_id,
                     sender_id,
                     content,
+                    image_url,
+                    message_type,
                     created_at,
                     read_at
                 `)
@@ -154,7 +271,6 @@ const Chat = () => {
                 return
             }
 
-            console.log('Messages fetched:', data?.length || 0)
             setMessages(data || [])
         } catch (error) {
             console.error('Error in fetchMessages:', error)
@@ -163,7 +279,7 @@ const Chat = () => {
         }
     }, [conversationId])
 
-    // --- Send message ---
+    // --- Send text message ---
     const sendMessage = async () => {
         if (!newMessage.trim() || !currentUser || sending) return
 
@@ -172,14 +288,13 @@ const Chat = () => {
         setSending(true)
 
         try {
-            console.log('Sending message:', messageContent)
-
             const { data: messageData, error: messageError } = await supabase
                 .from('messages')
                 .insert([{
                     conversation_id: conversationId,
                     sender_id: currentUser.id,
-                    content: messageContent
+                    content: messageContent,
+                    message_type: 'text'
                 }])
                 .select()
                 .single()
@@ -238,20 +353,15 @@ const Chat = () => {
     useEffect(() => {
         if (!conversationId || !currentUser?.id) return
 
-        console.log('Setting up real-time subscription for messages')
-
         const channel = supabase
             .channel(`chat_${conversationId}`)
             .on(
                 'postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
-                    console.log('New message via real-time:', payload)
                     const newMessage = payload.new
-
                     setMessages(prev => prev.some(m => m.id === newMessage.id) ? prev : [...prev, newMessage])
 
-                    // If it's not from current user, mark as read after a short delay
                     if (newMessage.sender_id !== currentUser.id) {
                         setTimeout(() => {
                             markMessagesAsRead();
@@ -263,9 +373,7 @@ const Chat = () => {
                 'postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
-                    console.log('Message updated via real-time:', payload)
                     const updatedMessage = payload.new
-
                     setMessages(prev =>
                         prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
                     )
@@ -274,12 +382,50 @@ const Chat = () => {
             .subscribe()
 
         return () => {
-            console.log('Cleaning up real-time subscription')
             supabase.removeChannel(channel)
         }
     }, [conversationId, currentUser?.id, markMessagesAsRead])
 
-    // --- UI ---
+    // --- Render message ---
+    const renderMessage = (message, index) => {
+        const isMyMessage = message.sender_id === currentUser.id
+        const showTimestamp = index === 0 ||
+            (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000
+
+        return (
+            <View key={message.id}>
+                {showTimestamp && <Text style={styles.timestamp}>{formatMessageTime(message.created_at)}</Text>}
+                <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
+                    <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
+                        {message.message_type === 'image' && message.image_url ? (
+                            <TouchableOpacity
+                                onPress={() => {
+                                    setSelectedImage(message.image_url);
+                                    setShowImageModal(true);
+                                }}
+                            >
+                                <Image
+                                    source={{ uri: message.image_url }}
+                                    style={styles.messageImage}
+                                    resizeMode="cover"
+                                />
+                            </TouchableOpacity>
+                        ) : (
+                            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
+                                {message.content}
+                            </Text>
+                        )}
+                    </View>
+                    {isMyMessage && (
+                        <Text style={styles.readStatus}>
+                            {message.read_at ? '✓✓' : '✓'}
+                        </Text>
+                    )}
+                </View>
+            </View>
+        )
+    }
+
     if (!currentUser) {
         return (
             <View style={styles.container}>
@@ -335,34 +481,34 @@ const Chat = () => {
                             <Text style={styles.emptySubtext}>Start the conversation!</Text>
                         </View>
                     ) : (
-                        messages.map((message, index) => {
-                            const isMyMessage = message.sender_id === currentUser.id
-                            const showTimestamp = index === 0 ||
-                                (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000
-
-                            return (
-                                <View key={message.id}>
-                                    {showTimestamp && <Text style={styles.timestamp}>{formatMessageTime(message.created_at)}</Text>}
-                                    <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
-                                        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-                                            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
-                                                {message.content}
-                                            </Text>
-                                        </View>
-                                        {isMyMessage && (
-                                            <Text style={styles.readStatus}>
-                                                {message.read_at ? '✓✓' : '✓'}
-                                            </Text>
-                                        )}
-                                    </View>
-                                </View>
-                            )
-                        })
+                        messages.map((message, index) => renderMessage(message, index))
                     )}
                 </ScrollView>
 
                 {/* Input */}
                 <View style={styles.inputContainer}>
+                    <TouchableOpacity
+                        style={styles.attachButton}
+                        onPress={() => {
+                            Alert.alert(
+                                "Add Image",
+                                "Choose an option",
+                                [
+                                    { text: "Camera", onPress: takePhoto },
+                                    { text: "Gallery", onPress: pickImage },
+                                    { text: "Cancel", style: "cancel" }
+                                ]
+                            );
+                        }}
+                        disabled={uploadingImage}
+                    >
+                        {uploadingImage ? (
+                            <ActivityIndicator size="small" color="#FFAB00" />
+                        ) : (
+                            <Text style={styles.attachButtonText}>📷</Text>
+                        )}
+                    </TouchableOpacity>
+
                     <TextInput
                         style={styles.textInput}
                         value={newMessage}
@@ -380,6 +526,34 @@ const Chat = () => {
                         {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.sendButtonText}>Send</Text>}
                     </TouchableOpacity>
                 </View>
+
+                {/* Image Modal */}
+                <Modal
+                    visible={showImageModal}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setShowImageModal(false)}
+                >
+                    <View style={styles.modalContainer}>
+                        <TouchableOpacity
+                            style={styles.modalOverlay}
+                            onPress={() => setShowImageModal(false)}
+                        />
+                        <View style={styles.modalContent}>
+                            <Image
+                                source={{ uri: selectedImage }}
+                                style={styles.fullImage}
+                                resizeMode="contain"
+                            />
+                            <TouchableOpacity
+                                style={styles.closeButton}
+                                onPress={() => setShowImageModal(false)}
+                            >
+                                <Text style={styles.closeButtonText}>✕</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </Modal>
             </KeyboardAvoidingView>
         </SafeAreaView>
     )
@@ -409,11 +583,6 @@ const styles = StyleSheet.create({
         },
         shadowOpacity: 0.1,
         shadowRadius: 2,
-    },
-    backButton: {
-        fontSize: 16,
-        color: '#FFAB00',
-        fontFamily: 'DM-Medium',
     },
     backImage: {
         width: 30,
@@ -521,6 +690,11 @@ const styles = StyleSheet.create({
     otherMessageText: {
         color: '#333',
     },
+    messageImage: {
+        width: 200,
+        height: 150,
+        borderRadius: 10,
+    },
     readStatus: {
         fontSize: 12,
         color: '#666',
@@ -536,6 +710,18 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFF',
         borderTopWidth: 1,
         borderTopColor: '#E5E5E5',
+    },
+    attachButton: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: '#F5F5F5',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 10,
+    },
+    attachButtonText: {
+        fontSize: 20,
     },
     textInput: {
         flex: 1,
@@ -565,7 +751,47 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontFamily: 'DM-Bold',
     },
-})
+    // Modal styles
+    modalContainer: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+    },
+    modalContent: {
+        width: '90%',
+        height: '70%',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    fullImage: {
+        width: '100%',
+        height: '100%',
+    },
+    closeButton: {
+        position: 'absolute',
+        top: 20,
+        right: 20,
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: 'rgba(255, 255, 255, 0.8)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    closeButtonText: {
+        fontSize: 20,
+        color: '#000',
+        fontWeight: 'bold',
+    },
+});
 
 // import {
 //     StyleSheet,
