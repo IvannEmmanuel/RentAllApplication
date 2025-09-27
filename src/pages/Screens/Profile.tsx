@@ -9,6 +9,7 @@ import ActiveRentalModal from '../../components/ActiveRentalModal'
 import PendingRentalModal from '../../components/PendingRentalModal'
 import CompletedRentalModal from '../../components/CompletedRentalModal'
 import RatingsModal from '../../components/RatingsModal'
+import PictureModal from '../../components/PictureModal'
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -21,6 +22,7 @@ const Profile = () => {
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [showRatingsModal, setShowRatingsModal] = useState(false);
+  const [pictureModalVisible, setPictureModalVisible] = useState(false)
 
   // Use shared favorites context instead of local state
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
@@ -349,11 +351,22 @@ const Profile = () => {
     return (
       <View key={item.item_id} style={styles.itemContainer}>
         <View style={styles.itemImageContainer}>
-          <Image
-            source={item.imageUrl ? { uri: item.imageUrl } : require('../../../assets/splash-icon.png')}
-            style={styles.itemImage}
-            resizeMode="cover"
-          />
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedItem(item)
+              setPictureModalVisible(true)
+            }}
+          >
+            <Image
+              source={
+                item?.imageUrl
+                  ? { uri: item.imageUrl }
+                  : require('../../../assets/splash-icon.png')
+              }
+              style={styles.itemImage}
+            />
+          </TouchableOpacity>
+
           <View style={styles.itemRateContainer}>
             <Text style={styles.itemName}>{item.title}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }}>
@@ -542,6 +555,12 @@ const Profile = () => {
         visible={showRatingsModal}
         onClose={() => setShowRatingsModal(false)}
         currentUserId={currentUser?.id}
+      />
+
+      <PictureModal
+        visible={pictureModalVisible}
+        onClose={() => setPictureModalVisible(false)}
+        item={selectedItem}
       />
     </>
   )
