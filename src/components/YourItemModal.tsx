@@ -99,12 +99,6 @@ const YourItemsModal = ({ visible, onClose, currentUser }) => {
               continue; // skip if not enough stock
             }
 
-            // Deduct rental quantity from item stock
-            await supabase
-              .from('items')
-              .update({ quantity: itemData.quantity - rentedQuantity })
-              .eq('item_id', booking.item_id);
-
             // Update rental status to ongoing
             await supabase
               .from('rental_transactions')
