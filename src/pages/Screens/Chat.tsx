@@ -11,7 +11,8 @@ import {
     ActivityIndicator,
     Image,
     Modal,
-    Dimensions
+    Dimensions,
+    Keyboard
 } from 'react-native'
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../supbaseClient'
@@ -51,6 +52,20 @@ const Chat = () => {
 
     console.log("Conversation ID:", conversationId)
     console.log("Current User ID:", currentUser?.id)
+
+    useEffect(() => {
+        const showSub = Keyboard.addListener("keyboardDidShow", () => {
+            scrollToBottom();
+        });
+        const hideSub = Keyboard.addListener("keyboardDidHide", () => {
+            scrollToBottom();
+        });
+
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
 
     // --- Mark messages as read ---
     const markMessagesAsRead = useCallback(async () => {
