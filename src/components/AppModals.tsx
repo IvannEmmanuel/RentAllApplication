@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNotificationModal } from './NotificationModalContext';
 import RatingsModal from './RatingsModal';
 import YourItemsModal from './YourItemModal';
+import PendingRentalModal from './PendingRentalModal';
 import { supabase } from '../../supbaseClient';
 
 export default function AppModals({ currentUser }) {
@@ -75,6 +76,14 @@ export default function AppModals({ currentUser }) {
 
   return (
     <>
+      {/* Booking request - show PendingRentalModal for renter */}
+      {modalData.visible && modalData.type === 'booking_request' && (
+        <PendingRentalModal 
+          visible={true}
+          onClose={hideModal}
+        />
+      )}
+
       {/* Booking completed - show different modals based on user role */}
       {modalData.visible && modalData.type === 'booking_completed' && !isLoadingRole && (
         <>
@@ -98,9 +107,8 @@ export default function AppModals({ currentUser }) {
         </>
       )}
       
-      {/* Other notification types - always show YourItemsModal for lessor */}
+      {/* Other notification types - show YourItemsModal for lessor */}
       {modalData.visible && (
-        modalData.type === 'booking_request' ||
         modalData.type === 'booking_return' ||
         modalData.type === 'booking_started' ||
         modalData.type === 'booking_confirmed'
