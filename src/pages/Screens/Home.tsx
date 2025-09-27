@@ -541,12 +541,12 @@ const Home = () => {
             )}
           </TouchableOpacity>
           <View style={styles.itemRateContainer}>
-            <Text style={styles.itemName}>{item.title}</Text>
-            <View style={{ flexDirection: "row", alignItems: "center", paddingLeft: 10 }}>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Image source={require("../../../assets/rate.png")} style={styles.rateImage} />
               <Text> {itemRatings[item.item_id] || "No rating"}</Text>
             </View>
           </View>
+          <Text style={styles.itemName}>{item.title}</Text>
           <Text style={styles.lessorText}>{item.lessorName}</Text>
           <View style={{ alignSelf: "baseline", width: "100%" }}>
             <Text style={styles.text}>{item.location || "Location not specified"}</Text>
@@ -803,12 +803,12 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    height: 50,
+    height: 30,
   },
   itemName: {
     flex: 1,
     fontFamily: "DM-Medium",
-    fontSize: 14,
+    fontSize: 16,
   },
   rateImage: {
     width: 12,
