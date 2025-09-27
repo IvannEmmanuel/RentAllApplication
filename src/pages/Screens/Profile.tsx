@@ -22,10 +22,12 @@ const Profile = () => {
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [showRatingsModal, setShowRatingsModal] = useState(false);
-  const [pictureModalVisible, setPictureModalVisible] = useState(false)
+  const [pictureModalVisible, setPictureModalVisible] = useState(false);
 
   // Use shared favorites context instead of local state
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
+
+  const [itemRatings, setItemRatings] = useState({});
 
   useEffect(() => {
     if (!currentUser) {
@@ -166,11 +168,61 @@ const Profile = () => {
     }
   }
 
+  const fetchItemRatings = useCallback(async (itemIds) => {
+    if (!itemIds || itemIds.length === 0) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('reviews')
+        .select('item_id, rating')
+        .in('item_id', itemIds);
+
+      if (error) {
+        console.error('Error fetching ratings:', error);
+        return;
+      }
+
+      // Build totals/counts
+      const ratingsMap = {};
+      (data || []).forEach((r) => {
+        const id = String(r.item_id);
+        if (!ratingsMap[id]) ratingsMap[id] = { total: 0, count: 0 };
+        ratingsMap[id].total += Number(r.rating);
+        ratingsMap[id].count += 1;
+      });
+
+      // Convert to averages
+      const averageRatings = {};
+      Object.keys(ratingsMap).forEach((id) => {
+        const { total, count } = ratingsMap[id];
+        averageRatings[id] = count > 0 ? (total / count).toFixed(1) : null;
+      });
+
+      setItemRatings((prev) => ({ ...prev, ...averageRatings }));
+    } catch (err) {
+      console.error('fetchItemRatings error:', err);
+    }
+  }, []);
+
   const fetchRecommendedItems = useCallback(async () => {
     try {
       let { data, error } = await supabase
         .from("items")
-        .select("item_id,user_id,title,description,price_per_day,location,created_at,available,item_status")
+        .select(`
+        item_id,
+        user_id,
+        title,
+        description,
+        price_per_day,
+        location,
+        created_at,
+        available,
+        item_status,
+        users (
+          first_name,
+          last_name
+        )
+      `)
         .eq("available", true)
         .eq("item_status", "approved")
 
@@ -184,12 +236,16 @@ const Profile = () => {
           const imageUrl = await getImageUrl(item.user_id, item.item_id)
           return {
             ...item,
+            lessorName: item.users ? `${item.users.first_name} ${item.users.last_name}` : "Unknown",
             imageUrl,
             formattedPrice: `₱${item.price_per_day}`,
             formattedDate: new Date(item.created_at).toLocaleDateString()
           }
         })
       )
+
+      const itemIds = withImages.map(i => i.item_id).filter(Boolean);
+      fetchItemRatings(itemIds);   // fetch ratings for those items
 
       setRecommendedItems(withImages)
     } catch (e) {
@@ -371,9 +427,10 @@ const Profile = () => {
             <Text style={styles.itemName}>{item.title}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', paddingLeft: 10 }}>
               <Image source={require('../../../assets/rate.png')} style={styles.rateImage} />
-              <Text> 5.0</Text>
+              <Text> {itemRatings[String(item.item_id)] ?? 'No rating'}</Text>
             </View>
           </View>
+          <Text style={styles.text}>{item.lessorName}</Text>
           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
           <Text style={styles.text}>{item.formattedDate}</Text>
           <View style={styles.moneyRateContainer}>
