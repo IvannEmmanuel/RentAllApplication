@@ -4,29 +4,45 @@ import {
   StyleSheet,
   Text,
   View,
-  ScrollView,
   ActivityIndicator,
   Image,
   Modal,
   TouchableOpacity,
-} from 'react-native';
-import React, { useEffect, useState } from 'react';
-import { supabase } from '../../supbaseClient';
-import { useFavorites } from './FavoritesContext';
+  FlatList,
+} from "react-native"
+import React, { useEffect, useState, useCallback } from "react"
+import { supabase } from "../../supbaseClient"
+import { useFavorites } from "./FavoritesContext"
+
+const PAGE_SIZE = 6
 
 const CompletedRentalModal = ({ visible, onClose }) => {
-  const { currentUser } = useFavorites();
-  const [rentals, setRentals] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { currentUser } = useFavorites()
+  const [rentals, setRentals] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [page, setPage] = useState(0)
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
 
-  useEffect(() => {
-    if (!currentUser || !visible) return;
+  const fetchCompletedRentals = useCallback(
+    async (reset = false) => {
+      if (!currentUser) return
 
-    const fetchCompletedRentals = async () => {
-      setLoading(true);
+      if (reset) {
+        setLoading(true)
+        setPage(0)
+        setHasMore(true)
+      } else {
+        setLoadingMore(true)
+      }
+
+      const from = reset ? 0 : page * PAGE_SIZE
+      const to = from + PAGE_SIZE - 1
+
       const { data, error } = await supabase
-        .from('rental_transactions')
-        .select(`
+        .from("rental_transactions")
+        .select(
+          `
           rental_id,
           item_id,
           start_date,
@@ -41,67 +57,159 @@ const CompletedRentalModal = ({ visible, onClose }) => {
             location,
             main_image_url
           )
-        `)
-        .eq('renter_id', currentUser.id)
-        .eq('status', 'completed')
+        `
+        )
+        .eq("renter_id", currentUser.id)
+        .eq("status", "completed")
+        .order("created_at", { ascending: false })
+        .range(from, to)
 
       if (error) {
-        console.error('Error fetching completed rentals:', error);
+        console.error("Error fetching completed rentals:", error)
       } else {
-        setRentals(data);
+        if (reset) {
+          setRentals(data)
+        } else {
+          setRentals((prev) => [...prev, ...data])
+        }
+
+        // if less than PAGE_SIZE returned, no more data
+        if (data.length < PAGE_SIZE) {
+          setHasMore(false)
+        }
       }
-      setLoading(false);
-    };
 
-    fetchCompletedRentals();
-  }, [currentUser, visible]);
+      setLoading(false)
+      setLoadingMore(false)
+    },
+    [currentUser, page]
+  )
 
-  const getTimeAgo = (updatedAt) => {
-    const now = new Date();
-    const updated = new Date(updatedAt);
-    const diffTime = now - updated;
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    const diffWeeks = Math.floor(diffDays / 7);
-    const diffMonths = Math.floor(diffDays / 30);
-
-    if (diffMonths > 0) {
-      return `${diffMonths} month${diffMonths !== 1 ? 's' : ''} ago`;
-    } else if (diffWeeks > 0) {
-      return `${diffWeeks} week${diffWeeks !== 1 ? 's' : ''} ago`;
-    } else if (diffDays > 0) {
-      return `${diffDays} day${diffDays !== 1 ? 's' : ''} ago`;
-    } else {
-      return 'Recently';
+  useEffect(() => {
+    if (visible) {
+      fetchCompletedRentals(true)
     }
-  };
+  }, [visible, currentUser])
+
+  const loadMore = () => {
+    if (!loadingMore && hasMore) {
+      setPage((prev) => prev + 1)
+    }
+  }
+
+  useEffect(() => {
+    if (page > 0) {
+      fetchCompletedRentals(false)
+    }
+  }, [page])
+
+  // helpers unchanged...
+  const getTimeAgo = (updatedAt) => {
+    const now = new Date()
+    const updated = new Date(updatedAt)
+    const diffTime = now - updated
+    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+    const diffWeeks = Math.floor(diffDays / 7)
+    const diffMonths = Math.floor(diffDays / 30)
+
+    if (diffMonths > 0) return `${diffMonths} month${diffMonths !== 1 ? "s" : ""} ago`
+    if (diffWeeks > 0) return `${diffWeeks} week${diffWeeks !== 1 ? "s" : ""} ago`
+    if (diffDays > 0) return `${diffDays} day${diffDays !== 1 ? "s" : ""} ago`
+    return "Recently"
+  }
 
   const getRentalDuration = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const diffTime = end - start;
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  };
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const diffTime = end - start
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+  }
 
   const formatDateRange = (startDate, endDate) => {
-    const start = new Date(startDate);
-    const end = new Date(endDate);
-    const startMonth = start.toLocaleDateString('en-US', { month: 'short' });
-    const endMonth = end.toLocaleDateString('en-US', { month: 'short' });
-    const startDay = start.getDate();
-    const endDay = end.getDate();
-    
-    if (startMonth === endMonth) {
-      return `${startMonth} ${startDay}-${endDay}`;
-    } else {
-      return `${startMonth} ${startDay} - ${endMonth} ${endDay}`;
-    }
-  };
+    const start = new Date(startDate)
+    const end = new Date(endDate)
+    const startMonth = start.toLocaleDateString("en-US", { month: "short" })
+    const endMonth = end.toLocaleDateString("en-US", { month: "short" })
+    const startDay = start.getDate()
+    const endDay = end.getDate()
+    return startMonth === endMonth
+      ? `${startMonth} ${startDay}-${endDay}`
+      : `${startMonth} ${startDay} - ${endMonth} ${endDay}`
+  }
+
+  const renderRental = ({ item: rental, index }) => {
+    const duration = getRentalDuration(rental.start_date, rental.end_date)
+    const timeAgo = getTimeAgo(rental.created_at)
+    const dateRange = formatDateRange(rental.start_date, rental.end_date)
+
+    return (
+      <View key={rental.rental_id} style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}>
+        <View style={styles.cardHeader}>
+          <View style={styles.statusBadge}>
+            <Text style={styles.statusText}>✅ Completed</Text>
+          </View>
+          <View style={styles.timeBadge}>
+            <Text style={styles.timeText}>{timeAgo}</Text>
+          </View>
+        </View>
+
+        <View style={styles.cardContent}>
+          <Image
+            source={
+              rental.items?.main_image_url
+                ? { uri: rental.items.main_image_url }
+                : require("../../assets/splash-icon.png")
+            }
+            style={styles.image}
+          />
+
+          <View style={styles.info}>
+            <Text style={styles.title} numberOfLines={2}>
+              {rental.items?.title}
+            </Text>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailIcon}>📅</Text>
+              <Text style={styles.detailText}>{dateRange}</Text>
+            </View>
+
+            <View style={styles.detailRow}>
+              <Text style={styles.detailIcon}>⏱️</Text>
+              <Text style={styles.detailText}>
+                {duration} day{duration !== 1 ? "s" : ""} rental
+              </Text>
+            </View>
+
+            <View style={styles.detailsGrid}>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Quantity</Text>
+                <Text style={styles.detailValue}>{rental.quantity}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Text style={styles.detailLabel}>Total Paid</Text>
+                <Text style={styles.priceText}>₱{rental.total_cost}</Text>
+              </View>
+            </View>
+
+            <View style={styles.locationContainer}>
+              <Text style={styles.detailIcon}>📍</Text>
+              <Text style={styles.locationText} numberOfLines={1}>
+                {rental.items?.location}
+              </Text>
+            </View>
+
+            <View style={styles.completedContainer}>
+              <Text style={styles.completedText}>🎉 Rental successfully completed</Text>
+            </View>
+          </View>
+        </View>
+      </View>
+    )
+  }
 
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
-        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerText}>Completed Rentals</Text>
           <TouchableOpacity onPress={onClose}>
@@ -109,107 +217,34 @@ const CompletedRentalModal = ({ visible, onClose }) => {
           </TouchableOpacity>
         </View>
 
-        {/* Body */}
         {loading ? (
           <View style={styles.center}>
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#FFAB00" />
-              <Text style={styles.loadingText}>Loading rental history...</Text>
-            </View>
+            <ActivityIndicator size="large" color="#FFAB00" />
+            <Text style={styles.loadingText}>Loading rental history...</Text>
           </View>
         ) : rentals.length === 0 ? (
           <View style={styles.center}>
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyIcon}>📋</Text>
-              <Text style={styles.emptyTitle}>No Completed Rentals</Text>
-              <Text style={styles.emptySubtitle}>
-                Your completed rental history will appear here
-              </Text>
-            </View>
+            <Text style={styles.emptyTitle}>No Completed Rentals</Text>
           </View>
         ) : (
-          <ScrollView 
-            style={styles.scrollView}
+          <FlatList
+            data={rentals}
+            keyExtractor={(item) => item.rental_id.toString()}
+            renderItem={renderRental}
             contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-          >
-            {rentals.map((rental, index) => {
-              const duration = getRentalDuration(rental.start_date, rental.end_date);
-              const timeAgo = getTimeAgo(rental.updated_at);
-              const dateRange = formatDateRange(rental.start_date, rental.end_date);
-              
-              return (
-                <View key={rental.rental_id} style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}>
-                  <View style={styles.cardHeader}>
-                    <View style={styles.statusBadge}>
-                      <Text style={styles.statusText}>✅ Completed</Text>
-                    </View>
-                    <View style={styles.timeBadge}>
-                      <Text style={styles.timeText}>{timeAgo}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.cardContent}>
-                    <Image
-                      source={
-                        rental.items?.main_image_url
-                          ? { uri: rental.items.main_image_url }
-                          : require('../../assets/splash-icon.png')
-                      }
-                      style={styles.image}
-                    />
-
-                    <View style={styles.info}>
-                      <Text style={styles.title} numberOfLines={2}>
-                        {rental.items?.title}
-                      </Text>
-                      
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailIcon}>📅</Text>
-                        <Text style={styles.detailText}>{dateRange}</Text>
-                      </View>
-
-                      <View style={styles.detailRow}>
-                        <Text style={styles.detailIcon}>⏱️</Text>
-                        <Text style={styles.detailText}>
-                          {duration} day{duration !== 1 ? 's' : ''} rental
-                        </Text>
-                      </View>
-
-                      <View style={styles.detailsGrid}>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Quantity</Text>
-                          <Text style={styles.detailValue}>{rental.quantity}</Text>
-                        </View>
-                        <View style={styles.detailItem}>
-                          <Text style={styles.detailLabel}>Total Paid</Text>
-                          <Text style={styles.priceText}>₱{rental.total_cost}</Text>
-                        </View>
-                      </View>
-
-                      <View style={styles.locationContainer}>
-                        <Text style={styles.detailIcon}>📍</Text>
-                        <Text style={styles.locationText} numberOfLines={1}>
-                          {rental.items?.location}
-                        </Text>
-                      </View>
-
-                      <View style={styles.completedContainer}>
-                        <Text style={styles.completedText}>
-                          🎉 Rental successfully completed
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              );
-            })}
-          </ScrollView>
+            onEndReached={loadMore}
+            onEndReachedThreshold={0.5}
+            ListFooterComponent={
+              loadingMore ? (
+                <ActivityIndicator style={{ marginVertical: 12 }} color="#FFAB00" />
+              ) : null
+            }
+          />
         )}
       </View>
     </Modal>
-  );
-};
+  )
+}
 
 export default CompletedRentalModal;
 
