@@ -34,6 +34,7 @@ const FavoritesModal = ({
   const [bookModalVisible, setBookModalVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
   const [pictureModalVisible, setPictureModalVisible] = useState(false)
+  const [itemRatings, setItemRatings] = useState({});
 
   useEffect(() => {
     if (visible) {
@@ -100,6 +101,41 @@ const FavoritesModal = ({
     setSelectedItem(item)
     setBookModalVisible(true)
   }
+
+  const fetchItemRatings = async (itemIds) => {
+    if (!itemIds || itemIds.length === 0) return;
+
+    try {
+      const { data, error } = await supabase
+        .from("reviews")
+        .select("item_id, rating")
+        .in("item_id", itemIds);
+
+      if (error) {
+        console.error("Error fetching ratings:", error);
+        return;
+      }
+
+      const ratingsMap = {};
+      (data || []).forEach((r) => {
+        const id = String(r.item_id);
+        if (!ratingsMap[id]) ratingsMap[id] = { total: 0, count: 0 };
+        ratingsMap[id].total += Number(r.rating);
+        ratingsMap[id].count += 1;
+      });
+
+      const averages = {};
+      Object.keys(ratingsMap).forEach((id) => {
+        const { total, count } = ratingsMap[id];
+        averages[id] = count > 0 ? (total / count).toFixed(1) : null;
+      });
+
+      setItemRatings((prev) => ({ ...prev, ...averages }));
+    } catch (err) {
+      console.error("fetchItemRatings error:", err);
+    }
+  };
+
 
   // Check if item belongs to current user
   const isUserItem = (item) => {
@@ -180,8 +216,9 @@ const FavoritesModal = ({
           }
         })
       )
+      await fetchItemRatings(itemIds);
 
-      setFavoriteItems(withExtras)
+      setFavoriteItems(withExtras);
     } catch (error) {
       console.error("Error fetching favorites:", error)
       Alert.alert("Error", "Failed to load favorite items")
@@ -244,6 +281,12 @@ const FavoritesModal = ({
         </View>
 
         <View style={styles.itemDetails}>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4 }}>
+            <Image source={require("../../assets/rate.png")} style={{ width: 14, height: 14, marginRight: 4 }} />
+            <Text style={{ fontSize: 12, color: "#333" }}>
+              {itemRatings[String(item.item_id)] ?? "No rating"}
+            </Text>
+          </View>
           <Text style={styles.itemTitle} numberOfLines={2}>
             {item.title}
           </Text>
