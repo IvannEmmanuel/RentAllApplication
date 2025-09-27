@@ -13,8 +13,10 @@ import {
 } from 'react-native'
 import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '../../../supbaseClient'
-import { useRoute, useNavigation } from '@react-navigation/native'
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRoute, useNavigation, useFocusEffect } from '@react-navigation/native'
+import { SafeAreaView } from 'react-native-safe-area-context'
+import { useFavorites } from '../../components/FavoritesContext'
+import { useUnreadMessages } from '../../hooks/useUnreadMessages'
 
 const Chat = () => {
     const route = useRoute()
@@ -22,31 +24,112 @@ const Chat = () => {
     const scrollViewRef = useRef(null)
 
     const { conversationId, otherUserId, otherUserName, itemTitle, itemId } = route.params
+    const { currentUser } = useFavorites()
 
     const [messages, setMessages] = useState([])
     const [newMessage, setNewMessage] = useState('')
     const [loading, setLoading] = useState(true)
     const [sending, setSending] = useState(false)
-    const [currentUser, setCurrentUser] = useState(null)
 
-    // Get current user
-    useEffect(() => {
-        const getCurrentUser = async () => {
-            try {
-                const { data: { user }, error } = await supabase.auth.getUser()
-                if (error) {
-                    console.error('Error getting user:', error)
-                    return
-                }
-                setCurrentUser(user)
-            } catch (error) {
-                console.error('Error in getCurrentUser:', error)
+    const { refreshUnreadCount } = useUnreadMessages(currentUser?.id);
+
+    console.log("Conversation ID:", conversationId)
+    console.log("Current User ID:", currentUser?.id)
+
+    // --- Mark messages as read ---
+    const markMessagesAsRead = useCallback(async () => {
+        if (!currentUser?.id || !conversationId) return;
+
+        try {
+            console.log('🔄 Attempting to mark messages as read...');
+            console.log('Current user ID:', currentUser.id);
+            console.log('Conversation ID:', conversationId);
+            
+            // First, let's check what messages need to be marked as read
+            const { data: unreadMessages, error: checkError } = await supabase
+                .from('messages')
+                .select('id, sender_id, content, read_at, conversation_id')
+                .eq('conversation_id', conversationId)
+                .neq('sender_id', currentUser.id)
+                .is('read_at', null);
+
+            if (checkError) {
+                console.error('❌ Error checking unread messages:', checkError);
+                return;
             }
-        }
-        getCurrentUser()
-    }, [])
 
-    // Fetch messages
+            console.log(`📋 Found ${unreadMessages?.length || 0} unread messages to mark as read`);
+            
+            if (unreadMessages && unreadMessages.length > 0) {
+                console.log('📋 Unread messages details:', unreadMessages.map(m => ({
+                    id: m.id,
+                    sender_id: m.sender_id,
+                    conversation_id: m.conversation_id
+                })));
+            }
+
+            if (!unreadMessages || unreadMessages.length === 0) {
+                console.log('✅ No messages to mark as read');
+                return;
+            }
+
+            // Get the IDs of messages to mark as read
+            const messageIds = unreadMessages.map(msg => msg.id);
+            console.log('📋 Message IDs to mark as read:', messageIds);
+
+            // Mark them as read using the specific IDs
+            const { data, error } = await supabase
+                .from('messages')
+                .update({ read_at: new Date().toISOString() })
+                .in('id', messageIds)
+                .select('id, read_at');
+
+            if (error) {
+                console.error('❌ Error marking messages as read:', error);
+                console.error('❌ Error details:', error.message);
+                return;
+            }
+
+            console.log(`✅ Successfully marked ${data?.length || 0} messages as read`);
+            if (data && data.length > 0) {
+                console.log('✅ Marked messages:', data.map(m => ({ id: m.id, read_at: m.read_at })));
+            }
+
+            // Force refresh unread count after a small delay
+            setTimeout(() => {
+                console.log('🔄 Refreshing unread count...');
+                refreshUnreadCount();
+            }, 300);
+
+        } catch (error) {
+            console.error('❌ Error in markMessagesAsRead:', error);
+        }
+    }, [currentUser?.id, conversationId, refreshUnreadCount]);
+
+    // --- Mark messages as read when screen focused ---
+    useFocusEffect(
+        useCallback(() => {
+            if (currentUser?.id && conversationId) {
+                console.log('👀 Screen focused - marking messages as read');
+                // Add a small delay to ensure the screen is fully loaded
+                setTimeout(() => {
+                    markMessagesAsRead();
+                }, 100);
+            }
+        }, [currentUser?.id, conversationId, markMessagesAsRead])
+    );
+
+    // --- Mark messages as read when messages are loaded (but only once) ---
+    const [hasMarkedOnLoad, setHasMarkedOnLoad] = useState(false);
+    useEffect(() => {
+        if (messages.length > 0 && currentUser?.id && conversationId && !hasMarkedOnLoad && !loading) {
+            console.log('📨 Messages loaded - marking as read');
+            setHasMarkedOnLoad(true);
+            markMessagesAsRead();
+        }
+    }, [messages.length, currentUser?.id, conversationId, hasMarkedOnLoad, loading, markMessagesAsRead]);
+
+    // --- Fetch messages ---
     const fetchMessages = useCallback(async () => {
         if (!conversationId) return
 
@@ -56,13 +139,13 @@ const Chat = () => {
             const { data, error } = await supabase
                 .from('messages')
                 .select(`
-          id,
-          conversation_id,
-          sender_id,
-          content,
-          created_at,
-          read_at
-        `)
+                    id,
+                    conversation_id,
+                    sender_id,
+                    content,
+                    created_at,
+                    read_at
+                `)
                 .eq('conversation_id', conversationId)
                 .order('created_at', { ascending: true })
 
@@ -73,10 +156,6 @@ const Chat = () => {
 
             console.log('Messages fetched:', data?.length || 0)
             setMessages(data || [])
-
-            // Mark messages as read
-            await markMessagesAsRead()
-
         } catch (error) {
             console.error('Error in fetchMessages:', error)
         } finally {
@@ -84,27 +163,7 @@ const Chat = () => {
         }
     }, [conversationId])
 
-    // Mark messages as read
-    const markMessagesAsRead = useCallback(async () => {
-        if (!currentUser || !conversationId) return
-
-        try {
-            const { error } = await supabase
-                .from('messages')
-                .update({ read_at: new Date().toISOString() })
-                .eq('conversation_id', conversationId)
-                .neq('sender_id', currentUser.id)
-                .is('read_at', null)
-
-            if (error) {
-                console.warn('Error marking messages as read:', error)
-            }
-        } catch (error) {
-            console.warn('Error in markMessagesAsRead:', error)
-        }
-    }, [currentUser, conversationId])
-
-    // Send message
+    // --- Send message ---
     const sendMessage = async () => {
         if (!newMessage.trim() || !currentUser || sending) return
 
@@ -115,7 +174,6 @@ const Chat = () => {
         try {
             console.log('Sending message:', messageContent)
 
-            // Insert new message
             const { data: messageData, error: messageError } = await supabase
                 .from('messages')
                 .insert([{
@@ -128,8 +186,7 @@ const Chat = () => {
 
             if (messageError) throw messageError
 
-            // Update conversation's last message
-            const { error: convError } = await supabase
+            await supabase
                 .from('conversations')
                 .update({
                     last_message: messageContent,
@@ -137,68 +194,49 @@ const Chat = () => {
                 })
                 .eq('id', conversationId)
 
-            if (convError) {
-                console.warn('Error updating conversation:', convError)
-            }
-
             console.log('Message sent successfully')
-
-            // The real-time subscription will handle adding the message to the UI
-
         } catch (error) {
             console.error('Error sending message:', error)
             Alert.alert('Error', 'Failed to send message. Please try again.')
-
-            // Restore message text on error
             setNewMessage(messageContent)
         } finally {
             setSending(false)
         }
     }
 
-    // Format message time
+    // --- Helpers ---
     const formatMessageTime = (timestamp) => {
         const messageTime = new Date(timestamp)
         const now = new Date()
 
         if (messageTime.toDateString() === now.toDateString()) {
-            // Same day - show time
-            return messageTime.toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-            })
+            return messageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         } else {
-            // Different day - show date and time
             return messageTime.toLocaleDateString() + ' ' +
-                messageTime.toLocaleTimeString([], {
-                    hour: '2-digit',
-                    minute: '2-digit'
-                })
+                messageTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         }
     }
 
-    // Scroll to bottom when new messages arrive
     const scrollToBottom = () => {
         setTimeout(() => {
             scrollViewRef.current?.scrollToEnd({ animated: true })
         }, 100)
     }
 
-    // Load messages when component mounts
+    // --- Effects ---
     useEffect(() => {
-        if (currentUser) {
+        if (currentUser && conversationId) {
             fetchMessages()
         }
-    }, [currentUser, fetchMessages])
+    }, [currentUser, conversationId, fetchMessages])
 
-    // Scroll to bottom when messages change
     useEffect(() => {
         scrollToBottom()
     }, [messages])
 
-    // Real-time message updates
+    // --- Real-time subscription ---
     useEffect(() => {
-        if (!conversationId) return
+        if (!conversationId || !currentUser?.id) return
 
         console.log('Setting up real-time subscription for messages')
 
@@ -206,46 +244,30 @@ const Chat = () => {
             .channel(`chat_${conversationId}`)
             .on(
                 'postgres_changes',
-                {
-                    event: 'INSERT',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `conversation_id=eq.${conversationId}`
-                },
+                { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
-                    console.log('New message received via real-time:', payload)
+                    console.log('New message via real-time:', payload)
                     const newMessage = payload.new
 
-                    setMessages(prevMessages => {
-                        // Check if message already exists to avoid duplicates
-                        if (prevMessages.some(msg => msg.id === newMessage.id)) {
-                            return prevMessages
-                        }
-                        return [...prevMessages, newMessage]
-                    })
+                    setMessages(prev => prev.some(m => m.id === newMessage.id) ? prev : [...prev, newMessage])
 
-                    // Mark as read if we're the recipient
-                    if (newMessage.sender_id !== currentUser?.id) {
-                        markMessagesAsRead()
+                    // If it's not from current user, mark as read after a short delay
+                    if (newMessage.sender_id !== currentUser.id) {
+                        setTimeout(() => {
+                            markMessagesAsRead();
+                        }, 500);
                     }
                 }
             )
             .on(
                 'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'messages',
-                    filter: `conversation_id=eq.${conversationId}`
-                },
+                { event: 'UPDATE', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
                     console.log('Message updated via real-time:', payload)
                     const updatedMessage = payload.new
 
-                    setMessages(prevMessages =>
-                        prevMessages.map(msg =>
-                            msg.id === updatedMessage.id ? updatedMessage : msg
-                        )
+                    setMessages(prev =>
+                        prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
                     )
                 }
             )
@@ -255,8 +277,9 @@ const Chat = () => {
             console.log('Cleaning up real-time subscription')
             supabase.removeChannel(channel)
         }
-    }, [conversationId, currentUser, markMessagesAsRead])
+    }, [conversationId, currentUser?.id, markMessagesAsRead])
 
+    // --- UI ---
     if (!currentUser) {
         return (
             <View style={styles.container}>
@@ -265,12 +288,8 @@ const Chat = () => {
                         <Image source={require("../../../assets/back.png")} style={styles.backImage} />
                     </TouchableOpacity>
                     <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>
-                            {otherUserName}
-                        </Text>
-                        <Text style={styles.headerSubtitle} numberOfLines={1}>
-                            {itemTitle}
-                        </Text>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
+                        <Text style={styles.headerSubtitle} numberOfLines={1}>{itemTitle}</Text>
                     </View>
                     <View style={styles.headerSpacer} />
                 </View>
@@ -291,12 +310,8 @@ const Chat = () => {
                         <Image source={require("../../../assets/back.png")} style={styles.backImage} />
                     </TouchableOpacity>
                     <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>
-                            {otherUserName}
-                        </Text>
-                        <Text style={styles.headerSubtitle} numberOfLines={1}>
-                            {itemTitle}
-                        </Text>
+                        <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
+                        <Text style={styles.headerSubtitle} numberOfLines={1}>{itemTitle}</Text>
                     </View>
                     <View style={styles.headerSpacer} />
                 </View>
@@ -307,7 +322,7 @@ const Chat = () => {
                     style={styles.messagesContainer}
                     contentContainerStyle={styles.messagesContent}
                     showsVerticalScrollIndicator={false}
-                    onContentSizeChange={() => scrollToBottom()}
+                    onContentSizeChange={scrollToBottom}
                 >
                     {loading ? (
                         <View style={styles.loadingContainer}>
@@ -323,27 +338,14 @@ const Chat = () => {
                         messages.map((message, index) => {
                             const isMyMessage = message.sender_id === currentUser.id
                             const showTimestamp = index === 0 ||
-                                (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000 // 5 minutes
+                                (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000
 
                             return (
                                 <View key={message.id}>
-                                    {showTimestamp && (
-                                        <Text style={styles.timestamp}>
-                                            {formatMessageTime(message.created_at)}
-                                        </Text>
-                                    )}
-                                    <View style={[
-                                        styles.messageContainer,
-                                        isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer
-                                    ]}>
-                                        <View style={[
-                                            styles.messageBubble,
-                                            isMyMessage ? styles.myMessage : styles.otherMessage
-                                        ]}>
-                                            <Text style={[
-                                                styles.messageText,
-                                                isMyMessage ? styles.myMessageText : styles.otherMessageText
-                                            ]}>
+                                    {showTimestamp && <Text style={styles.timestamp}>{formatMessageTime(message.created_at)}</Text>}
+                                    <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
+                                        <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
+                                            <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
                                                 {message.content}
                                             </Text>
                                         </View>
@@ -359,7 +361,7 @@ const Chat = () => {
                     )}
                 </ScrollView>
 
-                {/* Message Input */}
+                {/* Input */}
                 <View style={styles.inputContainer}>
                     <TextInput
                         style={styles.textInput}
@@ -371,18 +373,11 @@ const Chat = () => {
                         maxLength={1000}
                     />
                     <TouchableOpacity
-                        style={[
-                            styles.sendButton,
-                            (!newMessage.trim() || sending) && styles.sendButtonDisabled
-                        ]}
+                        style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
                         onPress={sendMessage}
                         disabled={!newMessage.trim() || sending}
                     >
-                        {sending ? (
-                            <ActivityIndicator size="small" color="#FFF" />
-                        ) : (
-                            <Text style={styles.sendButtonText}>Send</Text>
-                        )}
+                        {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.sendButtonText}>Send</Text>}
                     </TouchableOpacity>
                 </View>
             </KeyboardAvoidingView>
