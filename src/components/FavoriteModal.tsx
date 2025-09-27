@@ -14,6 +14,7 @@ import {
 import { useState, useEffect } from "react"
 import { supabase } from "../../supbaseClient"
 import BookItemModal from "./BookItemModal"
+import PictureModal from "./PictureModal"
 import { useFavorites } from "./FavoritesContext"
 
 const FavoritesModal = ({
@@ -32,11 +33,48 @@ const FavoritesModal = ({
   const [loading, setLoading] = useState(false)
   const [bookModalVisible, setBookModalVisible] = useState(false)
   const [selectedItem, setSelectedItem] = useState(null)
+  const [pictureModalVisible, setPictureModalVisible] = useState(false)
 
   useEffect(() => {
     if (visible) {
-      setLoading(true)
-      fetchFavorites().finally(() => setLoading(false))
+      const fetchData = async () => {
+        setLoading(true)
+        try {
+          const favs = await fetchFavorites()
+          if (!favs) {
+            setFavoriteItems([])
+            return
+          }
+
+          // Fetch lessor names for each favorite item
+          const withLessorNames = await Promise.all(
+            favs.map(async (item) => {
+              const { data: userData, error: userError } = await supabase
+                .from("users")
+                .select("first_name,last_name")
+                .eq("id", item.user_id)
+                .single()
+
+              const lessorName = userData
+                ? `${userData.first_name} ${userData.last_name}`
+                : "Unknown"
+
+              return {
+                ...item,
+                lessorName,
+              }
+            })
+          )
+
+          setFavoriteItems(withLessorNames)
+        } catch (err) {
+          console.error("Error fetching favorite items:", err)
+        } finally {
+          setLoading(false)
+        }
+      }
+
+      fetchData()
     }
   }, [visible, fetchFavorites])
 
@@ -109,7 +147,7 @@ const FavoritesModal = ({
       const itemIds = favoriteIds.map((fav) => fav.item_id)
       const { data: items, error: itemsError } = await supabase
         .from("items")
-        .select("item_id,user_id,title,description,price_per_day,deposit_fee,location,created_at,quantity") // Add quantity to select
+        .select("item_id,user_id,title,description,price_per_day,deposit_fee,location,created_at,quantity")
         .in("item_id", itemIds)
         .eq("available", true)
 
@@ -117,19 +155,33 @@ const FavoritesModal = ({
 
       const sortedItems = itemIds.map((id) => items.find((item) => item.item_id === id)).filter(Boolean)
 
-      const withImages = await Promise.all(
+      const withExtras = await Promise.all(
         sortedItems.map(async (item) => {
+          // get image
           const imageUrl = await getImageUrl(item.user_id, item.item_id)
+
+          // get lessor name
+          const { data: userData } = await supabase
+            .from("users")
+            .select("first_name,last_name")
+            .eq("id", item.user_id)
+            .single()
+
+          const lessorName = userData
+            ? `${userData.first_name} ${userData.last_name}`
+            : "Unknown"
+
           return {
             ...item,
             imageUrl,
             formattedPrice: `₱${item.price_per_day}`,
             formattedDate: new Date(item.created_at).toLocaleDateString(),
+            lessorName,
           }
-        }),
+        })
       )
 
-      setFavoriteItems(withImages)
+      setFavoriteItems(withExtras)
     } catch (error) {
       console.error("Error fetching favorites:", error)
       Alert.alert("Error", "Failed to load favorite items")
@@ -181,17 +233,21 @@ const FavoritesModal = ({
     return (
       <View key={item.item_id} style={styles.favoriteItem}>
         <View style={styles.itemImageContainer}>
-          {item.imageUrl ? (
+          <TouchableOpacity
+            onPress={() => {
+              setSelectedItem(item)
+              setPictureModalVisible(true)
+            }}
+          >
             <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
-          ) : (
-            <Image source={require("../../assets/splash-icon.png")} style={styles.itemImage} resizeMode="cover" />
-          )}
+          </TouchableOpacity>
         </View>
 
         <View style={styles.itemDetails}>
           <Text style={styles.itemTitle} numberOfLines={2}>
             {item.title}
           </Text>
+          <Text style={styles.lessorText}>{item.lessorName}</Text>
           <Text style={styles.itemLocation} numberOfLines={1}>
             {item.location || "Location not specified"}
           </Text>
@@ -294,6 +350,12 @@ const FavoritesModal = ({
             onBookingUpdate()
           }
         }}
+      />
+
+      <PictureModal
+        visible={pictureModalVisible}
+        onClose={() => setPictureModalVisible(false)}
+        item={selectedItem}
       />
     </>
   )
@@ -513,5 +575,10 @@ const styles = StyleSheet.create({
     width: 16,
     height: 16,
     tintColor: "#FFAB00",
+  },
+  lessorText: {
+    fontSize: 12,
+    color: "#555",
+    marginBottom: 2,
   },
 })
