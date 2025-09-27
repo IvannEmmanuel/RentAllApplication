@@ -39,7 +39,11 @@ const PendingRentalModal = ({ visible, onClose }) => {
             title,
             price_per_day,
             location,
-            main_image_url
+            main_image_url,
+            user: user_id (
+              first_name,
+              last_name
+            )
           )
         `)
         .eq('renter_id', currentUser.id)
@@ -114,7 +118,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
             </View>
           </View>
         ) : (
-          <ScrollView 
+          <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
@@ -122,7 +126,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
             {rentals.map((rental, index) => {
               const daysUntilStart = getDaysUntilStart(rental.start_date);
               const timeAgo = getTimeAgo(rental.created_at);
-              
+
               return (
                 <View key={rental.rental_id} style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}>
                   <View style={styles.cardHeader}>
@@ -148,14 +152,17 @@ const PendingRentalModal = ({ visible, onClose }) => {
                       <Text style={styles.title} numberOfLines={2}>
                         {rental.items?.title}
                       </Text>
-                      
+                      <Text style={styles.detailText}>
+                        {rental.items?.user?.first_name} {rental.items?.user?.last_name}
+                      </Text>
+
                       <View style={styles.detailRow}>
                         <Text style={styles.detailIcon}>📅</Text>
                         <Text style={styles.detailText}>
-                          {new Date(rental.start_date).toLocaleDateString('en-US', { 
-                            month: 'short', day: 'numeric' 
-                          })} → {new Date(rental.end_date).toLocaleDateString('en-US', { 
-                            month: 'short', day: 'numeric' 
+                          {new Date(rental.start_date).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric'
+                          })} → {new Date(rental.end_date).toLocaleDateString('en-US', {
+                            month: 'short', day: 'numeric'
                           })}
                         </Text>
                       </View>
