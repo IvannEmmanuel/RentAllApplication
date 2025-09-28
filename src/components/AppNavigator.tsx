@@ -18,6 +18,8 @@ import { FavoritesProvider } from './FavoritesContext';
 import LessorReviewsModal from './LessorReviewsModal';
 import Chat from '../pages/Screens/Chat';
 import LessorReviewee from './LessorReviewee';
+import ItemTrackingScreen from './ItemTrackingScreen';
+import ItemTrackingLessorScreen from './ItemTrackingLessorScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -78,6 +80,8 @@ export default function AppNavigator() {
                             <Stack.Screen name="LessorReviews" component={LessorReviewsModal} />
                             <Stack.Screen name="Chat" component={Chat} />
                             <Stack.Screen name="LessorReviewee" component={LessorReviewee} />
+                            <Stack.Screen name="ItemTrackingScreen" component={ItemTrackingScreen} />
+                            <Stack.Screen name="ItemTrackingLessorScreen" component={ItemTrackingLessorScreen} />
                         </Stack.Navigator>
                     </NavigationContainer>
                     <AppModals currentUser={currentUser} />
