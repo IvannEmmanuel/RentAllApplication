@@ -8,15 +8,100 @@ import {
     ScrollView,
     ActivityIndicator,
     Alert,
+    Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../supbaseClient';
-import { handleBookingStatusChange } from '../notifications/notifications'; // Add this import
+import { handleBookingStatusChange } from '../notifications/notifications';
 
-const ItemTrackingLessorScreen = ({ route, navigation }) => {
-    const { booking } = route.params;
-    const [currentBooking, setCurrentBooking] = useState(booking);
+const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalId, currentUser }) => {
+    // Handle both navigation route params and direct props
+    const isModal = visible !== undefined;
+    const bookingFromRoute = route?.params?.booking;
+    
+    const [currentBooking, setCurrentBooking] = useState(bookingFromRoute || null);
     const [loading, setLoading] = useState(false);
+    const [fetchingBooking, setFetchingBooking] = useState(isModal && !bookingFromRoute);
+
+    // Fetch booking data when used as modal
+    useEffect(() => {
+        if (isModal && rentalId && !bookingFromRoute) {
+            fetchBookingData();
+        }
+    }, [isModal, rentalId, bookingFromRoute]);
+
+    const fetchBookingData = async () => {
+        setFetchingBooking(true);
+        try {
+            const { data, error } = await supabase
+                .from('rental_transactions')
+                .select(`
+                    rental_id,
+                    item_id,
+                    renter_id,
+                    start_date,
+                    end_date,
+                    total_cost,
+                    status,
+                    quantity,
+                    created_at,
+                    items!inner(
+                        title,
+                        price_per_day,
+                        user_id,
+                        location,
+                        quantity
+                    ),
+                    users!rental_transactions_renter_id_fkey(
+                        first_name,
+                        last_name,
+                        face_image_url
+                    )
+                `)
+                .eq('rental_id', rentalId)
+                .single();
+
+            if (error) throw error;
+
+            // Get item image
+            const imageUrl = await getItemImage(data.items.user_id, data.item_id);
+            
+            setCurrentBooking({
+                ...data,
+                items: {
+                    ...data.items,
+                    main_image_url: imageUrl,
+                    users: data.users // Add user info to items for consistency
+                }
+            });
+        } catch (error) {
+            console.error('Error fetching booking:', error);
+            Alert.alert('Error', 'Failed to load booking details');
+            if (onClose) onClose();
+        } finally {
+            setFetchingBooking(false);
+        }
+    };
+
+    const getItemImage = async (userId, itemId) => {
+        try {
+            const dir = `${userId}/${itemId}`;
+            const { data: files } = await supabase.storage
+                .from('Items-photos')
+                .list(dir, { limit: 1, sortBy: { column: 'name', order: 'desc' } });
+            
+            if (!files || files.length === 0) return null;
+            
+            const fullPath = `${dir}/${files[0].name}`;
+            const { data: pub } = supabase.storage
+                .from('Items-photos')
+                .getPublicUrl(fullPath);
+            
+            return pub?.publicUrl;
+        } catch {
+            return null;
+        }
+    };
 
     const phases = [
         { id: 1, title: 'Ready for Pickup', status: 'confirmed' },
@@ -25,6 +110,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
     ];
 
     const getCurrentPhase = () => {
+        if (!currentBooking) return 1;
         switch (currentBooking.status) {
             case 'confirmed':
                 return 1;
@@ -40,6 +126,8 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
     };
 
     const handleActionPress = async () => {
+        if (!currentBooking) return;
+        
         setLoading(true);
         try {
             const oldStatus = currentBooking.status;
@@ -55,7 +143,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                     const { data: itemData, error: itemError } = await supabase
                         .from('items')
                         .select('quantity')
-                        .eq('item_id', currentBooking.item_id) // <-- changed from id to item_id
+                        .eq('item_id', currentBooking.item_id)
                         .single();
 
                     if (itemError) throw itemError;
@@ -102,9 +190,18 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
     };
 
     const getActionButtonLabel = () => {
+        if (!currentBooking) return null;
         if (currentBooking.status === 'confirmed') return 'Mark as On The Way';
         if (currentBooking.status === 'awaiting_owner_confirmation') return 'Item Received';
         return null;
+    };
+
+    const handleClose = () => {
+        if (onClose) {
+            onClose();
+        } else if (navigation) {
+            navigation.goBack();
+        }
     };
 
     const currentPhase = getCurrentPhase();
@@ -149,8 +246,25 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
         </View>
     );
 
-    return (
-        <SafeAreaView style={styles.container}>
+    const renderContent = () => {
+        if (fetchingBooking) {
+            return (
+                <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color="#FF9900" />
+                    <Text style={styles.loadingText}>Loading booking details...</Text>
+                </View>
+            );
+        }
+
+        if (!currentBooking) {
+            return (
+                <View style={styles.errorContainer}>
+                    <Text style={styles.errorText}>Booking not found</Text>
+                </View>
+            );
+        }
+
+        return (
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
                 {/* Progress Bar */}
                 {renderProgressBar()}
@@ -178,7 +292,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                 {/* Status Section */}
                 <View style={styles.statusSection}>
                     <Text style={styles.statusTitle}>
-                        Status: {currentBooking.status.replace(/_/g, ' ')}
+                        Status: {currentBooking.status.replace(/_/g, ' ').toUpperCase()}
                     </Text>
 
                     {getActionButtonLabel() && (
@@ -215,6 +329,31 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                     </View>
                 </View>
             </ScrollView>
+        );
+    };
+
+    // Render as modal if visible prop is provided
+    if (isModal) {
+        return (
+            <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+                <SafeAreaView style={styles.container}>
+                    {/* Header for modal */}
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}>Order Tracking</Text>
+                        <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                            <Text style={styles.closeButtonText}>✕</Text>
+                        </TouchableOpacity>
+                    </View>
+                    {renderContent()}
+                </SafeAreaView>
+            </Modal>
+        );
+    }
+
+    // Render as regular screen
+    return (
+        <SafeAreaView style={styles.container}>
+            {renderContent()}
         </SafeAreaView>
     );
 };
@@ -222,6 +361,29 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F5F5F5' },
     content: { flex: 1 },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    loadingText: { marginTop: 12, color: '#666', fontSize: 14 },
+    errorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    errorText: { fontSize: 16, color: '#666' },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        backgroundColor: '#F5F5F5',
+    },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', flex: 1 },
+    closeButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    closeButtonText: { fontSize: 18, color: '#666', fontWeight: 'bold' },
     progressContainer: {
         backgroundColor: '#FFF',
         marginHorizontal: 16,
