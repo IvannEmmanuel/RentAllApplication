@@ -15,6 +15,8 @@ import ActiveRental from './ActiveRentalModal';
 import { NotificationModalProvider } from './NotificationModalContext';
 import AppModals from './AppModals';
 import { FavoritesProvider } from './FavoritesContext';
+import LessorReviewsModal from './LessorReviewsModal';
+import Chat from '../pages/Screens/Chat';
 
 const Stack = createNativeStackNavigator();
 
@@ -47,7 +49,7 @@ export default function AppNavigator() {
                     .select('*')
                     .eq('id', session.user.id)
                     .single();
-                
+
                 if (data) setCurrentUser(data);
             } else if (event === 'SIGNED_OUT') {
                 setCurrentUser(null);
@@ -72,6 +74,8 @@ export default function AppNavigator() {
                             <Stack.Screen name="Dashboard" component={Dashboard} />
                             <Stack.Screen name="Favorites" component={FavoriteModal} />
                             <Stack.Screen name="ActiveRental" component={ActiveRental} />
+                            <Stack.Screen name="LessorReviews" component={LessorReviewsModal} />
+                            <Stack.Screen name="Chat" component={Chat}/>
                         </Stack.Navigator>
                     </NavigationContainer>
                     <AppModals currentUser={currentUser} />

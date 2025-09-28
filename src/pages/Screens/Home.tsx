@@ -39,6 +39,42 @@ const Home = ({ route }) => {
   const [itemRatings, setItemRatings] = useState({}) // Add this line
   const [pictureModalVisible, setPictureModalVisible] = useState(false)
   const [pictureItem, setPictureItem] = useState(null)
+  const [lessorRatings, setLessorRatings] = useState({})
+
+  const fetchLessorRatings = useCallback(async (lessorIds) => {
+    if (!lessorIds || lessorIds.length === 0) return
+
+    try {
+      const { data, error } = await supabase
+        .from("lessor_reviews")
+        .select("lessor_id, rating")
+        .in("lessor_id", lessorIds)
+
+      if (error) {
+        console.error("Error fetching lessor ratings:", error)
+        return
+      }
+
+      const ratingsMap = {}
+      data.forEach((review) => {
+        if (!ratingsMap[review.lessor_id]) {
+          ratingsMap[review.lessor_id] = { total: 0, count: 0 }
+        }
+        ratingsMap[review.lessor_id].total += review.rating
+        ratingsMap[review.lessor_id].count += 1
+      })
+
+      const averageRatings = {}
+      Object.keys(ratingsMap).forEach((lessorId) => {
+        const { total, count } = ratingsMap[lessorId]
+        averageRatings[lessorId] = count > 0 ? (total / count).toFixed(1) : null
+      })
+
+      setLessorRatings(prev => ({ ...prev, ...averageRatings }))
+    } catch (error) {
+      console.error("Error calculating lessor ratings:", error)
+    }
+  }, [])
 
   useEffect(() => {
     if (items.length > 0) {
@@ -355,9 +391,9 @@ const Home = ({ route }) => {
         const withImages = await Promise.all(
           (data || []).map(async (item) => {
             const imageUrl = await getImageUrl(item.user_id, item.item_id)
-            const { data: userData, error: userError } = await supabase
+            const { data: userData } = await supabase
               .from("users")
-              .select("first_name,last_name")
+              .select("id, first_name, last_name")
               .eq("id", item.user_id)
               .single()
 
@@ -365,12 +401,16 @@ const Home = ({ route }) => {
             return {
               ...item,
               imageUrl,
+              lessorId: userData?.id,
+              lessorName,
               formattedPrice: `₱${item.price_per_day}`,
               formattedDate: new Date(item.created_at).toLocaleDateString(),
-              lessorName
             }
           }),
         )
+
+        const lessorIds = withImages.map(item => item.lessorId).filter(Boolean)
+        fetchLessorRatings(lessorIds)
 
         setItems((prev) => {
           const merged = append ? [...prev, ...withImages] : withImages
@@ -557,7 +597,14 @@ const Home = ({ route }) => {
             </View>
           </View>
           <Text style={styles.itemName}>{item.title}</Text>
-          <Text style={styles.lessorText}>{item.lessorName}</Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("LessorReviews", { lessorId: item.lessorId })}
+            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start" }}
+          >
+            <Text style={styles.lessorText}>{item.lessorName}</Text>
+            <Image source={require("../../../assets/rate.png")} style={styles.lessorRateImage} />
+            <Text style={styles.lessorText}>{lessorRatings[item.lessorId] || "No rating"}</Text>
+          </TouchableOpacity>
           <View style={{ alignSelf: "baseline", width: "100%" }}>
             <Text style={styles.text}>{item.location || "Location not specified"}</Text>
             <Text style={styles.text}>{item.formattedDate}</Text>
@@ -605,7 +652,7 @@ const Home = ({ route }) => {
             </View>
           </View>
         </View>
-      </View>
+      </View >
     )
   }
 
@@ -824,6 +871,13 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     marginRight: 3,
+    alignSelf: 'center'
+  },
+  lessorRateImage: {
+    width: 10,
+    height: 10,
+    marginRight: 3,
+    alignSelf: 'center'
   },
   text: {
     color: "#9C9894",
@@ -907,5 +961,6 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#555",
     marginBottom: 2,
+    marginRight: 3,
   },
 })

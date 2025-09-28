@@ -15,8 +15,10 @@ import { supabase } from "../../supbaseClient";
 
 const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const [pendingReviews, setPendingReviews] = useState([]);
-    const [rating, setRating] = useState(0);
-    const [comment, setComment] = useState("");
+    const [itemRating, setItemRating] = useState(0);
+    const [lessorRating, setLessorRating] = useState(0);
+    const [itemComment, setItemComment] = useState("");
+    const [lessorComment, setLessorComment] = useState("");
     const [selectedRental, setSelectedRental] = useState(null);
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
@@ -31,7 +33,12 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
             try {
                 const { data: completedRentals, error } = await supabase
                     .from("rental_transactions")
-                    .select("rental_id, item_id, items(title, user_id), review:reviews(review_id)")
+                    .select(`
+                        rental_id, 
+                        item_id, 
+                        items(title, user_id, users(*)), 
+                        reviews(review_id, rating, comment, item_id)
+                    `)
                     .eq("renter_id", currentUserId)
                     .eq("status", "completed");
 
@@ -40,9 +47,16 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     return;
                 }
 
-                // Filter rentals without an existing review
-                const noReviews = completedRentals.filter((r) => !r.review?.length);
-                setPendingReviews(noReviews);
+                // Filter rentals that don't have both item and lessor reviews
+                const needsReview = completedRentals.filter((rental) => {
+                    const existingReviews = rental.reviews || [];
+                    const hasItemReview = existingReviews.some(review => review.item_id === rental.item_id);
+                    const hasLessorReview = existingReviews.some(review => review.item_id === null);
+
+                    return !hasItemReview || !hasLessorReview;
+                });
+
+                setPendingReviews(needsReview);
             } catch (error) {
                 console.error("Error:", error);
             } finally {
@@ -57,8 +71,10 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
     useEffect(() => {
         if (!visible) {
             setSelectedRental(null);
-            setRating(0);
-            setComment("");
+            setItemRating(0);
+            setLessorRating(0);
+            setItemComment("");
+            setLessorComment("");
             setShowRatingForm(false);
         }
     }, [visible]);
@@ -71,65 +87,86 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const handleCloseRatingForm = () => {
         setShowRatingForm(false);
         setSelectedRental(null);
-        setRating(0);
-        setComment("");
+        setItemRating(0);
+        setLessorRating(0);
+        setItemComment("");
+        setLessorComment("");
     };
 
-    const submitReview = async () => {
-        if (!selectedRental || rating === 0) {
-            Alert.alert("Error", "Please select a rating");
+    const submitReviews = async () => {
+        if (!selectedRental || (itemRating === 0 && lessorRating === 0)) {
+            Alert.alert("Error", "Please provide at least one rating");
             return;
         }
 
         setSubmitting(true);
         try {
-            const { error } = await supabase.from("reviews").insert([
+            // Insert item review if rating provided
+            if (itemRating > 0) {
+                const { error: itemError } = await supabase
+                    .from("reviews")
+                    .insert([
+                        {
+                            rental_id: selectedRental.rental_id,
+                            item_id: selectedRental.item_id, // Item review belongs here
+                            reviewer_id: currentUserId,
+                            reviewee_id: selectedRental.items.user_id, // lessor id, but review about item
+                            rating: itemRating,
+                            comment: itemComment,
+                        }
+                    ]);
+
+                if (itemError) throw itemError;
+            }
+
+            // Insert lessor review if rating provided
+            if (lessorRating > 0) {
+                const { error: lessorError } = await supabase
+                    .from("lessor_reviews")
+                    .insert([
+                        {
+                            rental_id: selectedRental.rental_id,
+                            lessor_id: selectedRental.items.user_id, // person being reviewed
+                            reviewer_id: currentUserId,
+                            rating: lessorRating,
+                            comment: lessorComment,
+                        }
+                    ]);
+
+                if (lessorError) throw lessorError;
+            }
+
+            Alert.alert("Success", "Reviews submitted successfully!", [
                 {
-                    rental_id: selectedRental.rental_id,
-                    item_id: selectedRental.item_id,
-                    reviewer_id: currentUserId,
-                    reviewee_id: selectedRental.items.user_id,
-                    rating,
-                    comment,
+                    text: "OK",
+                    onPress: () => {
+                        setPendingReviews((prev) =>
+                            prev.filter((r) => r.rental_id !== selectedRental.rental_id)
+                        );
+                        handleCloseRatingForm();
+                    },
                 },
             ]);
-
-            if (error) {
-                console.error("Error submitting review:", error);
-                Alert.alert("Error", "Could not submit review");
-            } else {
-                Alert.alert("Success", "Review submitted successfully!", [
-                    {
-                        text: "OK",
-                        onPress: () => {
-                            setPendingReviews((prev) =>
-                                prev.filter((r) => r.rental_id !== selectedRental.rental_id)
-                            );
-                            handleCloseRatingForm();
-                        }
-                    }
-                ]);
-            }
         } catch (error) {
-            console.error("Error submitting review:", error);
-            Alert.alert("Error", "Could not submit review");
+            console.error("Error submitting reviews:", error);
+            Alert.alert("Error", "Could not submit reviews");
         } finally {
             setSubmitting(false);
         }
     };
 
-    const renderStarRating = () => {
+    const renderStarRating = (currentRating, setRating, type) => {
         return (
             <View style={styles.starContainer}>
                 {[1, 2, 3, 4, 5].map((star) => (
                     <TouchableOpacity
-                        key={star}
+                        key={`${type}-${star}`}
                         onPress={() => setRating(star)}
                         style={styles.starButton}
                     >
                         <Text style={[
                             styles.star,
-                            rating >= star ? styles.starFilled : styles.starEmpty
+                            currentRating >= star ? styles.starFilled : styles.starEmpty
                         ]}>
                             ★
                         </Text>
@@ -149,7 +186,12 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     {item.items?.title || "Untitled Item"}
                 </Text>
                 <Text style={styles.rentalItemSubtitle}>
-                    Tap to rate this item
+                    Lessor: {item.items?.users?.first_name && item.items?.users?.last_name
+                        ? `${item.items.users.first_name} ${item.items.users.last_name}`
+                        : "Unknown"}
+                </Text>
+                <Text style={styles.rentalItemAction}>
+                    Tap to rate item and lessor
                 </Text>
             </View>
             <View style={styles.arrowIcon}>
@@ -200,7 +242,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                     <View style={styles.listHeader}>
                                         <Text style={styles.sectionTitle}>Items to Rate</Text>
                                         <Text style={styles.sectionSubtitle}>
-                                            Rate your completed rentals to help other users
+                                            Rate both the item quality and lessor experience
                                         </Text>
                                     </View>
                                 }
@@ -229,36 +271,72 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     </View>
 
                     <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                        {/* Item Rating Section */}
                         <View style={styles.section}>
-                            <Text style={styles.sectionTitle}>Your Rating</Text>
+                            <Text style={styles.sectionTitle}>Rate the Item</Text>
                             <Text style={styles.sectionSubtitle}>
-                                Share your experience with this rental
+                                How was the quality and condition of the item?
                             </Text>
 
                             <View style={styles.ratingCard}>
-                                <Text style={styles.ratingLabel}>How would you rate this item?</Text>
-                                {renderStarRating()}
-                                {rating > 0 && (
+                                <Text style={styles.ratingLabel}>Item Quality Rating</Text>
+                                {renderStarRating(itemRating, setItemRating, "item")}
+                                {itemRating > 0 && (
                                     <Text style={styles.ratingText}>
-                                        {rating} out of 5 stars
+                                        {itemRating} out of 5 stars
                                     </Text>
                                 )}
 
                                 <Text style={styles.commentLabel}>
-                                    Write a Review (Optional)
+                                    Item Review (Optional)
                                 </Text>
                                 <TextInput
                                     style={styles.commentInput}
-                                    placeholder="Share your thoughts about this rental..."
-                                    value={comment}
-                                    onChangeText={setComment}
+                                    placeholder="How was the item quality, condition, etc.?"
+                                    value={itemComment}
+                                    onChangeText={setItemComment}
                                     multiline
-                                    numberOfLines={4}
+                                    numberOfLines={3}
                                     textAlignVertical="top"
                                     maxLength={500}
                                 />
                                 <Text style={styles.characterCount}>
-                                    {comment.length}/500 characters
+                                    {itemComment.length}/500 characters
+                                </Text>
+                            </View>
+                        </View>
+
+                        {/* Lessor Rating Section */}
+                        <View style={styles.section}>
+                            <Text style={styles.sectionTitle}>Rate the Lessor</Text>
+                            <Text style={styles.sectionSubtitle}>
+                                How was your experience with {selectedRental?.items?.users?.name || "the lessor"}?
+                            </Text>
+
+                            <View style={styles.ratingCard}>
+                                <Text style={styles.ratingLabel}>Lessor Service Rating</Text>
+                                {renderStarRating(lessorRating, setLessorRating, "lessor")}
+                                {lessorRating > 0 && (
+                                    <Text style={styles.ratingText}>
+                                        {lessorRating} out of 5 stars
+                                    </Text>
+                                )}
+
+                                <Text style={styles.commentLabel}>
+                                    Lessor Review (Optional)
+                                </Text>
+                                <TextInput
+                                    style={styles.commentInput}
+                                    placeholder="How was the communication, responsiveness, etc.?"
+                                    value={lessorComment}
+                                    onChangeText={setLessorComment}
+                                    multiline
+                                    numberOfLines={3}
+                                    textAlignVertical="top"
+                                    maxLength={500}
+                                />
+                                <Text style={styles.characterCount}>
+                                    {lessorComment.length}/500 characters
                                 </Text>
                             </View>
                         </View>
@@ -278,15 +356,15 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                             style={[
                                 styles.button,
                                 styles.submitButton,
-                                rating === 0 && styles.disabledButton
+                                (itemRating === 0 && lessorRating === 0) && styles.disabledButton
                             ]}
-                            onPress={submitReview}
-                            disabled={rating === 0 || submitting}
+                            onPress={submitReviews}
+                            disabled={(itemRating === 0 && lessorRating === 0) || submitting}
                         >
                             {submitting ? (
                                 <ActivityIndicator size="small" color="#FFF" />
                             ) : (
-                                <Text style={styles.submitButtonText}>Submit Review</Text>
+                                <Text style={styles.submitButtonText}>Submit Reviews</Text>
                             )}
                         </TouchableOpacity>
                     </View>
@@ -350,7 +428,7 @@ const styles = StyleSheet.create({
         paddingBottom: 16,
     },
     section: {
-        paddingVertical: 20,
+        paddingVertical: 16,
     },
     sectionTitle: {
         fontSize: 16,
@@ -362,6 +440,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#666',
         marginBottom: 16,
+        lineHeight: 20,
     },
     loadingContainer: {
         alignItems: 'center',
@@ -418,6 +497,12 @@ const styles = StyleSheet.create({
     rentalItemSubtitle: {
         fontSize: 12,
         color: '#666',
+        marginBottom: 2,
+    },
+    rentalItemAction: {
+        fontSize: 12,
+        color: '#FFAB00',
+        fontFamily: 'DM-Medium',
     },
     arrowIcon: {
         width: 24,
@@ -481,7 +566,7 @@ const styles = StyleSheet.create({
         fontSize: 14,
         color: '#333',
         backgroundColor: '#FAFAFA',
-        minHeight: 100,
+        minHeight: 80,
         fontFamily: 'DM-Regular',
     },
     characterCount: {
