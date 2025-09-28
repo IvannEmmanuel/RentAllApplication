@@ -45,9 +45,33 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
             const oldStatus = currentBooking.status;
             let newStatus = currentBooking.status;
 
-            if (currentBooking.status === 'confirmed') newStatus = 'ongoing';
-            else if (currentBooking.status === 'awaiting_owner_confirmation') newStatus = 'completed';
+            if (currentBooking.status === 'confirmed') {
+                newStatus = 'ongoing';
+            } else if (currentBooking.status === 'awaiting_owner_confirmation') {
+                newStatus = 'completed';
 
+                // Restore item quantity in the Items table
+                if (currentBooking.items) {
+                    const { data: itemData, error: itemError } = await supabase
+                        .from('items')
+                        .select('quantity')
+                        .eq('id', currentBooking.item_id)
+                        .single();
+
+                    if (itemError) throw itemError;
+
+                    const updatedQuantity = (itemData.quantity || 0) + (currentBooking.quantity || 1);
+
+                    const { error: updateError } = await supabase
+                        .from('items')
+                        .update({ quantity: updatedQuantity })
+                        .eq('id', currentBooking.item_id);
+
+                    if (updateError) throw updateError;
+                }
+            }
+
+            // Update booking status
             const { error } = await supabase
                 .from('rental_transactions')
                 .update({ status: newStatus })
@@ -57,7 +81,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
 
             setCurrentBooking(prev => ({ ...prev, status: newStatus }));
 
-            // Fetch the complete rental data including renter_id for notifications
+            // Fetch complete rental for notifications
             const { data: fullRental, error: fetchError } = await supabase
                 .from('rental_transactions')
                 .select('*')
@@ -65,12 +89,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                 .single();
 
             if (!fetchError && fullRental) {
-                // Trigger notification to renter
-                await handleBookingStatusChange(
-                    fullRental,
-                    oldStatus,
-                    newStatus
-                );
+                await handleBookingStatusChange(fullRental, oldStatus, newStatus);
             }
 
             Alert.alert('Success', `Status updated to ${newStatus.toUpperCase()}`);
