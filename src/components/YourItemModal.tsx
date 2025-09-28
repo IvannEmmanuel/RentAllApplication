@@ -76,18 +76,18 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
       if (error) throw error;
 
       // Auto-update confirmed -> ongoing if start date reached
-      if (activeTab === 'active') {
-        const now = new Date();
-        for (const booking of transactions) {
-          if (booking.status === 'confirmed' && new Date(booking.start_date) <= now) {
-            await supabase
-              .from('rental_transactions')
-              .update({ status: 'ongoing' })
-              .eq('rental_id', booking.rental_id);
-            booking.status = 'ongoing';
-          }
-        }
-      }
+      // if (activeTab === 'active') {
+      //   const now = new Date();
+      //   for (const booking of transactions) {
+      //     if (booking.status === 'confirmed' && new Date(booking.start_date) <= now) {
+      //       await supabase
+      //         .from('rental_transactions')
+      //         .update({ status: 'ongoing' })
+      //         .eq('rental_id', booking.rental_id);
+      //       booking.status = 'ongoing';
+      //     }
+      //   }
+      // }
 
       const bookingsWithImages = await Promise.all(
         (transactions || []).map(async (booking) => {
