@@ -55,7 +55,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                     const { data: itemData, error: itemError } = await supabase
                         .from('items')
                         .select('quantity')
-                        .eq('id', currentBooking.item_id)
+                        .eq('item_id', currentBooking.item_id) // <-- changed from id to item_id
                         .single();
 
                     if (itemError) throw itemError;
@@ -65,7 +65,7 @@ const ItemTrackingLessorScreen = ({ route, navigation }) => {
                     const { error: updateError } = await supabase
                         .from('items')
                         .update({ quantity: updatedQuantity })
-                        .eq('id', currentBooking.item_id);
+                        .eq('item_id', currentBooking.item_id);
 
                     if (updateError) throw updateError;
                 }
