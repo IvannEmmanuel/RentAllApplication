@@ -83,8 +83,8 @@ export default function AppNavigator() {
                             <Stack.Screen name="ItemTrackingScreen" component={ItemTrackingScreen} />
                             <Stack.Screen name="ItemTrackingLessorScreen" component={ItemTrackingLessorScreen} />
                         </Stack.Navigator>
+                        <AppModals currentUser={currentUser} />
                     </NavigationContainer>
-                    <AppModals currentUser={currentUser} />
                 </RegistrationProvider>
             </FavoritesProvider>
         </NotificationModalProvider>
