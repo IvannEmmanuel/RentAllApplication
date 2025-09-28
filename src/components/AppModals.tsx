@@ -5,6 +5,7 @@ import YourItemsModal from './YourItemModal';
 import PendingRentalModal from './PendingRentalModal';
 import ActiveRentalModal from './ActiveRentalModal';
 import { supabase } from '../../supbaseClient';
+import ItemTrackingLessorScreen from './ItemTrackingLessorScreen';
 
 export default function AppModals({ currentUser }) {
   const { modalData, hideModal } = useNotificationModal();
@@ -75,14 +76,14 @@ export default function AppModals({ currentUser }) {
       {modalData.visible && modalData.type === 'booking_completed' && !isLoadingRole && (
         <>
           {userRole === 'renter' && (
-            <RatingsModal 
+            <RatingsModal
               visible={true}
               onClose={hideModal}
               currentUserId={currentUser?.id}
             />
           )}
           {userRole === 'lessor' && (
-            <YourItemsModal 
+            <YourItemsModal
               visible={true}
               rentalId={modalData.rentalId}
               initialTab="completed"
@@ -96,7 +97,7 @@ export default function AppModals({ currentUser }) {
       {/* Booking request - show modal based on role */}
       {modalData.visible && !isLoadingRole && modalData.type === 'booking_request' && (
         userRole === 'lessor' ? (
-          <YourItemsModal 
+          <YourItemsModal
             visible={true}
             rentalId={modalData.rentalId}
             initialTab="pending"
@@ -113,11 +114,12 @@ export default function AppModals({ currentUser }) {
 
       {/* Other notifications for lessor */}
       {modalData.visible && !isLoadingRole && userRole === 'lessor' &&
-        (modalData.type === 'booking_return' || modalData.type === 'booking_started') && (
-          <YourItemsModal 
+        (modalData.type === 'booking_return' ||
+          modalData.type === 'booking_started' ||
+          modalData.type === 'booking_delivered') && (
+          <ItemTrackingLessorScreen
             visible={true}
             rentalId={modalData.rentalId}
-            initialTab={getInitialTab(modalData.type)}
             onClose={hideModal}
             currentUser={currentUser}
           />
