@@ -476,6 +476,20 @@ export async function handleBookingStatusChange(
         );
         break;
 
+      case 'delivered':
+        // Notify lessor that renter has confirmed receipt
+        await sendNotificationToUser(
+          item.user_id,
+          'Item Delivered Confirmed',
+          `${renterName} has confirmed receipt of your "${item.title}"`,
+          {
+            type: 'booking_delivered',
+            rental_id: rental.rental_id,
+            item_id: rental.item_id
+          }
+        );
+        break;
+
       default:
         // No notification for other statuses
         break;
