@@ -143,39 +143,56 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
 
         setSubmitting(true);
         try {
-            // Insert item review if rating provided
-            if (itemRating > 0) {
-                const { error: itemError } = await supabase
-                    .from("reviews")
-                    .insert([
-                        {
-                            rental_id: selectedRental.rental_id,
-                            item_id: selectedRental.item_id, // Item review belongs here
-                            reviewer_id: currentUserId,
-                            reviewee_id: selectedRental.items.user_id, // lessor id, but review about item
-                            rating: itemRating,
-                            comment: itemComment,
-                        }
-                    ]);
+            // Check for existing reviews first
+            const { data: existingReviews, error: checkError } = await supabase
+                .from("reviews")
+                .select("*")
+                .eq("rental_id", selectedRental.rental_id)
+                .eq("reviewer_id", currentUserId);
 
-                if (itemError) throw itemError;
+            if (checkError) throw checkError;
+
+            // Insert item review if rating provided and doesn't already exist
+            if (itemRating > 0) {
+                const hasItemReview = existingReviews.some(review => review.item_id === selectedRental.item_id);
+
+                if (!hasItemReview) {
+                    const { error: itemError } = await supabase
+                        .from("reviews")
+                        .insert([
+                            {
+                                rental_id: selectedRental.rental_id,
+                                item_id: selectedRental.item_id,
+                                reviewer_id: currentUserId,
+                                reviewee_id: selectedRental.items.user_id,
+                                rating: itemRating,
+                                comment: itemComment,
+                            }
+                        ]);
+
+                    if (itemError) throw itemError;
+                }
             }
 
-            // Insert lessor review if rating provided
+            // Insert lessor review if rating provided and doesn't already exist
             if (lessorRating > 0) {
-                const { error: lessorError } = await supabase
-                    .from("lessor_reviews")
-                    .insert([
-                        {
-                            rental_id: selectedRental.rental_id,
-                            lessor_id: selectedRental.items.user_id, // person being reviewed
-                            reviewer_id: currentUserId,
-                            rating: lessorRating,
-                            comment: lessorComment,
-                        }
-                    ]);
+                const hasLessorReview = existingReviews.some(review => review.item_id === null);
 
-                if (lessorError) throw lessorError;
+                if (!hasLessorReview) {
+                    const { error: lessorError } = await supabase
+                        .from("lessor_reviews")
+                        .insert([
+                            {
+                                rental_id: selectedRental.rental_id,
+                                lessor_id: selectedRental.items.user_id,
+                                reviewer_id: currentUserId,
+                                rating: lessorRating,
+                                comment: lessorComment,
+                            }
+                        ]);
+
+                    if (lessorError) throw lessorError;
+                }
             }
 
             Alert.alert("Success", "Reviews submitted successfully!", [
@@ -225,8 +242,8 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
         >
             <View style={styles.rentalItemImageContainer}>
                 {item.itemImageUrl ? (
-                    <Image 
-                        source={{ uri: item.itemImageUrl }} 
+                    <Image
+                        source={{ uri: item.itemImageUrl }}
                         style={styles.rentalItemImage}
                         resizeMode="cover"
                     />
@@ -242,8 +259,8 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                 </Text>
                 <View style={styles.lessorInfoContainer}>
                     {item.items?.users?.face_image_url ? (
-                        <Image 
-                            source={{ uri: item.items.users.face_image_url }} 
+                        <Image
+                            source={{ uri: item.items.users.face_image_url }}
                             style={styles.lessorAvatarSmall}
                             resizeMode="cover"
                         />
@@ -352,8 +369,8 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                 {/* Item Image */}
                                 <View style={styles.itemImageContainer}>
                                     {itemImage ? (
-                                        <Image 
-                                            source={{ uri: itemImage }} 
+                                        <Image
+                                            source={{ uri: itemImage }}
                                             style={styles.itemImageLarge}
                                             resizeMode="cover"
                                         />
@@ -404,8 +421,8 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                 {/* Lessor Profile Section */}
                                 <View style={styles.lessorProfileContainer}>
                                     {selectedRental?.items?.users?.face_image_url ? (
-                                        <Image 
-                                            source={{ uri: selectedRental.items.users.face_image_url }} 
+                                        <Image
+                                            source={{ uri: selectedRental.items.users.face_image_url }}
                                             style={styles.lessorAvatarLarge}
                                             resizeMode="cover"
                                         />

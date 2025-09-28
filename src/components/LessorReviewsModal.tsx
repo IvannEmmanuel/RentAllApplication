@@ -260,6 +260,7 @@ const LessorReviews = ({ route }) => {
         conversation = newConversation;
       }
 
+      // Navigate to the correct screen based on your navigation structure
       navigation.navigate('Chat', {
         conversationId: conversation.id,
         otherUserId: lessorId,
@@ -271,6 +272,15 @@ const LessorReviews = ({ route }) => {
       console.error('Error creating/finding conversation:', error);
       Alert.alert('Error', 'Failed to start conversation');
     }
+  };
+
+  // Navigate to reviews screen
+  const handleViewReviews = () => {
+    const lessorName = lessorInfo ? `${lessorInfo.first_name} ${lessorInfo.last_name}` : 'Unknown Lessor';
+    navigation.navigate('LessorReviewee', {
+      lessorId: lessorId,
+      lessorName: lessorName
+    });
   };
 
   // Handle message button press for items
@@ -450,9 +460,11 @@ const LessorReviews = ({ route }) => {
                 <Text style={styles.ratingText}>
                   {lessorRating || 'No rating'}
                 </Text>
-                <Text style={styles.reviewCountText}>
-                  ({reviewCount} review{reviewCount !== 1 ? 's' : ''})
-                </Text>
+                <TouchableOpacity onPress={handleViewReviews}>
+                  <Text style={styles.reviewCountText}>
+                    ({reviewCount} review{reviewCount !== 1 ? 's' : ''})
+                  </Text>
+                </TouchableOpacity>
                 {/* Chat button added here */}
                 {currentUser && currentUser.id !== lessorId && (
                   <TouchableOpacity style={styles.chatButton} onPress={handleChatWithLessor}>
@@ -605,8 +617,9 @@ const styles = StyleSheet.create({
   },
   reviewCountText: {
     fontSize: 12,
-    color: '#9C9894',
-    flex: 1,
+    color: '#FFAB00',
+    textDecorationLine: 'underline',
+    marginRight: 10,
   },
   chatButton: {
     marginLeft: 10,
