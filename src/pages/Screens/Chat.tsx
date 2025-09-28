@@ -145,9 +145,23 @@ const Chat = () => {
     }, []);
 
     // --- Upload image to Supabase Storage ---
+    // --- Upload image to Supabase Storage ---
     const uploadImage = async (uri: string, fileName: string) => {
         try {
             console.log("📤 Uploading image...");
+            console.log("Bucket: chat-images");
+            console.log("File name:", fileName);
+            console.log("URI:", uri);
+
+            // Debug: Check authentication
+            const { data: { user }, error: authError } = await supabase.auth.getUser();
+            console.log("Current user:", user?.id);
+            console.log("Auth error:", authError);
+
+            if (!user) {
+                console.error("No authenticated user found");
+                return null;
+            }
 
             // Read file as base64
             const base64 = await FileSystem.readAsStringAsync(uri, {
@@ -157,16 +171,18 @@ const Chat = () => {
             // Convert base64 to binary
             const fileBytes = base64ToUint8Array(base64);
 
+            console.log("File size:", fileBytes.length, "bytes");
+
             // Upload to Supabase Storage
             const { data, error } = await supabase.storage
-                .from("chat-images") // 👈 your bucket name
+                .from("chat-images")
                 .upload(`public/${fileName}`, fileBytes, {
                     contentType: "image/jpeg",
                     upsert: true,
                 });
 
             if (error) {
-                console.error("❌ Error uploading image:", error);
+                console.error("❌ Detailed upload error:", JSON.stringify(error, null, 2));
                 return null;
             }
 
@@ -189,14 +205,15 @@ const Chat = () => {
         try {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
-                allowsEditing: true, // enables cropping
-                aspect: [4, 3],      // cropping aspect ratio
+                allowsEditing: false,
                 quality: 0.8,
             });
 
             if (!result.canceled) {
                 const imageUri = result.assets[0].uri;
-                await sendImageMessage(imageUri); // auto-send after crop confirm
+                // Generate filename with user ID and timestamp
+                const fileName = `${currentUser.id}_${Date.now()}.jpg`;
+                await sendImageMessage(imageUri, fileName); // Pass fileName
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to pick image');
@@ -214,7 +231,9 @@ const Chat = () => {
 
             if (!result.canceled) {
                 const imageUri = result.assets[0].uri;
-                await sendImageMessage(imageUri); // auto-send after crop confirm
+                // Generate filename with user ID and timestamp
+                const fileName = `${currentUser.id}_${Date.now()}.jpg`;
+                await sendImageMessage(imageUri, fileName); // Pass fileName
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to take photo');
@@ -222,14 +241,18 @@ const Chat = () => {
     };
 
     // --- Send image message ---
-    const sendImageMessage = async (imageUri) => {
+    const sendImageMessage = async (imageUri, fileName) => {
         if (!currentUser || uploadingImage) return;
 
         setUploadingImage(true);
 
         try {
             console.log('Uploading image...');
-            const imageUrl = await uploadImage(imageUri);
+            const imageUrl = await uploadImage(imageUri, fileName); // Pass fileName
+
+            if (!imageUrl) {
+                throw new Error('Failed to upload image');
+            }
 
             console.log('Sending image message...');
             const { error: messageError } = await supabase
