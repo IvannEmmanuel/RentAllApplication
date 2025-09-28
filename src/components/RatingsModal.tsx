@@ -10,6 +10,7 @@ import {
     Alert,
     ScrollView,
     ActivityIndicator,
+    Image,
 } from "react-native";
 import { supabase } from "../../supbaseClient";
 
@@ -23,6 +24,33 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const [loading, setLoading] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showRatingForm, setShowRatingForm] = useState(false);
+    const [itemImage, setItemImage] = useState(null);
+
+    // Get image URL for items
+    const getImageUrl = async (userId, itemId) => {
+        try {
+            const dir = `${userId}/${itemId}`;
+            const { data: files, error } = await supabase.storage
+                .from('Items-photos')
+                .list(dir, {
+                    limit: 1,
+                    sortBy: { column: 'name', order: 'desc' },
+                });
+
+            if (error || !files || files.length === 0) return undefined;
+
+            const file = files[0];
+            const fullPath = `${dir}/${file.name}`;
+            const { data: pub } = supabase.storage
+                .from('Items-photos')
+                .getPublicUrl(fullPath);
+
+            return pub?.publicUrl;
+        } catch (e) {
+            console.warn('image list failed', e.message);
+            return undefined;
+        }
+    };
 
     // Fetch rentals completed by this user but not yet rated
     useEffect(() => {
@@ -36,7 +64,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     .select(`
                         rental_id, 
                         item_id, 
-                        items(title, user_id, users(*)), 
+                        items(title, user_id, users(id, first_name, last_name, face_image_url)), 
                         reviews(review_id, rating, comment, item_id)
                     `)
                     .eq("renter_id", currentUserId)
@@ -56,7 +84,18 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     return !hasItemReview || !hasLessorReview;
                 });
 
-                setPendingReviews(needsReview);
+                // Add item images to the pending reviews
+                const reviewsWithImages = await Promise.all(
+                    needsReview.map(async (rental) => {
+                        const imageUrl = await getImageUrl(rental.items.user_id, rental.item_id);
+                        return {
+                            ...rental,
+                            itemImageUrl: imageUrl,
+                        };
+                    })
+                );
+
+                setPendingReviews(reviewsWithImages);
             } catch (error) {
                 console.error("Error:", error);
             } finally {
@@ -76,11 +115,13 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
             setItemComment("");
             setLessorComment("");
             setShowRatingForm(false);
+            setItemImage(null);
         }
     }, [visible]);
 
     const handleSelectRental = (rental) => {
         setSelectedRental(rental);
+        setItemImage(rental.itemImageUrl);
         setShowRatingForm(true);
     };
 
@@ -91,6 +132,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
         setLessorRating(0);
         setItemComment("");
         setLessorComment("");
+        setItemImage(null);
     };
 
     const submitReviews = async () => {
@@ -181,15 +223,43 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
             style={styles.rentalItem}
             onPress={() => handleSelectRental(item)}
         >
+            <View style={styles.rentalItemImageContainer}>
+                {item.itemImageUrl ? (
+                    <Image 
+                        source={{ uri: item.itemImageUrl }} 
+                        style={styles.rentalItemImage}
+                        resizeMode="cover"
+                    />
+                ) : (
+                    <View style={styles.rentalItemImagePlaceholder}>
+                        <Text style={styles.rentalItemImagePlaceholderText}>No Image</Text>
+                    </View>
+                )}
+            </View>
             <View style={styles.rentalItemContent}>
                 <Text style={styles.rentalItemTitle}>
                     {item.items?.title || "Untitled Item"}
                 </Text>
-                <Text style={styles.rentalItemSubtitle}>
-                    Lessor: {item.items?.users?.first_name && item.items?.users?.last_name
-                        ? `${item.items.users.first_name} ${item.items.users.last_name}`
-                        : "Unknown"}
-                </Text>
+                <View style={styles.lessorInfoContainer}>
+                    {item.items?.users?.face_image_url ? (
+                        <Image 
+                            source={{ uri: item.items.users.face_image_url }} 
+                            style={styles.lessorAvatarSmall}
+                            resizeMode="cover"
+                        />
+                    ) : (
+                        <View style={styles.lessorAvatarSmallPlaceholder}>
+                            <Text style={styles.lessorAvatarSmallText}>
+                                {item.items?.users?.first_name?.[0] || '?'}{item.items?.users?.last_name?.[0] || ''}
+                            </Text>
+                        </View>
+                    )}
+                    <Text style={styles.rentalItemSubtitle}>
+                        {item.items?.users?.first_name && item.items?.users?.last_name
+                            ? `${item.items.users.first_name} ${item.items.users.last_name}`
+                            : "Unknown Lessor"}
+                    </Text>
+                </View>
                 <Text style={styles.rentalItemAction}>
                     Tap to rate item and lessor
                 </Text>
@@ -279,6 +349,21 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                             </Text>
 
                             <View style={styles.ratingCard}>
+                                {/* Item Image */}
+                                <View style={styles.itemImageContainer}>
+                                    {itemImage ? (
+                                        <Image 
+                                            source={{ uri: itemImage }} 
+                                            style={styles.itemImageLarge}
+                                            resizeMode="cover"
+                                        />
+                                    ) : (
+                                        <View style={styles.itemImagePlaceholder}>
+                                            <Text style={styles.itemImagePlaceholderText}>No Image</Text>
+                                        </View>
+                                    )}
+                                </View>
+
                                 <Text style={styles.ratingLabel}>Item Quality Rating</Text>
                                 {renderStarRating(itemRating, setItemRating, "item")}
                                 {itemRating > 0 && (
@@ -310,10 +395,35 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Rate the Lessor</Text>
                             <Text style={styles.sectionSubtitle}>
-                                How was your experience with {selectedRental?.items?.users?.name || "the lessor"}?
+                                How was your experience with {selectedRental?.items?.users?.first_name && selectedRental?.items?.users?.last_name
+                                    ? `${selectedRental.items.users.first_name} ${selectedRental.items.users.last_name}`
+                                    : "the lessor"}?
                             </Text>
 
                             <View style={styles.ratingCard}>
+                                {/* Lessor Profile Section */}
+                                <View style={styles.lessorProfileContainer}>
+                                    {selectedRental?.items?.users?.face_image_url ? (
+                                        <Image 
+                                            source={{ uri: selectedRental.items.users.face_image_url }} 
+                                            style={styles.lessorAvatarLarge}
+                                            resizeMode="cover"
+                                        />
+                                    ) : (
+                                        <View style={styles.lessorAvatarLargePlaceholder}>
+                                            <Text style={styles.lessorAvatarLargeText}>
+                                                {selectedRental?.items?.users?.first_name?.[0] || '?'}
+                                                {selectedRental?.items?.users?.last_name?.[0] || ''}
+                                            </Text>
+                                        </View>
+                                    )}
+                                    <Text style={styles.lessorNameText}>
+                                        {selectedRental?.items?.users?.first_name && selectedRental?.items?.users?.last_name
+                                            ? `${selectedRental.items.users.first_name} ${selectedRental.items.users.last_name}`
+                                            : "Unknown Lessor"}
+                                    </Text>
+                                </View>
+
                                 <Text style={styles.ratingLabel}>Lessor Service Rating</Text>
                                 {renderStarRating(lessorRating, setLessorRating, "lessor")}
                                 {lessorRating > 0 && (
@@ -485,6 +595,27 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#F0F0F0',
     },
+    rentalItemImageContainer: {
+        marginRight: 12,
+    },
+    rentalItemImage: {
+        width: 50,
+        height: 50,
+        borderRadius: 8,
+    },
+    rentalItemImagePlaceholder: {
+        width: 50,
+        height: 50,
+        borderRadius: 8,
+        backgroundColor: '#F0F0F0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    rentalItemImagePlaceholderText: {
+        fontSize: 10,
+        color: '#999',
+        textAlign: 'center',
+    },
     rentalItemContent: {
         flex: 1,
     },
@@ -494,10 +625,34 @@ const styles = StyleSheet.create({
         color: '#333',
         marginBottom: 4,
     },
+    lessorInfoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    lessorAvatarSmall: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        marginRight: 6,
+    },
+    lessorAvatarSmallPlaceholder: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        backgroundColor: '#FFAB00',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 6,
+    },
+    lessorAvatarSmallText: {
+        fontSize: 8,
+        fontFamily: 'DM-Bold',
+        color: '#FFF',
+    },
     rentalItemSubtitle: {
         fontSize: 12,
         color: '#666',
-        marginBottom: 2,
     },
     rentalItemAction: {
         fontSize: 12,
@@ -524,6 +679,61 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 1 },
         shadowOpacity: 0.1,
         shadowRadius: 2,
+    },
+    itemImageContainer: {
+        alignItems: 'center',
+        marginBottom: 20,
+    },
+    itemImageLarge: {
+        width: 120,
+        height: 120,
+        borderRadius: 12,
+    },
+    itemImagePlaceholder: {
+        width: 120,
+        height: 120,
+        borderRadius: 12,
+        backgroundColor: '#F0F0F0',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    itemImagePlaceholderText: {
+        fontSize: 14,
+        color: '#999',
+        textAlign: 'center',
+    },
+    lessorProfileContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#F0F0F0',
+    },
+    lessorAvatarLarge: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        marginRight: 12,
+    },
+    lessorAvatarLargePlaceholder: {
+        width: 50,
+        height: 50,
+        borderRadius: 25,
+        backgroundColor: '#FFAB00',
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginRight: 12,
+    },
+    lessorAvatarLargeText: {
+        fontSize: 16,
+        fontFamily: 'DM-Bold',
+        color: '#FFF',
+    },
+    lessorNameText: {
+        fontSize: 16,
+        fontFamily: 'DM-Bold',
+        color: '#333',
     },
     ratingLabel: {
         fontSize: 14,
