@@ -152,7 +152,9 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
       if (error) throw error;
 
       setBookings(prev =>
-        prev.map(b => (b.rental_id === rentalId ? { ...b, status: newStatus } : b))
+        prev
+          .map(b => (b.rental_id === rentalId ? { ...b, status: newStatus } : b))
+          .filter(b => !(activeTab === 'active' && b.status === 'cancelled'))
       );
 
       // Trigger notifications
