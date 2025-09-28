@@ -11,11 +11,11 @@ export default function AppModals({ currentUser }) {
   const [userRole, setUserRole] = useState(null); // 'lessor' or 'renter'
   const [isLoadingRole, setIsLoadingRole] = useState(false);
 
-  // Determine user role for booking_completed notifications
+  // Determine user role
   useEffect(() => {
-    if (modalData.visible && modalData.type === 'booking_completed' && modalData.rentalId && currentUser?.id) {
+    if (modalData.visible && modalData.rentalId && currentUser?.id) {
       setIsLoadingRole(true);
-      
+
       const determineUserRole = async () => {
         try {
           const { data, error } = await supabase
@@ -29,13 +29,9 @@ export default function AppModals({ currentUser }) {
 
           if (error) throw error;
 
-          if (data.renter_id === currentUser.id) {
-            setUserRole('renter');
-          } else if (data.items.user_id === currentUser.id) {
-            setUserRole('lessor');
-          } else {
-            setUserRole(null);
-          }
+          if (data.renter_id === currentUser.id) setUserRole('renter');
+          else if (data.items.user_id === currentUser.id) setUserRole('lessor');
+          else setUserRole(null);
         } catch (error) {
           console.error('Error determining user role:', error);
           setUserRole(null);
@@ -48,9 +44,8 @@ export default function AppModals({ currentUser }) {
     } else {
       setUserRole(null);
     }
-  }, [modalData.visible, modalData.type, modalData.rentalId, currentUser?.id]);
+  }, [modalData.visible, modalData.rentalId, currentUser?.id]);
 
-  // Reset role when modal closes
   useEffect(() => {
     if (!modalData.visible) {
       setUserRole(null);
@@ -58,34 +53,25 @@ export default function AppModals({ currentUser }) {
     }
   }, [modalData.visible]);
 
-  // Determine which tab to show based on notification type
   const getInitialTab = (notificationType) => {
     switch (notificationType) {
-      case 'booking_request':
-        return 'pending';
-      case 'booking_return':
-        return 'confirmationReturned';
+      case 'booking_request': return 'pending';
+      case 'booking_return': return 'confirmationReturned';
       case 'booking_started':
-      case 'booking_confirmed':
-        return 'active';
-      case 'booking_completed':
-        return 'completed';
-      default:
-        return 'pending';
+      case 'booking_confirmed': return 'active';
+      case 'booking_completed': return 'completed';
+      default: return 'pending';
     }
   };
 
   return (
     <>
-      {/* Booking request - show PendingRentalModal for renter */}
+      {/* Active rentals */}
       {modalData.visible && modalData.type === 'booking_confirmed' && (
-        <ActiveRentalModal 
-          visible={true}
-          onClose={hideModal}
-        />
+        <ActiveRentalModal visible={true} onClose={hideModal} />
       )}
 
-      {/* Booking completed - show different modals based on user role */}
+      {/* Booking completed */}
       {modalData.visible && modalData.type === 'booking_completed' && !isLoadingRole && (
         <>
           {userRole === 'renter' && (
@@ -95,7 +81,6 @@ export default function AppModals({ currentUser }) {
               currentUserId={currentUser?.id}
             />
           )}
-          
           {userRole === 'lessor' && (
             <YourItemsModal 
               visible={true}
@@ -107,21 +92,37 @@ export default function AppModals({ currentUser }) {
           )}
         </>
       )}
-      
-      {/* Other notification types - show YourItemsModal for lessor */}
-      {modalData.visible && (
-        modalData.type === 'booking_return' ||
-        modalData.type === 'booking_started' ||
-        modalData.type === 'booking_request'
-      ) && (
-        <YourItemsModal 
-          visible={true}
-          rentalId={modalData.rentalId}
-          initialTab={getInitialTab(modalData.type)}
-          onClose={hideModal}
-          currentUser={currentUser}
-        />
+
+      {/* Booking request - show modal based on role */}
+      {modalData.visible && !isLoadingRole && modalData.type === 'booking_request' && (
+        userRole === 'lessor' ? (
+          <YourItemsModal 
+            visible={true}
+            rentalId={modalData.rentalId}
+            initialTab="pending"
+            onClose={hideModal}
+            currentUser={currentUser}
+          />
+        ) : userRole === 'renter' ? (
+          <PendingRentalModal
+            visible={true}
+            onClose={hideModal}
+          />
+        ) : null
       )}
+
+      {/* Other notifications for lessor */}
+      {modalData.visible && !isLoadingRole && userRole === 'lessor' &&
+        (modalData.type === 'booking_return' || modalData.type === 'booking_started') && (
+          <YourItemsModal 
+            visible={true}
+            rentalId={modalData.rentalId}
+            initialTab={getInitialTab(modalData.type)}
+            onClose={hideModal}
+            currentUser={currentUser}
+          />
+        )
+      }
     </>
   );
 }
