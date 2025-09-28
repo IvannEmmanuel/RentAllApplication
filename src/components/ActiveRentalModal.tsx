@@ -14,12 +14,15 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supbaseClient';
 import { useFavorites } from './FavoritesContext';
 import { handleBookingStatusChange } from '../notifications/notifications';
+import { useNavigation } from '@react-navigation/native';
 
 const ActiveRentalModal = ({ visible, onClose }) => {
   const { currentUser } = useFavorites();
   const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [returningIds, setReturningIds] = useState<string[]>([]);
+
+  const navigation = useNavigation();
 
   useEffect(() => {
     if (!currentUser || !visible) return;
@@ -132,13 +135,20 @@ const ActiveRentalModal = ({ visible, onClose }) => {
     }
   };
 
+  const handleCardPress = (rental) => {
+    // Close the modal first
+    onClose();
+    // Navigate to tracking screen
+    navigation.navigate('ItemTrackingScreen', { rental });
+  };
+
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
       <View style={styles.container}>
-        {/* Header - Keep unchanged */}
+        {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerText}>Active Rentals</Text>
-          <TouchableOpacity onPress={onClose} style={{ width: 30, height: 30, backgroundColor: '#FFF', justifyContent: 'center', borderRadius: 20 }}>
+          <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
             <Text style={styles.closeButton}>✕</Text>
           </TouchableOpacity>
         </View>
@@ -168,7 +178,12 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             {rentals.map((rental, index) => {
               const remainingDays = getRemainingDays(rental.end_date);
               return (
-                <View key={rental.rental_id} style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}>
+                <TouchableOpacity
+                  key={rental.rental_id}
+                  style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}
+                  onPress={() => handleCardPress(rental)}
+                  activeOpacity={0.7}
+                >
                   <View style={styles.cardHeader}>
                     <View style={[
                       styles.statusBadge,
@@ -244,23 +259,15 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                           {rental.items?.location}
                         </Text>
                       </View>
-                      {rental.status === 'ongoing' && getRemainingDays(rental.end_date) <= 0 && (
-                        <TouchableOpacity
-                          style={[
-                            styles.returnButton,
-                            returningIds.includes(rental.rental_id) && { backgroundColor: '#ccc' },
-                          ]}
-                          disabled={returningIds.includes(rental.rental_id)}
-                          onPress={() => handleReturnNow(rental.rental_id)}
-                        >
-                          <Text style={styles.returnButtonText}>
-                            {returningIds.includes(rental.rental_id) ? 'Returning...' : 'Return Now'}
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                      
+                      {/* Tap to track indicator */}
+                      <View style={styles.trackIndicator}>
+                        <Text style={styles.trackText}>Tap to track order</Text>
+                        <Text style={styles.trackIcon}>👆</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
+                </TouchableOpacity>
               );
             })}
           </ScrollView>
@@ -287,6 +294,13 @@ const styles = StyleSheet.create({
   headerText: {
     fontFamily: 'DM-Bold',
     fontSize: 18,
+  },
+  closeButtonContainer: {
+    width: 30,
+    height: 30,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    borderRadius: 20
   },
   closeButton: {
     fontSize: 18,
@@ -404,6 +418,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
     borderRadius: 8,
+    marginBottom: 8,
   },
   locationText: {
     fontSize: 12,
@@ -449,6 +464,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
+    marginBottom: 8,
   },
   returnButtonText: {
     color: '#fff',
@@ -470,5 +486,24 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#34495E',
+  },
+  trackIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFF8E1',
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    marginTop: 4,
+  },
+  trackText: {
+    fontSize: 12,
+    color: '#F57C00',
+    fontWeight: '500',
+    marginRight: 4,
+  },
+  trackIcon: {
+    fontSize: 12,
   },
 });
