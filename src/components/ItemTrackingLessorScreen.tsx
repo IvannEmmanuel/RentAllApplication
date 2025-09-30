@@ -18,7 +18,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     // Handle both navigation route params and direct props
     const isModal = visible !== undefined;
     const bookingFromRoute = route?.params?.booking;
-    
+
     const [currentBooking, setCurrentBooking] = useState(bookingFromRoute || null);
     const [loading, setLoading] = useState(false);
     const [fetchingBooking, setFetchingBooking] = useState(isModal && !bookingFromRoute);
@@ -36,28 +36,28 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
             const { data, error } = await supabase
                 .from('rental_transactions')
                 .select(`
-                    rental_id,
-                    item_id,
-                    renter_id,
-                    start_date,
-                    end_date,
-                    total_cost,
-                    status,
-                    quantity,
-                    created_at,
-                    items!inner(
-                        title,
-                        price_per_day,
-                        user_id,
-                        location,
-                        quantity
-                    ),
-                    users!rental_transactions_renter_id_fkey(
-                        first_name,
-                        last_name,
-                        face_image_url
-                    )
-                `)
+                rental_id,
+                item_id,
+                renter_id,
+                start_date,
+                end_date,
+                total_cost,
+                status,
+                quantity,
+                created_at,
+                items!inner(
+                    title,
+                    price_per_day,
+                    user_id,
+                    location,
+                    quantity
+                ),
+                users!rental_transactions_renter_id_fkey(
+                    first_name,
+                    last_name,
+                    face_image_url
+                )
+            `)
                 .eq('rental_id', rentalId)
                 .single();
 
@@ -65,14 +65,15 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
             // Get item image
             const imageUrl = await getItemImage(data.items.user_id, data.item_id);
-            
+
             setCurrentBooking({
                 ...data,
                 items: {
                     ...data.items,
                     main_image_url: imageUrl,
-                    users: data.users // Add user info to items for consistency
-                }
+                    users: data.users // Ensure users is in items
+                },
+                users: data.users // Also keep at root for compatibility
             });
         } catch (error) {
             console.error('Error fetching booking:', error);
@@ -89,14 +90,14 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
             const { data: files } = await supabase.storage
                 .from('Items-photos')
                 .list(dir, { limit: 1, sortBy: { column: 'name', order: 'desc' } });
-            
+
             if (!files || files.length === 0) return null;
-            
+
             const fullPath = `${dir}/${files[0].name}`;
             const { data: pub } = supabase.storage
                 .from('Items-photos')
                 .getPublicUrl(fullPath);
-            
+
             return pub?.publicUrl;
         } catch {
             return null;
@@ -127,7 +128,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
     const handleActionPress = async () => {
         if (!currentBooking) return;
-        
+
         setLoading(true);
         try {
             const oldStatus = currentBooking.status;
@@ -202,6 +203,24 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         } else if (navigation) {
             navigation.goBack();
         }
+    };
+
+    const getRenterName = () => {
+        if (!currentBooking) return 'N/A';
+
+        // Try different possible locations for user data
+        if (currentBooking.users) {
+            // From direct navigation (YourItemsModal)
+            return `${currentBooking.users.first_name} ${currentBooking.users.last_name}`;
+        } else if (currentBooking.items?.users) {
+            // From modal fetch or other sources
+            return `${currentBooking.items.users.first_name} ${currentBooking.items.users.last_name}`;
+        } else if (currentBooking.renter_name) {
+            // Fallback to renter_name if available
+            return currentBooking.renter_name;
+        }
+
+        return 'N/A';
     };
 
     const currentPhase = getCurrentPhase();
@@ -324,7 +343,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Renter:</Text>
                         <Text style={styles.detailValue}>
-                            {currentBooking.items?.users?.first_name} {currentBooking.items?.users?.last_name}
+                            {getRenterName()}
                         </Text>
                     </View>
                 </View>
