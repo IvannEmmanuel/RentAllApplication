@@ -481,7 +481,7 @@ export async function handleBookingStatusChange(
         await sendNotificationToUser(
           item.user_id,
           'Item Delivered Confirmed',
-          `${renterName} has confirmed receipt of your "${item.title}"`,
+          `${renterName} has confirmed received of your "${item.title}"`,
           {
             type: 'booking_delivered',
             rental_id: rental.rental_id,
