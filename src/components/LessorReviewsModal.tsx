@@ -13,12 +13,14 @@ import {
 import { supabase } from '../../supbaseClient';
 import { useNavigation } from '@react-navigation/native';
 import { useFavorites } from './FavoritesContext';
+import BookItemModal from './BookItemModal';
+import PictureModal from './PictureModal';
 
 const LessorReviews = ({ route }) => {
   const { lessorId } = route.params;
   const navigation = useNavigation();
   const { favorites, currentUser, toggleFavorite, isFavorited } = useFavorites();
-  
+
   const [lessorInfo, setLessorInfo] = useState(null);
   const [lessorRating, setLessorRating] = useState(null);
   const [reviewCount, setReviewCount] = useState(0);
@@ -28,7 +30,115 @@ const LessorReviews = ({ route }) => {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [userBookings, setUserBookings] = useState([]);
   const LIMIT = 6;
+  const [bookModalVisible, setBookModalVisible] = useState(false);
+  const [pictureModalVisible, setPictureModalVisible] = useState(false);
+  const [pictureItem, setPictureItem] = useState(null)
+  const [selectedItem, setSelectedItem] = useState(null);
+
+  // Fetch user's bookings - SAME AS HOME.TSX
+  const fetchUserBookings = useCallback(async () => {
+    if (!currentUser) {
+      setUserBookings([]);
+      return;
+    }
+
+    try {
+      console.log("Fetching user bookings for:", currentUser.id);
+      const { data, error } = await supabase
+        .from("rental_transactions")
+        .select("item_id, status")
+        .eq("renter_id", currentUser.id)
+        .in("status", ["pending", "confirmed", "ongoing"]);
+
+      if (!error && data) {
+        console.log("User bookings fetched:", data);
+        setUserBookings(data);
+      } else if (error) {
+        console.error("Error fetching bookings:", error);
+      }
+    } catch (error) {
+      console.error("Error fetching user bookings:", error);
+    }
+  }, [currentUser]);
+
+  // Check if user has pending/active booking for an item - SAME AS HOME.TSX
+  const getUserBookingStatus = useCallback(
+    (itemId) => {
+      const status = userBookings.find((booking) => booking.item_id === itemId)?.status || null;
+      return status;
+    },
+    [userBookings],
+  );
+
+  // Check if item belongs to current user - SAME AS HOME.TSX
+  const isUserItem = (item) => {
+    return currentUser && currentUser.id === item.user_id;
+  }
+
+  // Get button text and style based on item status - SAME AS HOME.TSX
+  const getButtonInfo = useCallback(
+    (item) => {
+      const isOwner = isUserItem(item);
+      const bookingStatus = getUserBookingStatus(item.item_id);
+
+      if (isOwner) {
+        return {
+          text: "Your Item",
+          disabled: true,
+          style: "disabled",
+        }
+      }
+
+      // Only disable button if booking is pending/confirmed/ongoing
+      if (bookingStatus && bookingStatus !== "completed") {
+        const statusText = bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1)
+        return {
+          text: statusText,
+          disabled: true,
+          style: "pending",
+        }
+      }
+
+      if (item.quantity === 0) {
+        return {
+          text: "Out of Stock",
+          disabled: true,
+          style: "disabled",
+        }
+      }
+
+      return {
+        text: "Rent Now",
+        disabled: false,
+        style: "normal",
+      }
+    },
+    [getUserBookingStatus],
+  );
+
+  // Handle rent now button - SAME AS HOME.TSX
+  const handleRentNow = (item) => {
+    if (!currentUser) {
+      Alert.alert("Login Required", "Please log in to rent items")
+      return
+    }
+
+    if (currentUser.id === item.user_id) {
+      Alert.alert("Your Item", "You cannot rent your own item")
+      return
+    }
+
+    const bookingStatus = getUserBookingStatus(item.item_id)
+    if (bookingStatus) {
+      Alert.alert("Already Booked", `You already have a ${bookingStatus} booking for this item.`)
+      return
+    }
+
+    setSelectedItem(item)
+    setBookModalVisible(true)
+  }
 
   // Fetch lessor basic information including face image
   const fetchLessorInfo = useCallback(async () => {
@@ -260,7 +370,6 @@ const LessorReviews = ({ route }) => {
         conversation = newConversation;
       }
 
-      // Navigate to the correct screen based on your navigation structure
       navigation.navigate('Chat', {
         conversationId: conversation.id,
         otherUserId: lessorId,
@@ -357,7 +466,8 @@ const LessorReviews = ({ route }) => {
       await Promise.all([
         fetchLessorInfo(),
         fetchLessorRatings(),
-        fetchLessorItems(1, false) // Load first page
+        fetchLessorItems(1, false), // Load first page
+        fetchUserBookings() // Load user bookings
       ]);
       setLoading(false);
     };
@@ -365,51 +475,84 @@ const LessorReviews = ({ route }) => {
     if (lessorId) {
       loadData();
     }
-  }, [lessorId, fetchLessorInfo, fetchLessorRatings, fetchLessorItems]);
+  }, [lessorId, fetchLessorInfo, fetchLessorRatings, fetchLessorItems, fetchUserBookings]);
 
-  const renderItem = ({ item }) => (
-    <View style={styles.itemContainer}>
-      <View style={styles.itemImageContainer}>
-        {item.imageUrl ? (
-          <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
-        ) : (
-          <Image source={require('../../assets/splash-icon.png')} style={styles.itemImage} resizeMode="cover" />
-        )}
-        <View style={styles.itemRateContainer}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Image source={require('../../assets/rate.png')} style={styles.rateImage} />
-            <Text> {itemRatings[item.item_id] || 'No rating'}</Text>
+  const renderItem = ({ item }) => {
+    const buttonInfo = getButtonInfo(item);
+
+    return (
+      <View style={styles.itemContainer}>
+        <View style={styles.itemImageContainer}>
+          <TouchableOpacity
+            onPress={() => {
+              setPictureItem(item)
+              setPictureModalVisible(true)
+            }}
+          >
+            {item.imageUrl ? (
+              <Image source={{ uri: item.imageUrl }} style={styles.itemImage} resizeMode="cover" />
+            ) : (
+              <Image source={require("../../assets/splash-icon.png")} style={styles.itemImage} resizeMode="cover" />
+            )}
+          </TouchableOpacity>
+          <View style={styles.itemRateContainer}>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Image source={require('../../assets/rate.png')} style={styles.rateImage} />
+              <Text> {itemRatings[item.item_id] || 'No rating'}</Text>
+            </View>
           </View>
-        </View>
-        <Text style={styles.itemName}>{item.title}</Text>
-        <View style={{ alignSelf: 'baseline', width: '100%' }}>
-          <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
-          <Text style={styles.text}>{item.formattedDate}</Text>
-          <Text style={styles.text}>Quantity: {item.quantity ?? 1}</Text>
-          <View style={styles.moneyRateContainer}>
-            <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-            <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
-              {currentUser && currentUser.id !== item.user_id && (
-                <TouchableOpacity style={styles.messageContainer} onPress={() => handleMessage(item)}>
-                  <Image source={require('../../assets/message.png')} style={styles.messageImage} />
+          <Text style={styles.itemName}>{item.title}</Text>
+          <View style={{ alignSelf: 'baseline', width: '100%' }}>
+            <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
+            <Text style={styles.text}>{item.formattedDate}</Text>
+            <Text style={styles.text}>Quantity: {item.quantity}</Text>
+            <View style={styles.moneyRateContainer}>
+              <Text style={styles.moneyText}>{item.formattedPrice}</Text>
+              <View style={{ justifyContent: 'flex-end', flexDirection: 'row' }}>
+                {currentUser && currentUser.id !== item.user_id && (
+                  <TouchableOpacity style={styles.messageContainer} onPress={() => handleMessage(item)}>
+                    <Image source={require('../../assets/message.png')} style={styles.messageImage} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => handleToggleFavorite(item.item_id)}>
+                  <Image
+                    source={
+                      isFavorited(item.item_id)
+                        ? require('../../assets/liked.png')
+                        : require('../../assets/like.png')
+                    }
+                    style={styles.likeImage}
+                  />
                 </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={() => handleToggleFavorite(item.item_id)}>
-                <Image
-                  source={
-                    isFavorited(item.item_id)
-                      ? require('../../assets/liked.png')
-                      : require('../../assets/like.png')
-                  }
-                  style={styles.likeImage}
-                />
+              </View>
+            </View>
+            {/* ADD RENT NOW BUTTON */}
+            <View style={styles.rentNowContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.buttonContainer,
+                  buttonInfo.style === "disabled" && styles.disabledButtonContainer,
+                  buttonInfo.style === "pending" && styles.pendingButtonContainer,
+                ]}
+                onPress={() => handleRentNow(item)}
+                disabled={buttonInfo.disabled}
+              >
+                <Text
+                  style={[
+                    styles.rentText,
+                    buttonInfo.style === "disabled" && styles.disabledRentText,
+                    buttonInfo.style === "pending" && styles.pendingRentText,
+                  ]}
+                >
+                  {buttonInfo.text}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   if (loading) {
     return (
@@ -436,8 +579,8 @@ const LessorReviews = ({ route }) => {
           <View style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
               {lessorInfo?.face_image_url ? (
-                <Image 
-                  source={{ uri: lessorInfo.face_image_url }} 
+                <Image
+                  source={{ uri: lessorInfo.face_image_url }}
                   style={styles.avatarImage}
                   resizeMode="cover"
                 />
@@ -449,12 +592,12 @@ const LessorReviews = ({ route }) => {
                 </View>
               )}
             </View>
-            
+
             <View style={styles.profileInfo}>
               <Text style={styles.lessorName}>
                 {lessorInfo ? `${lessorInfo.first_name} ${lessorInfo.last_name}` : 'Unknown Lessor'}
               </Text>
-              
+
               <View style={styles.ratingContainer}>
                 <Image source={require('../../assets/rate.png')} style={styles.rateImage} />
                 <Text style={styles.ratingText}>
@@ -479,7 +622,7 @@ const LessorReviews = ({ route }) => {
         {/* Listed Items Section */}
         <View style={styles.itemsSection}>
           <Text style={styles.sectionTitle}>Listed Items</Text>
-          
+
           {lessorItems.length === 0 && !loadingMore ? (
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>No items listed by this lessor</Text>
@@ -510,6 +653,26 @@ const LessorReviews = ({ route }) => {
           )}
         </View>
       </ScrollView>
+
+      {/* Book Item Modal */}
+      <BookItemModal
+        visible={bookModalVisible}
+        onClose={() => setBookModalVisible(false)}
+        item={selectedItem}
+        currentUserId={currentUser?.id}
+        onBooked={() => {
+          console.log("Booking completed, refreshing data...")
+          setPage(1)
+          fetchUserBookings()
+          fetchLessorItems(1, false)
+        }}
+      />
+
+      <PictureModal
+        visible={pictureModalVisible}
+        onClose={() => setPictureModalVisible(false)}
+        item={pictureItem}
+      />
     </View>
   );
 };
@@ -721,6 +884,36 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     width: 130,
+  },
+  // ADD RENT NOW BUTTON STYLES (SAME AS HOME.TSX)
+  rentNowContainer: {
+    justifyContent: 'center',
+    marginTop: 10,
+  },
+  buttonContainer: {
+    backgroundColor: '#000',
+    borderRadius: 10,
+    height: 30,
+    justifyContent: 'center',
+    alignSelf: 'flex-end',
+    width: '70%',
+  },
+  disabledButtonContainer: {
+    backgroundColor: '#CCC',
+  },
+  pendingButtonContainer: {
+    backgroundColor: '#FF8C00',
+  },
+  rentText: {
+    color: '#FFF',
+    fontFamily: 'DM-Medium',
+    textAlign: 'center',
+  },
+  disabledRentText: {
+    color: '#999',
+  },
+  pendingRentText: {
+    color: '#FFF',
   },
   loadMoreButton: {
     backgroundColor: '#FFAB00',
