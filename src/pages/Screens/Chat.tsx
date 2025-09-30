@@ -47,6 +47,8 @@ const Chat = () => {
     const [uploadingImage, setUploadingImage] = useState(false)
     const [selectedImage, setSelectedImage] = useState(null)
     const [showImageModal, setShowImageModal] = useState(false)
+    const [otherUserProfile, setOtherUserProfile] = useState(null)
+    const [uploadingImages, setUploadingImages] = useState({}) // Track uploading images by message ID
 
     const { refreshUnreadCount } = useUnread();
 
@@ -66,6 +68,25 @@ const Chat = () => {
             hideSub.remove();
         };
     }, []);
+
+    // --- Fetch other user profile ---
+    const fetchOtherUserProfile = useCallback(async () => {
+        try {
+            if (otherUserId) {
+                const { data: otherUserData, error: otherUserError } = await supabase
+                    .from('users')
+                    .select('id, first_name, last_name, face_image_url')
+                    .eq('id', otherUserId)
+                    .single();
+
+                if (!otherUserError && otherUserData) {
+                    setOtherUserProfile(otherUserData);
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching other user profile:', error);
+        }
+    }, [otherUserId]);
 
     // --- Mark messages as read ---
     const markMessagesAsRead = useCallback(async () => {
@@ -145,7 +166,6 @@ const Chat = () => {
     }, []);
 
     // --- Upload image to Supabase Storage ---
-    // --- Upload image to Supabase Storage ---
     const uploadImage = async (uri: string, fileName: string) => {
         try {
             console.log("📤 Uploading image...");
@@ -211,9 +231,7 @@ const Chat = () => {
 
             if (!result.canceled) {
                 const imageUri = result.assets[0].uri;
-                // Generate filename with user ID and timestamp
-                const fileName = `${currentUser.id}_${Date.now()}.jpg`;
-                await sendImageMessage(imageUri, fileName); // Pass fileName
+                await sendImageMessage(imageUri);
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to pick image');
@@ -231,9 +249,7 @@ const Chat = () => {
 
             if (!result.canceled) {
                 const imageUri = result.assets[0].uri;
-                // Generate filename with user ID and timestamp
-                const fileName = `${currentUser.id}_${Date.now()}.jpg`;
-                await sendImageMessage(imageUri, fileName); // Pass fileName
+                await sendImageMessage(imageUri);
             }
         } catch (error) {
             Alert.alert('Error', 'Failed to take photo');
@@ -241,32 +257,56 @@ const Chat = () => {
     };
 
     // --- Send image message ---
-    const sendImageMessage = async (imageUri, fileName) => {
+    const sendImageMessage = async (imageUri) => {
         if (!currentUser || uploadingImage) return;
 
         setUploadingImage(true);
 
         try {
-            console.log('Uploading image...');
-            const imageUrl = await uploadImage(imageUri, fileName); // Pass fileName
+            // Generate filename with user ID and timestamp
+            const fileName = `${currentUser.id}_${Date.now()}.jpg`;
+
+            // Create temporary message immediately (like Messenger)
+            const tempMessageId = `temp_${Date.now()}`;
+            const tempMessage = {
+                id: tempMessageId,
+                conversation_id: conversationId,
+                sender_id: currentUser.id,
+                content: '',
+                image_url: imageUri, // Use local URI initially
+                message_type: 'image',
+                created_at: new Date().toISOString(),
+                read_at: null,
+                is_uploading: true // Flag to show loading state
+            };
+
+            // Add temporary message to local state immediately
+            setMessages(prev => [...prev, tempMessage]);
+            setUploadingImages(prev => ({ ...prev, [tempMessageId]: true }));
+
+            console.log('📤 Uploading image...');
+            const imageUrl = await uploadImage(imageUri, fileName);
 
             if (!imageUrl) {
                 throw new Error('Failed to upload image');
             }
 
-            console.log('Sending image message...');
-            const { error: messageError } = await supabase
+            console.log('📝 Sending image message to database...');
+            const { data: messageData, error: messageError } = await supabase
                 .from('messages')
                 .insert([{
                     conversation_id: conversationId,
                     sender_id: currentUser.id,
                     content: '',
-                    image_url: imageUrl,
+                    image_url: imageUrl, // Use the uploaded URL
                     message_type: 'image'
-                }]);
+                }])
+                .select()
+                .single();
 
             if (messageError) throw messageError;
 
+            // Update conversation last message
             await supabase
                 .from('conversations')
                 .update({
@@ -275,9 +315,32 @@ const Chat = () => {
                 })
                 .eq('id', conversationId);
 
-            console.log('✅ Image message sent');
+            // Remove temporary message and add the real one
+            setMessages(prev => {
+                const filtered = prev.filter(msg => msg.id !== tempMessageId);
+                return [...filtered, { ...messageData, is_uploading: false }];
+            });
+
+            // Remove from uploading tracking
+            setUploadingImages(prev => {
+                const newState = { ...prev };
+                delete newState[tempMessageId];
+                return newState;
+            });
+
+            console.log('✅ Image message sent successfully');
+
         } catch (error) {
             console.error('❌ Error sending image:', error);
+
+            // Remove the failed temporary message
+            setMessages(prev => prev.filter(msg => msg.id !== tempMessageId));
+            setUploadingImages(prev => {
+                const newState = { ...prev };
+                delete newState[tempMessageId];
+                return newState;
+            });
+
             Alert.alert('Error', 'Failed to send image. Please try again.');
         } finally {
             setUploadingImage(false);
@@ -376,12 +439,18 @@ const Chat = () => {
         }, 100)
     }
 
+    // --- Check if message is uploading ---
+    const isMessageUploading = (messageId) => {
+        return uploadingImages[messageId] || false;
+    }
+
     // --- Effects ---
     useEffect(() => {
         if (currentUser && conversationId) {
             fetchMessages()
+            fetchOtherUserProfile()
         }
-    }, [currentUser, conversationId, fetchMessages])
+    }, [currentUser, conversationId, fetchMessages, fetchOtherUserProfile])
 
     useEffect(() => {
         scrollToBottom()
@@ -397,8 +466,14 @@ const Chat = () => {
                 'postgres_changes',
                 { event: 'INSERT', schema: 'public', table: 'messages', filter: `conversation_id=eq.${conversationId}` },
                 (payload) => {
-                    const newMessage = payload.new
-                    setMessages(prev => prev.some(m => m.id === newMessage.id) ? prev : [...prev, newMessage])
+                    const newMessage = payload.new;
+
+                    // ✅ Don't add duplicates for your own messages
+                    if (newMessage.sender_id === currentUser.id) return;
+
+                    if (!messages.some(m => m.id === newMessage.id)) {
+                        setMessages(prev => [...prev, newMessage]);
+                    }
 
                     if (newMessage.sender_id !== currentUser.id) {
                         setTimeout(() => {
@@ -422,42 +497,74 @@ const Chat = () => {
         return () => {
             supabase.removeChannel(channel)
         }
-    }, [conversationId, currentUser?.id, markMessagesAsRead])
+    }, [conversationId, currentUser?.id, markMessagesAsRead, messages])
 
     // --- Render message ---
     const renderMessage = (message, index) => {
         const isMyMessage = message.sender_id === currentUser.id
         const showTimestamp = index === 0 ||
             (new Date(message.created_at) - new Date(messages[index - 1].created_at)) > 300000
+        const isUploading = isMessageUploading(message.id) || message.is_uploading
 
         return (
             <View key={message.id}>
                 {showTimestamp && <Text style={styles.timestamp}>{formatMessageTime(message.created_at)}</Text>}
                 <View style={[styles.messageContainer, isMyMessage ? styles.myMessageContainer : styles.otherMessageContainer]}>
-                    <View style={[styles.messageBubble, isMyMessage ? styles.myMessage : styles.otherMessage]}>
-                        {message.message_type === 'image' && message.image_url ? (
-                            <TouchableOpacity
-                                onPress={() => {
-                                    setSelectedImage(message.image_url);
-                                    setShowImageModal(true);
-                                }}
-                            >
-                                <Image
-                                    source={{ uri: message.image_url }}
-                                    style={styles.messageImage}
-                                    resizeMode="cover"
-                                />
-                            </TouchableOpacity>
+                    <View style={[
+                        styles.messageBubble,
+                        isMyMessage ? styles.myMessage : styles.otherMessage,
+                        isUploading && styles.uploadingMessage
+                    ]}>
+                        {message.message_type === 'image' && (message.image_url || isUploading) ? (
+                            <View>
+                                <TouchableOpacity
+                                    onPress={() => {
+                                        if (!isUploading && message.image_url) {
+                                            setSelectedImage(message.image_url);
+                                            setShowImageModal(true);
+                                        }
+                                    }}
+                                    disabled={isUploading}
+                                >
+                                    <Image
+                                        source={{ uri: message.image_url }}
+                                        style={[
+                                            styles.messageImage,
+                                            isUploading && styles.uploadingImage
+                                        ]}
+                                        resizeMode="cover"
+                                    />
+                                    {isUploading && (
+                                        <View style={styles.uploadingOverlay}>
+                                            <ActivityIndicator size="large" color="#FFF" />
+                                            <Text style={styles.uploadingText}>Sending...</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+                            </View>
                         ) : (
                             <Text style={[styles.messageText, isMyMessage ? styles.myMessageText : styles.otherMessageText]}>
                                 {message.content}
                             </Text>
                         )}
                     </View>
-                    {isMyMessage && (
-                        <Text style={styles.readStatus}>
-                            {message.read_at ? '✓✓' : '✓'}
-                        </Text>
+
+                    {/* Read Status - Below the message */}
+                    {isMyMessage && !isUploading && (
+                        <View style={styles.readStatusContainer}>
+                            {message.read_at ? (
+                                <Image
+                                    source={
+                                        otherUserProfile?.face_image_url
+                                            ? { uri: otherUserProfile.face_image_url }
+                                            : require('../../../assets/splash-icon.png')
+                                    }
+                                    style={styles.readStatusImage}
+                                />
+                            ) : (
+                                <Text style={styles.sentStatus}>✓</Text>
+                            )}
+                        </View>
                     )}
                 </View>
             </View>
@@ -493,6 +600,17 @@ const Chat = () => {
                     <TouchableOpacity onPress={() => navigation.goBack()}>
                         <Image source={require("../../../assets/back.png")} style={styles.backImage} />
                     </TouchableOpacity>
+
+                    {/* Other User Profile Image in Header */}
+                    <Image
+                        source={
+                            otherUserProfile?.face_image_url
+                                ? { uri: otherUserProfile.face_image_url }
+                                : require('../../../assets/splash-icon.png')
+                        }
+                        style={styles.headerProfileImage}
+                    />
+
                     <View style={styles.headerInfo}>
                         <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
                         <Text style={styles.headerSubtitle} numberOfLines={1}>{itemTitle}</Text>
@@ -626,9 +744,16 @@ const styles = StyleSheet.create({
         width: 30,
         height: 30
     },
+    headerProfileImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        marginLeft: 15,
+        marginRight: 10,
+    },
     headerInfo: {
         flex: 1,
-        marginLeft: 15,
+        marginLeft: 10,
     },
     headerTitle: {
         fontSize: 18,
@@ -717,6 +842,9 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.1,
         shadowRadius: 1,
     },
+    uploadingMessage: {
+        opacity: 0.7,
+    },
     messageText: {
         fontSize: 16,
         fontFamily: 'DM-Regular',
@@ -733,12 +861,43 @@ const styles = StyleSheet.create({
         height: 150,
         borderRadius: 10,
     },
-    readStatus: {
+    uploadingImage: {
+        opacity: 0.5,
+    },
+    uploadingOverlay: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        borderRadius: 10,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    uploadingText: {
+        color: '#FFF',
         fontSize: 12,
-        color: '#666',
+        marginTop: 5,
+        fontFamily: 'DM-Medium',
+    },
+    // Updated Read Status Styles
+    readStatusContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
         marginTop: 2,
         marginRight: 5,
-        textAlign: 'right',
+        justifyContent: 'flex-end',
+    },
+    sentStatus: {
+        fontSize: 12,
+        color: '#666',
+        marginRight: 5,
+    },
+    readStatusImage: {
+        width: 16,
+        height: 16,
+        borderRadius: 8,
     },
     inputContainer: {
         flexDirection: 'row',
