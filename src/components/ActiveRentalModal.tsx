@@ -53,7 +53,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
     )
   `)
         .eq('renter_id', currentUser.id)
-        .in('status', ['confirmed', 'ongoing'])
+        .in('status', ['confirmed', 'ongoing', 'delivered'])
         .order('created_at', { ascending: false });
 
       if (error) {
