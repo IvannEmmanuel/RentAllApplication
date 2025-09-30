@@ -220,14 +220,15 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         <SafeAreaView style={styles.container}>
             {/* Header */}
             <View style={styles.header}>
+                <Text style={styles.headerTitle}>Item Tracking</Text>
+                <View style={styles.placeholder} />
                 <TouchableOpacity
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
                     {/* <Ionicons name="arrow-back" size={24} color="#000" /> */}
+                    <Text style={styles.backButtonText}>✕</Text>
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>Item Tracking</Text>
-                <View style={styles.placeholder} />
             </View>
 
             <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -347,7 +348,22 @@ const styles = StyleSheet.create({
         backgroundColor: '#F5F5F5',
     },
     backButton: {
-        padding: 8,
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    backButtonText: {
+        fontSize: 18,
+        color: '#666',
+        fontWeight: 'bold',
     },
     headerTitle: {
         fontSize: 18,
