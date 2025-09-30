@@ -122,21 +122,41 @@ const Home = ({ route }) => {
   }, [])
 
   // When screen is focused, fetch items. If route param resetToAll is set, clear filters first.
+  // useFocusEffect(
+  //   useCallback(() => {
+  //     console.log("Home screen focused, fetching items")
+  //     if (route?.params?.resetToAll) {
+  //       // reset filters to "All"
+  //       setSelectedCategoryId("")
+  //       setSearchTerm("")
+  //       // clear the flag so it won't re-trigger repeatedly
+  //       if (navigation?.setParams) {
+  //         navigation.setParams({ resetToAll: false })
+  //       }
+  //     }
+  //     setPage(1)
+  //     fetchItems(1, false)
+  //   }, [fetchItems, route?.params?.resetToAll])
+  // )
+
   useFocusEffect(
     useCallback(() => {
-      console.log("Home screen focused, fetching items")
+      console.log("Home screen focused")
+
+      // Only reset filters if explicitly requested
       if (route?.params?.resetToAll) {
-        // reset filters to "All"
         setSelectedCategoryId("")
         setSearchTerm("")
-        // clear the flag so it won't re-trigger repeatedly
+        // Clear the flag
         if (navigation?.setParams) {
           navigation.setParams({ resetToAll: false })
         }
+        // Only fetch if we reset filters
+        setPage(1)
+        fetchItems(1, false)
       }
-      setPage(1)
-      fetchItems(1, false)
-    }, [fetchItems, route?.params?.resetToAll])
+      // Otherwise, don't refetch - keep the existing data
+    }, [route?.params?.resetToAll])
   )
 
   const dedupeItems = (itemsArray) => {
