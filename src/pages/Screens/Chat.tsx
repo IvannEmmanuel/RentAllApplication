@@ -22,6 +22,7 @@ import { useFavorites } from '../../components/FavoritesContext'
 import { useUnread } from '../../hooks/useUnreadMessages'
 import * as ImagePicker from 'expo-image-picker'
 import * as FileSystem from "expo-file-system/legacy";
+import SkeletonLoadingChat from '../../components/skeletonComponents/SkeletonLoadingChat'
 
 function base64ToUint8Array(base64: string) {
     const binary = atob(base64);
@@ -427,7 +428,7 @@ const Chat = () => {
             setSending(false)
         }
     }
-    
+
     // --- Helpers ---
     const formatMessageTime = (timestamp) => {
         const messageTime = new Date(timestamp)
@@ -613,121 +614,123 @@ const Chat = () => {
                 behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
             >
-                {/* Header */}
-                <View style={styles.header}>
-                    <TouchableOpacity onPress={() => navigation.goBack()}>
-                        <Image source={require("../../../assets/back.png")} style={styles.backImage} />
-                    </TouchableOpacity>
+                {/* Show skeleton while loading */}
+                {loading ? (
+                    <SkeletonLoadingChat />
+                ) : (
+                    <>
+                        {/* Header */}
+                        <View style={styles.header}>
+                            <TouchableOpacity onPress={() => navigation.goBack()}>
+                                <Image source={require("../../../assets/back.png")} style={styles.backImage} />
+                            </TouchableOpacity>
 
-                    {/* Other User Profile Image in Header */}
-                    <Image
-                        source={
-                            otherUserProfile?.face_image_url
-                                ? { uri: otherUserProfile.face_image_url }
-                                : require('../../../assets/splash-icon.png')
-                        }
-                        style={styles.headerProfileImage}
-                    />
-
-                    <View style={styles.headerInfo}>
-                        <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
-                        <Text style={styles.headerSubtitle} numberOfLines={1}>{itemTitle}</Text>
-                    </View>
-                    <View style={styles.headerSpacer} />
-                </View>
-
-                {/* Messages */}
-                <ScrollView
-                    ref={scrollViewRef}
-                    style={styles.messagesContainer}
-                    contentContainerStyle={styles.messagesContent}
-                    showsVerticalScrollIndicator={false}
-                    onContentSizeChange={scrollToBottom}
-                >
-                    {loading ? (
-                        <View style={styles.loadingContainer}>
-                            <ActivityIndicator size="small" color="#FFAB00" />
-                            <Text style={styles.loadingText}>Loading messages...</Text>
-                        </View>
-                    ) : messages.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <Text style={styles.emptyText}>No messages yet</Text>
-                            <Text style={styles.emptySubtext}>Start the conversation!</Text>
-                        </View>
-                    ) : (
-                        messages.map((message, index) => renderMessage(message, index))
-                    )}
-                </ScrollView>
-
-                {/* Input */}
-                <View style={styles.inputContainer}>
-                    <TouchableOpacity
-                        style={styles.attachButton}
-                        onPress={() => {
-                            Alert.alert(
-                                "Add Image",
-                                "Choose an option",
-                                [
-                                    { text: "Camera", onPress: takePhoto },
-                                    { text: "Gallery", onPress: pickImage },
-                                    { text: "Cancel", style: "cancel" }
-                                ]
-                            );
-                        }}
-                        disabled={uploadingImage}
-                    >
-                        {uploadingImage ? (
-                            <ActivityIndicator size="small" color="#FFAB00" />
-                        ) : (
-                            <Text style={styles.attachButtonText}>📷</Text>
-                        )}
-                    </TouchableOpacity>
-
-                    <TextInput
-                        style={styles.textInput}
-                        value={newMessage}
-                        onChangeText={setNewMessage}
-                        placeholder="Type a message..."
-                        placeholderTextColor="#999"
-                        multiline
-                        maxLength={1000}
-                    />
-                    <TouchableOpacity
-                        style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
-                        onPress={sendMessage}
-                        disabled={!newMessage.trim() || sending}
-                    >
-                        {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.sendButtonText}>Send</Text>}
-                    </TouchableOpacity>
-                </View>
-
-                {/* Image Modal */}
-                <Modal
-                    visible={showImageModal}
-                    transparent={true}
-                    animationType="fade"
-                    onRequestClose={() => setShowImageModal(false)}
-                >
-                    <View style={styles.modalContainer}>
-                        <TouchableOpacity
-                            style={styles.modalOverlay}
-                            onPress={() => setShowImageModal(false)}
-                        />
-                        <View style={styles.modalContent}>
+                            {/* Other User Profile Image in Header */}
                             <Image
-                                source={{ uri: selectedImage }}
-                                style={styles.fullImage}
-                                resizeMode="contain"
+                                source={
+                                    otherUserProfile?.face_image_url
+                                        ? { uri: otherUserProfile.face_image_url }
+                                        : require('../../../assets/splash-icon.png')
+                                }
+                                style={styles.headerProfileImage}
+                            />
+
+                            <View style={styles.headerInfo}>
+                                <Text style={styles.headerTitle} numberOfLines={1}>{otherUserName}</Text>
+                                <Text style={styles.headerSubtitle} numberOfLines={1}>{itemTitle}</Text>
+                            </View>
+                            <View style={styles.headerSpacer} />
+                        </View>
+
+                        {/* Messages */}
+                        <ScrollView
+                            ref={scrollViewRef}
+                            style={styles.messagesContainer}
+                            contentContainerStyle={styles.messagesContent}
+                            showsVerticalScrollIndicator={false}
+                            onContentSizeChange={scrollToBottom}
+                        >
+                            {messages.length === 0 ? (
+                                <View style={styles.emptyContainer}>
+                                    <Text style={styles.emptyText}>No messages yet</Text>
+                                    <Text style={styles.emptySubtext}>Start the conversation!</Text>
+                                </View>
+                            ) : (
+                                messages.map((message, index) => renderMessage(message, index))
+                            )}
+                        </ScrollView>
+
+                        {/* Input */}
+                        <View style={styles.inputContainer}>
+                            <TouchableOpacity
+                                style={styles.attachButton}
+                                onPress={() => {
+                                    Alert.alert(
+                                        "Add Image",
+                                        "Choose an option",
+                                        [
+                                            { text: "Camera", onPress: takePhoto },
+                                            { text: "Gallery", onPress: pickImage },
+                                            { text: "Cancel", style: "cancel" }
+                                        ]
+                                    );
+                                }}
+                                disabled={uploadingImage}
+                            >
+                                {uploadingImage ? (
+                                    <ActivityIndicator size="small" color="#FFAB00" />
+                                ) : (
+                                    <Text style={styles.attachButtonText}>📷</Text>
+                                )}
+                            </TouchableOpacity>
+
+                            <TextInput
+                                style={styles.textInput}
+                                value={newMessage}
+                                onChangeText={setNewMessage}
+                                placeholder="Type a message..."
+                                placeholderTextColor="#999"
+                                multiline
+                                maxLength={1000}
                             />
                             <TouchableOpacity
-                                style={styles.closeButton}
-                                onPress={() => setShowImageModal(false)}
+                                style={[styles.sendButton, (!newMessage.trim() || sending) && styles.sendButtonDisabled]}
+                                onPress={sendMessage}
+                                disabled={!newMessage.trim() || sending}
                             >
-                                <Text style={styles.closeButtonText}>✕</Text>
+                                {sending ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={styles.sendButtonText}>Send</Text>}
                             </TouchableOpacity>
                         </View>
-                    </View>
-                </Modal>
+
+                        {/* Image Modal */}
+                        <Modal
+                            visible={showImageModal}
+                            transparent={true}
+                            animationType="fade"
+                            onRequestClose={() => setShowImageModal(false)}
+                        >
+                            <View style={styles.modalContainer}>
+                                <TouchableOpacity
+                                    style={styles.modalOverlay}
+                                    onPress={() => setShowImageModal(false)}
+                                />
+                                <View style={styles.modalContent}>
+                                    <Image
+                                        source={{ uri: selectedImage }}
+                                        style={styles.fullImage}
+                                        resizeMode="contain"
+                                    />
+                                    <TouchableOpacity
+                                        style={styles.closeButton}
+                                        onPress={() => setShowImageModal(false)}
+                                    >
+                                        <Text style={styles.closeButtonText}>✕</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </Modal>
+                    </>
+                )}
             </KeyboardAvoidingView>
         </SafeAreaView>
     )
