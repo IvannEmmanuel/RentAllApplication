@@ -301,7 +301,7 @@ const Tabs = () => {
                 listeners={({ navigation }) => ({
                     tabPress: (e) => {
                         // Navigate to the nested HomeMain and pass a param instructing it to reset to "All"
-                        navigation.navigate('Home', { screen: 'HomeMain', params: { resetToAll: true } });
+                        navigation.navigate('Home', { screen: 'HomeMain' }); //, params: { resetToAll: true } 
                     },
                 })}
             />
