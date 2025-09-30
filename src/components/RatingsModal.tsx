@@ -22,9 +22,15 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const [lessorComment, setLessorComment] = useState("");
     const [selectedRental, setSelectedRental] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [submitting, setSubmitting] = useState(false);
     const [showRatingForm, setShowRatingForm] = useState(false);
     const [itemImage, setItemImage] = useState(null);
+    
+    // Pagination states
+    const [page, setPage] = useState(0);
+    const [hasMore, setHasMore] = useState(true);
+    const PAGE_SIZE = 10;
 
     // Get image URL for items
     const getImageUrl = async (userId, itemId) => {
@@ -52,63 +58,91 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
         }
     };
 
-    // Fetch rentals completed by this user but not yet rated
-    useEffect(() => {
-        if (!visible || !currentUserId) return;
+    // Fetch initial rentals completed by this user but not yet rated
+    const fetchPendingReviews = async (pageNum = 0, isLoadMore = false) => {
+        if (!currentUserId) return;
 
-        const fetchPendingReviews = async () => {
+        if (isLoadMore) {
+            setLoadingMore(true);
+        } else {
             setLoading(true);
-            try {
-                const { data: completedRentals, error } = await supabase
-                    .from("rental_transactions")
-                    .select(`
-                        rental_id, 
-                        item_id, 
-                        items(title, user_id, users(id, first_name, last_name, face_image_url)), 
-                        reviews(review_id, rating, comment, item_id)
-                    `)
-                    .eq("renter_id", currentUserId)
-                    .eq("status", "completed");
+        }
 
-                if (error) {
-                    console.error("Error fetching completed rentals:", error);
-                    return;
-                }
+        try {
+            const from = pageNum * PAGE_SIZE;
+            const to = from + PAGE_SIZE - 1;
 
-                // Filter rentals that don't have both item and lessor reviews
-                const needsReview = completedRentals.filter((rental) => {
-                    const existingReviews = rental.reviews || [];
-                    const hasItemReview = existingReviews.some(review => review.item_id === rental.item_id);
-                    const hasLessorReview = existingReviews.some(review => review.item_id === null);
+            const { data: completedRentals, error, count } = await supabase
+                .from("rental_transactions")
+                .select(`
+                    rental_id, 
+                    item_id, 
+                    items(title, user_id, users(id, first_name, last_name, face_image_url)), 
+                    reviews(review_id, rating, comment, item_id)
+                `, { count: 'exact' })
+                .eq("renter_id", currentUserId)
+                .eq("status", "completed")
+                .order('created_at', { ascending: false })
+                .range(from, to);
 
-                    return !hasItemReview || !hasLessorReview;
-                });
+            if (error) {
+                console.error("Error fetching completed rentals:", error);
+                return;
+            }
 
-                // Add item images to the pending reviews
-                const reviewsWithImages = await Promise.all(
-                    needsReview.map(async (rental) => {
-                        const imageUrl = await getImageUrl(rental.items.user_id, rental.item_id);
-                        return {
-                            ...rental,
-                            itemImageUrl: imageUrl,
-                        };
-                    })
-                );
+            // Filter rentals that don't have both item and lessor reviews
+            const needsReview = completedRentals.filter((rental) => {
+                const existingReviews = rental.reviews || [];
+                const hasItemReview = existingReviews.some(review => review.item_id === rental.item_id);
+                const hasLessorReview = existingReviews.some(review => review.item_id === null);
 
+                return !hasItemReview || !hasLessorReview;
+            });
+
+            // Add item images to the pending reviews
+            const reviewsWithImages = await Promise.all(
+                needsReview.map(async (rental) => {
+                    const imageUrl = await getImageUrl(rental.items.user_id, rental.item_id);
+                    return {
+                        ...rental,
+                        itemImageUrl: imageUrl,
+                    };
+                })
+            );
+
+            if (isLoadMore) {
+                setPendingReviews(prev => [...prev, ...reviewsWithImages]);
+            } else {
                 setPendingReviews(reviewsWithImages);
-            } catch (error) {
-                console.error("Error:", error);
-            } finally {
+            }
+
+            // Check if there are more items to load
+            setHasMore(completedRentals.length === PAGE_SIZE);
+
+        } catch (error) {
+            console.error("Error:", error);
+        } finally {
+            if (isLoadMore) {
+                setLoadingMore(false);
+            } else {
                 setLoading(false);
             }
-        };
+        }
+    };
 
-        fetchPendingReviews();
+    // Load initial data when modal opens
+    useEffect(() => {
+        if (visible && currentUserId) {
+            setPage(0);
+            setHasMore(true);
+            fetchPendingReviews(0, false);
+        }
     }, [visible, currentUserId]);
 
     // Reset form when modal closes
     useEffect(() => {
         if (!visible) {
+            setPendingReviews([]);
             setSelectedRental(null);
             setItemRating(0);
             setLessorRating(0);
@@ -116,8 +150,19 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
             setLessorComment("");
             setShowRatingForm(false);
             setItemImage(null);
+            setPage(0);
+            setHasMore(true);
         }
     }, [visible]);
+
+    // Handle load more
+    const handleLoadMore = async () => {
+        if (!loadingMore && hasMore && !loading) {
+            const nextPage = page + 1;
+            setPage(nextPage);
+            await fetchPendingReviews(nextPage, true);
+        }
+    };
 
     const handleSelectRental = (rental) => {
         setSelectedRental(rental);
@@ -287,6 +332,30 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
         </TouchableOpacity>
     );
 
+    const renderFooter = () => {
+        if (!loadingMore) return null;
+
+        return (
+            <View style={styles.footerLoading}>
+                <ActivityIndicator size="small" color="#FFAB00" />
+                <Text style={styles.footerLoadingText}>Loading more rentals...</Text>
+            </View>
+        );
+    };
+
+    const renderEmptyComponent = () => {
+        if (loading) return null;
+
+        return (
+            <View style={styles.emptyContainer}>
+                <Text style={styles.emptyTitle}>No items to rate</Text>
+                <Text style={styles.emptySubtitle}>
+                    You'll see completed rentals here once they're finished
+                </Text>
+            </View>
+        );
+    };
+
     return (
         <>
             {/* Main Modal */}
@@ -306,17 +375,10 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                     </View>
 
                     <View style={styles.content}>
-                        {loading ? (
+                        {loading && pendingReviews.length === 0 ? (
                             <View style={styles.loadingContainer}>
                                 <ActivityIndicator size="large" color="#FFAB00" />
                                 <Text style={styles.loadingText}>Loading your rentals...</Text>
-                            </View>
-                        ) : pendingReviews.length === 0 ? (
-                            <View style={styles.emptyContainer}>
-                                <Text style={styles.emptyTitle}>No items to rate</Text>
-                                <Text style={styles.emptySubtitle}>
-                                    You'll see completed rentals here once they're finished
-                                </Text>
                             </View>
                         ) : (
                             <FlatList
@@ -326,13 +388,19 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                 showsVerticalScrollIndicator={false}
                                 contentContainerStyle={styles.listContent}
                                 ListHeaderComponent={
-                                    <View style={styles.listHeader}>
-                                        <Text style={styles.sectionTitle}>Items to Rate</Text>
-                                        <Text style={styles.sectionSubtitle}>
-                                            Rate both the item quality and lessor experience
-                                        </Text>
-                                    </View>
+                                    pendingReviews.length > 0 ? (
+                                        <View style={styles.listHeader}>
+                                            <Text style={styles.sectionTitle}>Items to Rate</Text>
+                                            <Text style={styles.sectionSubtitle}>
+                                                Rate both the item quality and lessor experience
+                                            </Text>
+                                        </View>
+                                    ) : null
                                 }
+                                ListEmptyComponent={renderEmptyComponent}
+                                ListFooterComponent={renderFooter}
+                                onEndReached={handleLoadMore}
+                                onEndReachedThreshold={0.5}
                             />
                         )}
                     </View>
@@ -839,5 +907,17 @@ const styles = StyleSheet.create({
         color: '#FFF',
         fontSize: 16,
         fontFamily: 'DM-Bold',
+    },
+    // New styles for pagination
+    footerLoading: {
+        paddingVertical: 20,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    footerLoadingText: {
+        fontSize: 14,
+        color: '#666',
     },
 });
