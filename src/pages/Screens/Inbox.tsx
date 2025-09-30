@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, ScrollView, TouchableOpacity, Image, ActivityIn
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import { useNavigation, useFocusEffect } from '@react-navigation/native'
+import SkeletonLoadingInbox from '../../components/skeletonComponents/SkeletonLoadingInbox' // Adjust path as needed
 
 const Inbox = () => {
   const navigation = useNavigation()
@@ -27,7 +28,6 @@ const Inbox = () => {
     getCurrentUser()
   }, [])
 
-  // Fetch conversations
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!currentUser) return
@@ -59,6 +59,7 @@ const Inbox = () => {
 
       if (!convData || convData.length === 0) {
         setConversations([])
+        setLoading(false)
         return
       }
 
@@ -151,9 +152,11 @@ const Inbox = () => {
 
       console.log('Enriched conversations:', enrichedConversations.length)
       setConversations(enrichedConversations)
+      setLoading(false)
 
     } catch (error) {
       console.error('Error in fetchConversations:', error)
+      setLoading(false)
     }
   }, [currentUser])
 
@@ -253,16 +256,10 @@ const Inbox = () => {
     })
   }
 
-  // Initial loading
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      if (currentUser) {
-        setLoading(false)
-      }
-    }, 1000)
-
-    return () => clearTimeout(timer)
-  }, [currentUser])
+  // Show skeleton loading while loading
+  if (loading) {
+    return <SkeletonLoadingInbox />;
+  }
 
   if (!currentUser) {
     return (
@@ -272,20 +269,6 @@ const Inbox = () => {
         </View>
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>Please log in to view messages</Text>
-        </View>
-      </View>
-    )
-  }
-
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Messages</Text>
-        </View>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#FFAB00" />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
         </View>
       </View>
     )
