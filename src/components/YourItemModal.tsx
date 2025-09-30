@@ -17,13 +17,13 @@ import { useNavigation } from '@react-navigation/native';
 
 const ITEMS_PER_PAGE = 6;
 
-const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
+const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initialTab = 'pending' }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [processingIds, setProcessingIds] = useState(new Set());
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState(initialTab); // Use initialTab here
   const [highlightedRentalId, setHighlightedRentalId] = useState(rentalId);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
