@@ -12,10 +12,13 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../../../supbaseClient';
 import { useFavorites } from '../../components/FavoritesContext';
 import { useNavigation } from '@react-navigation/native';
+import { useNotificationModal } from '../../components/NotificationModalContext'; // Import the context
+import AppModals from '../../components/AppModals'; // Import AppModals
 
 const Notification = () => {
   const navigation = useNavigation();
   const { currentUser } = useFavorites();
+  const { showModal } = useNotificationModal(); // Get the showModal function from context
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -50,7 +53,7 @@ const Notification = () => {
       case 'booking_completed':
       case 'booking_started':
       case 'booking_return':
-        return require("../../../assets/splash-icon.png"); // Using your existing asset
+        return require("../../../assets/splash-icon.png");
       case 'message':
         return require("../../../assets/message.png");
       default:
@@ -58,6 +61,7 @@ const Notification = () => {
     }
   };
 
+  // Get notification color based on type
   // Get notification color based on type
   const getNotificationColor = (type) => {
     switch (type) {
@@ -70,12 +74,78 @@ const Notification = () => {
       case 'booking_return':
         return '#FFAB00'; // Your theme color
       case 'booking_started':
+      case 'booking_ongoing':
+      case 'booking_delivered':
         return '#2196F3'; // Blue
       case 'message':
         return '#9C27B0'; // Purple
       default:
         return '#9C9894'; // Gray
     }
+  };
+
+  // Handle notification press
+  // Handle notification press
+  const handleNotificationPress = async (notification) => {
+    // Mark as read first
+    if (!notification.read_at) {
+      await markAsRead(notification.notification_id);
+    }
+
+    // Handle different notification types with AppModal
+    switch (notification.type) {
+      case 'booking_request':
+      case 'booking_confirmed':
+      case 'booking_cancelled':
+      case 'booking_completed':
+      case 'booking_started':
+      case 'booking_ongoing':
+      case 'booking_return':
+      case 'booking_delivered':
+        // Use rental_id directly from notification object (not from metadata)
+        const rentalId = notification.rental_id;
+
+        if (rentalId) {
+          console.log('📱 Opening modal for notification:', notification.type, 'rentalId:', rentalId);
+
+          // FIX: Pass parameters correctly - check your useNotificationModal context
+          // Try this format first:
+          showModal(notification.type, rentalId);
+
+          // If that doesn't work, try:
+          // showModal({
+          //   type: notification.type,
+          //   rentalId: rentalId,
+          //   visible: true
+          // });
+        } else {
+          console.log('❌ No rental_id found for notification:', notification);
+        }
+        break;
+
+      case 'message':
+        // Navigate to chat if you have chat data
+        if (notification.conversation_id) {
+          navigation.navigate('Chat', {
+            conversationId: notification.conversation_id,
+            otherUserId: notification.other_user_id,
+            otherUserName: notification.other_user_name,
+            itemTitle: notification.item_title,
+            itemId: notification.item_id
+          });
+        }
+        break;
+
+      default:
+        console.log('Unknown notification type:', notification.type);
+    }
+  };
+
+  // Helper function to extract rental ID from message (if not in metadata)
+  const extractRentalIdFromMessage = (message) => {
+    // Implement logic to extract rental ID from message if needed
+    // This depends on how your notifications are structured
+    return null;
   };
 
   // Fetch notifications from Supabase
@@ -85,14 +155,14 @@ const Notification = () => {
     if (showLoading) setLoading(true);
     try {
       const from = page * LIMIT;
-      const to = from + LIMIT - 1; // Supabase range is inclusive
+      const to = from + LIMIT - 1;
 
       const { data, error } = await supabase
         .from('notifications')
         .select('*')
         .eq('user_id', currentUser.id)
         .order('created_at', { ascending: false })
-        .range(from, to); // limit & offset
+        .range(from, to);
 
       if (error) throw error;
 
@@ -195,7 +265,7 @@ const Notification = () => {
         styles.notificationItem,
         !item.read_at && styles.unreadNotificationItem
       ]}
-      onPress={() => !item.read_at && markAsRead(item.notification_id)}
+      onPress={() => handleNotificationPress(item)}
     >
       <View style={styles.notificationContent}>
         <View style={[
