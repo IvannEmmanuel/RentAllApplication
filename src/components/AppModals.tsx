@@ -67,17 +67,17 @@ export default function AppModals({ currentUser }) {
 
   return (
     <>
-      {/* Active rentals - for both booking_confirmed AND booking_started (for renters) */}
+      {/* Active rentals - for booking_confirmed, booking_started, AND booking_ongoing */}
       {modalData.visible &&
         (
           modalData.type === 'booking_confirmed' ||
-          modalData.type === 'booking_ongoing' || // ✅ add this
+          modalData.type === 'booking_started' ||
+          modalData.type === 'booking_ongoing' ||
           (modalData.type === 'booking_started' && userRole === 'renter')
         ) &&
         !isLoadingRole && (
           <ActiveRentalModal visible={true} onClose={hideModal} />
         )}
-
 
       {/* Booking completed */}
       {modalData.visible && modalData.type === 'booking_completed' && !isLoadingRole && (
@@ -119,10 +119,11 @@ export default function AppModals({ currentUser }) {
         ) : null
       )}
 
-      {/* Other notifications for lessor - including booking_started */}
+      {/* Other notifications for lessor */}
       {modalData.visible && !isLoadingRole && userRole === 'lessor' &&
         (modalData.type === 'booking_return' ||
           modalData.type === 'booking_started' ||
+          modalData.type === 'booking_ongoing' ||
           modalData.type === 'booking_delivered') && (
           <ItemTrackingLessorScreen
             visible={true}
@@ -132,6 +133,15 @@ export default function AppModals({ currentUser }) {
           />
         )
       }
+
+      {/* Add a fallback for any unhandled notification types */}
+      {modalData.visible && !isLoadingRole && (
+        console.log('🔍 Modal data:', {
+          type: modalData.type,
+          rentalId: modalData.rentalId,
+          userRole: userRole
+        })
+      )}
     </>
   );
 }
