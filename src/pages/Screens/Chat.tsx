@@ -316,10 +316,15 @@ const Chat = () => {
                 })
                 .eq('id', conversationId);
 
-            // Remove temporary message and add the real one
+            // Remove temporary message and add the real one in ONE operation
             setMessages(prev => {
                 const filtered = prev.filter(msg => msg.id !== tempMessageId);
-                return [...filtered, { ...messageData, is_uploading: false }];
+                // Check if the real message already exists to prevent duplicates
+                const messageExists = filtered.some(msg => msg.id === messageData.id);
+                if (!messageExists) {
+                    return [...filtered, { ...messageData, is_uploading: false }];
+                }
+                return filtered;
             });
 
             // Remove from uploading tracking
@@ -478,15 +483,19 @@ const Chat = () => {
                     const newMessage = payload.new;
                     console.log('🔵 Real-time message received:', newMessage.id, newMessage.sender_id, newMessage.content);
 
-                    // Check if message already exists in local state
-                    const messageExists = messages.some(m => m.id === newMessage.id);
+                    // Use functional update to avoid dependency on messages array
+                    setMessages(prev => {
+                        // Check if message already exists in current state (including temp messages)
+                        const messageExists = prev.some(m => m.id === newMessage.id);
 
-                    if (!messageExists) {
-                        console.log('✅ Adding new message to local state');
-                        setMessages(prev => [...prev, newMessage]);
-                    } else {
-                        console.log('⏭️ Message already exists, skipping');
-                    }
+                        if (!messageExists) {
+                            console.log('✅ Adding new message to local state');
+                            return [...prev, newMessage];
+                        } else {
+                            console.log('⏭️ Message already exists, skipping');
+                            return prev;
+                        }
+                    });
 
                     // Mark as read if it's from other user
                     if (newMessage.sender_id !== currentUser.id) {
@@ -503,6 +512,8 @@ const Chat = () => {
                 (payload) => {
                     const updatedMessage = payload.new;
                     console.log('🟡 Message updated:', updatedMessage.id);
+
+                    // Use functional update for better performance
                     setMessages(prev =>
                         prev.map(msg => msg.id === updatedMessage.id ? updatedMessage : msg)
                     )
@@ -516,7 +527,7 @@ const Chat = () => {
             console.log('🔴 Removing real-time channel');
             supabase.removeChannel(channel);
         }
-    }, [conversationId, currentUser?.id, markMessagesAsRead, messages])
+    }, [conversationId, currentUser?.id, markMessagesAsRead]) // Remove messages dependency
 
     // --- Render message ---
     const renderMessage = (message, index) => {
