@@ -227,6 +227,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
     const renderProgressBar = () => (
         <View style={styles.progressContainer}>
+
             <View style={styles.progressLine}>
                 <View
                     style={[
@@ -372,6 +373,12 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     // Render as regular screen
     return (
         <SafeAreaView style={styles.container}>
+            <View style={styles.modalHeader}>
+                <Text style={styles.modalTitle}>Order Tracking</Text>
+                <TouchableOpacity style={styles.closeButton} onPress={handleClose}>
+                    <Text style={styles.closeButtonText}>✕</Text>
+                </TouchableOpacity>
+            </View>
             {renderContent()}
         </SafeAreaView>
     );
@@ -379,6 +386,32 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#F5F5F5' },
+    header: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingVertical: 12,
+        backgroundColor: '#F5F5F5',
+    },
+    backButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 3,
+    },
+    backButtonText: {
+        fontSize: 18,
+        color: '#666',
+        fontWeight: 'bold',
+    },
     content: { flex: 1 },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     loadingText: { marginTop: 12, color: '#666', fontSize: 14 },
@@ -389,7 +422,6 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
-        paddingBottom: 20,
         backgroundColor: '#F5F5F5',
     },
     modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', flex: 1 },
