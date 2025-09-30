@@ -20,6 +20,7 @@ import PictureModal from "../../components/PictureModal"
 import { useNavigation } from "@react-navigation/native"
 import { useFavorites } from "../../components/FavoritesContext"
 import { useFocusEffect } from '@react-navigation/native'
+import SkeletonLoadingHome from "../../components/skeletonComponents/SkeletonLoadingHome"
 
 const Home = ({ route }) => {
   const navigation = useNavigation()
@@ -715,25 +716,31 @@ const Home = ({ route }) => {
             <View style={styles.itemTextContainer}>
               <Text style={styles.itemText}>Items</Text>
             </View>
+
+            {/* Show skeleton loading when initial loading */}
+            {loading && page === 1 && <SkeletonLoadingHome />}
           </>
         }
         ListFooterComponent={
-          hasMore ? (
+          loading && page > 1 ? (
+            <ActivityIndicator size="large" color="#FFAB00" style={{ marginVertical: 20 }} />
+          ) : hasMore ? (
             <ActivityIndicator size="large" color="#FFAB00" style={{ marginVertical: 20 }} />
           ) : (
             <Text style={{ textAlign: "center", marginVertical: 20 }}>No more items</Text>
           )
         }
         onEndReached={() => {
-          if (hasMore) {
+          if (hasMore && !loading) {
             const nextPage = page + 1
             setPage(nextPage)
-            fetchItems(nextPage, true) // append new items
+            fetchItems(nextPage, true)
           }
         }}
         onEndReachedThreshold={0.5}
       />
 
+      {/* Your existing modals remain the same */}
       <FavoritesModal
         visible={favoritesModalVisible}
         onClose={() => setFavoritesModalVisible(false)}
@@ -743,7 +750,7 @@ const Home = ({ route }) => {
         getButtonInfo={getButtonInfo}
         onBookingUpdate={fetchUserBookings}
         onFavoriteRemoved={(itemId) => { }}
-        onMessage={(item) => handleMessage(item)} // ✅ added
+        onMessage={(item) => handleMessage(item)}
       />
 
       <BookItemModal
@@ -753,9 +760,9 @@ const Home = ({ route }) => {
         currentUserId={currentUser?.id}
         onBooked={() => {
           console.log("Booking completed, refreshing data...")
-          setPage(1)             // reset page
+          setPage(1)
           fetchUserBookings()
-          fetchItems(1, false)   // fetch first page
+          fetchItems(1, false)
         }}
       />
 
