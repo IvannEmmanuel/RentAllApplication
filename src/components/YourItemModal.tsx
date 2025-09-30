@@ -15,13 +15,18 @@ import { supabase } from '../../supbaseClient';
 import { handleBookingStatusChange } from '../notifications/notifications';
 import { useNavigation } from '@react-navigation/native';
 
+const ITEMS_PER_PAGE = 6;
+
 const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
   const [bookings, setBookings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [processingIds, setProcessingIds] = useState(new Set());
   const [activeTab, setActiveTab] = useState('pending');
   const [highlightedRentalId, setHighlightedRentalId] = useState(rentalId);
+  const [currentPage, setCurrentPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
 
   const navigation = useNavigation();
 
@@ -33,10 +38,11 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
     }
   }, [highlightedRentalId]);
 
-  // Fetch bookings
-  const fetchBookings = useCallback(async (showLoading = true) => {
+  // Fetch bookings with pagination
+  const fetchBookings = useCallback(async (showLoading = true, page = 0, append = false) => {
     if (!currentUser) return;
     if (showLoading) setLoading(true);
+    if (append) setLoadingMore(true);
 
     try {
       let statusFilter;
@@ -44,7 +50,10 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
       else if (activeTab === 'active') statusFilter = ['confirmed', 'ongoing', 'delivered', 'awaiting_owner_confirmation'];
       else statusFilter = ['completed'];
 
-      const { data: transactions, error } = await supabase
+      const from = page * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      const { data: transactions, error, count } = await supabase
         .from('rental_transactions')
         .select(`
           rental_id,
@@ -68,26 +77,13 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
             last_name,
             face_image_url
           )
-        `)
+        `, { count: 'exact' })
         .eq('items.user_id', currentUser.id)
         .in('status', statusFilter)
-        .order('created_at', { ascending: false });
+        .order('created_at', { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
-
-      // Auto-update confirmed -> ongoing if start date reached
-      // if (activeTab === 'active') {
-      //   const now = new Date();
-      //   for (const booking of transactions) {
-      //     if (booking.status === 'confirmed' && new Date(booking.start_date) <= now) {
-      //       await supabase
-      //         .from('rental_transactions')
-      //         .update({ status: 'ongoing' })
-      //         .eq('rental_id', booking.rental_id);
-      //       booking.status = 'ongoing';
-      //     }
-      //   }
-      // }
 
       const bookingsWithImages = await Promise.all(
         (transactions || []).map(async (booking) => {
@@ -107,12 +103,21 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
         })
       );
 
-      setBookings(bookingsWithImages);
+      if (append) {
+        setBookings(prev => [...prev, ...bookingsWithImages]);
+      } else {
+        setBookings(bookingsWithImages);
+      }
+
+      // Check if there are more items to load
+      setHasMore((count || 0) > (page + 1) * ITEMS_PER_PAGE);
+
     } catch (error) {
       console.error('Error fetching bookings:', error);
       Alert.alert('Error', 'Failed to load bookings');
     } finally {
       if (showLoading) setLoading(false);
+      if (append) setLoadingMore(false);
     }
   }, [currentUser, activeTab, highlightedRentalId]);
 
@@ -175,13 +180,40 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    await fetchBookings(false);
+    setCurrentPage(0);
+    setHasMore(true);
+    await fetchBookings(false, 0, false);
     setRefreshing(false);
   }, [fetchBookings]);
 
+  // Load more when scrolling
+  const handleLoadMore = useCallback(() => {
+    if (!loadingMore && hasMore && !loading) {
+      const nextPage = currentPage + 1;
+      setCurrentPage(nextPage);
+      fetchBookings(false, nextPage, true);
+    }
+  }, [loadingMore, hasMore, loading, currentPage, fetchBookings]);
+
+  // Handle scroll event
+  const handleScroll = ({ nativeEvent }) => {
+    const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+    const paddingToBottom = 20;
+    
+    if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
+      handleLoadMore();
+    }
+  };
+
+  // Reset when tab changes or modal opens
   useEffect(() => {
-    if (visible && currentUser) fetchBookings();
-  }, [visible, currentUser, activeTab, fetchBookings]);
+    if (visible && currentUser) {
+      setCurrentPage(0);
+      setHasMore(true);
+      setBookings([]);
+      fetchBookings(true, 0, false);
+    }
+  }, [visible, currentUser, activeTab]);
 
   // Real-time subscription
   useEffect(() => {
@@ -189,20 +221,15 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
     const channel = supabase.channel('your_items_changes').on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'rental_transactions' },
-      () => fetchBookings(false)
+      () => {
+        setCurrentPage(0);
+        setHasMore(true);
+        fetchBookings(false, 0, false);
+      }
     ).subscribe();
 
     return () => supabase.removeChannel(channel);
-  }, [visible, currentUser, fetchBookings]);
-
-  const getStatusText = (status) => status.toUpperCase();
-  const getStatusColor = (status, isOverdue = false) => isOverdue ? '#FF0000' : {
-    pending: '#FF8C00',
-    confirmed: '#4CAF50',
-    ongoing: '#2196F3',
-    completed: '#9E9E9E',
-    delivered: '#4CAF50'
-  }[status] || '#FF8C00';
+  }, [visible, currentUser, activeTab]);
 
   const renderBookingItem = (booking) => {
     const isActiveTab = activeTab === 'active';
@@ -309,6 +336,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
           <ScrollView
             style={styles.content}
             showsVerticalScrollIndicator={false}
+            onScroll={handleScroll}
+            scrollEventThrottle={400}
             refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#FFAB00']} tintColor="#FFAB00" />}
           >
             {bookings.length === 0 ? (
@@ -318,7 +347,20 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null }) => {
                 <Text style={styles.emptyText}>{emptyState.subtitle}</Text>
               </View>
             ) : (
-              <View style={styles.bookingsList}>{bookings.map(renderBookingItem)}</View>
+              <>
+                <View style={styles.bookingsList}>{bookings.map(renderBookingItem)}</View>
+                {loadingMore && (
+                  <View style={styles.loadingMoreContainer}>
+                    <ActivityIndicator size="small" color="#FFAB00" />
+                    <Text style={styles.loadingMoreText}>Loading more...</Text>
+                  </View>
+                )}
+                {!hasMore && bookings.length > 0 && (
+                  <View style={styles.endContainer}>
+                    <Text style={styles.endText}>No more items to load</Text>
+                  </View>
+                )}
+              </>
             )}
           </ScrollView>
         )}
@@ -347,8 +389,6 @@ const styles = StyleSheet.create({
   renterDetails: {},
   renterName: { fontSize: 16, fontFamily: 'DM-Bold', color: '#333' },
   requestDate: { fontSize: 12, color: '#666' },
-  statusBadge: { borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4 },
-  statusText: { color: '#FFF', fontSize: 12, fontFamily: 'DM-Medium' },
   itemInfo: { flexDirection: 'row', marginTop: 12 },
   itemImage: { width: 64, height: 64, borderRadius: 12, marginRight: 12 },
   itemDetails: { flex: 1 },
@@ -363,6 +403,10 @@ const styles = StyleSheet.create({
   actionButtonText: { color: '#FFF', fontWeight: 'bold' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   loadingText: { marginTop: 12, color: '#666', fontSize: 14 },
+  loadingMoreContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 20 },
+  loadingMoreText: { marginLeft: 8, color: '#666', fontSize: 12 },
+  endContainer: { paddingVertical: 20, alignItems: 'center' },
+  endText: { color: '#999', fontSize: 12 },
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   emptyImage: { width: 120, height: 120, marginBottom: 12 },
   emptyTitle: { fontSize: 16, fontFamily: 'DM-Bold', color: '#333', marginBottom: 4 },
