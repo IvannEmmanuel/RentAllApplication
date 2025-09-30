@@ -10,6 +10,7 @@ import PendingRentalModal from '../../components/PendingRentalModal'
 import CompletedRentalModal from '../../components/CompletedRentalModal'
 import RatingsModal from '../../components/RatingsModal'
 import PictureModal from '../../components/PictureModal'
+import SkeletonLoadingProfile from '../../components/skeletonComponents/SkeletonLoadingProfile'
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -557,7 +558,7 @@ const Profile = () => {
           <View style={styles.mainItemContainer}>
             <Text style={styles.itemText}>Items for you</Text>
             {recommendedItems.length === 0 ? (
-              <ActivityIndicator size="large" color="#FFAB00" style={{ marginTop: 20 }} />
+              <SkeletonLoadingProfile />
             ) : (
               <View style={styles.itemsGrid}>
                 {recommendedItems.map(renderItem)}
