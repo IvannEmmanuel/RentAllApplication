@@ -16,6 +16,7 @@ import { supabase } from "../../supbaseClient"
 import BookItemModal from "./BookItemModal"
 import PictureModal from "./PictureModal"
 import { useFavorites } from "./FavoritesContext"
+import { useNavigation } from "@react-navigation/native"
 
 const FavoritesModal = ({
   visible,
@@ -35,6 +36,62 @@ const FavoritesModal = ({
   const [selectedItem, setSelectedItem] = useState(null)
   const [pictureModalVisible, setPictureModalVisible] = useState(false)
   const [itemRatings, setItemRatings] = useState({});
+  const [lessorRatings, setLessorRatings] = useState({}); // Add this state
+  const navigation = useNavigation(); // Add navigation hook
+
+  const fetchLessorRatings = async (lessorIds) => {
+    if (!lessorIds || lessorIds.length === 0) return
+
+    try {
+      const { data, error } = await supabase
+        .from("lessor_reviews")
+        .select("lessor_id, rating")
+        .in("lessor_id", lessorIds)
+
+      if (error) {
+        console.error("Error fetching lessor ratings:", error)
+        return
+      }
+
+      const ratingsMap = {}
+      data.forEach((review) => {
+        if (!ratingsMap[review.lessor_id]) {
+          ratingsMap[review.lessor_id] = { total: 0, count: 0 }
+        }
+        ratingsMap[review.lessor_id].total += review.rating
+        ratingsMap[review.lessor_id].count += 1
+      })
+
+      const averageRatings = {}
+      Object.keys(ratingsMap).forEach((lessorId) => {
+        const { total, count } = ratingsMap[lessorId]
+        averageRatings[lessorId] = count > 0 ? (total / count).toFixed(1) : null
+      })
+
+      setLessorRatings(prev => ({ ...prev, ...averageRatings }))
+    } catch (error) {
+      console.error("Error calculating lessor ratings:", error)
+    }
+  }
+
+  // Add this function to handle lessor name press
+  const handleLessorNamePress = (lessorId, lessorName) => {
+    if (!lessorId) {
+      Alert.alert('Error', 'Lessor information not available');
+      return;
+    }
+
+    // Check if navigation is available
+    if (navigation && navigation.navigate) {
+      navigation.navigate('LessorReviews', {
+        lessorId: lessorId,
+        lessorName: lessorName
+      });
+    } else {
+      console.error('Navigation not available');
+      Alert.alert('Error', 'Navigation not available');
+    }
+  }
 
   useEffect(() => {
     if (visible) {
@@ -68,6 +125,11 @@ const FavoritesModal = ({
           )
 
           setFavoriteItems(withLessorNames)
+
+          // Fetch lessor ratings for the favorite items
+          const lessorIds = withLessorNames.map(item => item.user_id).filter(Boolean)
+          await fetchLessorRatings(lessorIds)
+
         } catch (err) {
           console.error("Error fetching favorite items:", err)
         } finally {
@@ -216,7 +278,12 @@ const FavoritesModal = ({
           }
         })
       )
+
       await fetchItemRatings(itemIds);
+
+      // Fetch lessor ratings
+      const lessorIds = withExtras.map(item => item.user_id).filter(Boolean)
+      await fetchLessorRatings(lessorIds)
 
       setFavoriteItems(withExtras);
     } catch (error) {
@@ -290,7 +357,14 @@ const FavoritesModal = ({
           <Text style={styles.itemTitle} numberOfLines={2}>
             {item.title}
           </Text>
-          <Text style={styles.lessorText}>{item.lessorName}</Text>
+          <TouchableOpacity
+            onPress={() => handleLessorNamePress(item.user_id, item.lessorName)}
+            style={{ flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginBottom: 4 }}
+          >
+            <Text style={styles.lessorText}>{item.lessorName}</Text>
+            <Image source={require("../../assets/rate.png")} style={styles.lessorRateImage} />
+            <Text style={styles.lessorText}>{lessorRatings[item.user_id] || "No rating"}</Text>
+          </TouchableOpacity>
           <Text style={styles.itemLocation} numberOfLines={1}>
             {item.location || "Location not specified"}
           </Text>
@@ -623,5 +697,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#555",
     marginBottom: 2,
+    marginRight: 3,
+  },
+  lessorRateImage: {
+    width: 10,
+    height: 10,
+    marginRight: 3,
+    alignSelf: 'center'
   },
 })
