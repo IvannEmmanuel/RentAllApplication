@@ -22,6 +22,76 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     const [currentBooking, setCurrentBooking] = useState(bookingFromRoute || null);
     const [loading, setLoading] = useState(false);
     const [fetchingBooking, setFetchingBooking] = useState(isModal && !bookingFromRoute);
+    const [isSubscribed, setIsSubscribed] = useState(false);
+    const [lastUpdated, setLastUpdated] = useState(new Date());
+
+    // Real-time subscription for booking updates
+    useEffect(() => {
+        const rentalIdToSubscribe = currentBooking?.rental_id || rentalId;
+        
+        if (!rentalIdToSubscribe) return;
+
+        console.log('Setting up real-time subscription for rental:', rentalIdToSubscribe);
+
+        const channel = supabase
+            .channel(`lessor_tracking_${rentalIdToSubscribe}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'rental_transactions',
+                    filter: `rental_id=eq.${rentalIdToSubscribe}`,
+                },
+                async (payload) => {
+                    console.log('Real-time booking update received:', payload);
+                    setLastUpdated(new Date());
+                    
+                    // Update the current booking with new status
+                    setCurrentBooking(prev => ({
+                        ...prev,
+                        ...payload.new
+                    }));
+
+                    // If the update doesn't include complete item details, fetch them
+                    if (!payload.new.items && currentBooking?.item_id) {
+                        await fetchUpdatedBookingDetails();
+                    }
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'items',
+                    filter: `item_id=eq.${currentBooking?.item_id}`,
+                },
+                (payload) => {
+                    console.log('Real-time item update received:', payload);
+                    setLastUpdated(new Date());
+                    
+                    // Update item details if they change
+                    setCurrentBooking(prev => ({
+                        ...prev,
+                        items: {
+                            ...prev.items,
+                            ...payload.new
+                        }
+                    }));
+                }
+            )
+            .subscribe((status) => {
+                console.log('Lessor tracking subscription status:', status);
+                setIsSubscribed(status === 'SUBSCRIBED');
+            });
+
+        return () => {
+            console.log('Cleaning up lessor real-time subscription');
+            supabase.removeChannel(channel);
+            setIsSubscribed(false);
+        };
+    }, [currentBooking?.rental_id, currentBooking?.item_id, rentalId]);
 
     // Fetch booking data when used as modal
     useEffect(() => {
@@ -81,6 +151,59 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
             if (onClose) onClose();
         } finally {
             setFetchingBooking(false);
+        }
+    };
+
+    // Fetch updated booking details with complete information
+    const fetchUpdatedBookingDetails = async () => {
+        try {
+            const rentalIdToFetch = currentBooking?.rental_id || rentalId;
+            if (!rentalIdToFetch) return;
+
+            const { data, error } = await supabase
+                .from('rental_transactions')
+                .select(`
+                rental_id,
+                item_id,
+                renter_id,
+                start_date,
+                end_date,
+                total_cost,
+                status,
+                quantity,
+                created_at,
+                items!inner(
+                    title,
+                    price_per_day,
+                    user_id,
+                    location,
+                    quantity
+                ),
+                users!rental_transactions_renter_id_fkey(
+                    first_name,
+                    last_name,
+                    face_image_url
+                )
+            `)
+                .eq('rental_id', rentalIdToFetch)
+                .single();
+
+            if (error) throw error;
+
+            // Get item image if not already available
+            const imageUrl = data.items?.main_image_url || await getItemImage(data.items.user_id, data.item_id);
+
+            setCurrentBooking({
+                ...data,
+                items: {
+                    ...data.items,
+                    main_image_url: imageUrl,
+                    users: data.users
+                },
+                users: data.users
+            });
+        } catch (error) {
+            console.error('Error fetching updated booking details:', error);
         }
     };
 
@@ -160,7 +283,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 }
             }
 
-            // Update booking status
+            // Update booking status - real-time subscription will handle the UI update
             const { error } = await supabase
                 .from('rental_transactions')
                 .update({ status: newStatus })
@@ -168,7 +291,8 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
             if (error) throw error;
 
-            setCurrentBooking(prev => ({ ...prev, status: newStatus }));
+            // Note: Real-time subscription will automatically update the state
+            console.log('Status update submitted:', newStatus);
 
             // Fetch complete rental for notifications
             const { data: fullRental, error: fetchError } = await supabase
@@ -197,6 +321,13 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         return null;
     };
 
+    const getActionButtonColor = () => {
+        if (!currentBooking) return '#28A745';
+        if (currentBooking.status === 'confirmed') return '#FF9900';
+        if (currentBooking.status === 'awaiting_owner_confirmation') return '#28A745';
+        return '#28A745';
+    };
+
     const handleClose = () => {
         if (onClose) {
             onClose();
@@ -223,11 +354,29 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         return 'N/A';
     };
 
+    const getStatusColor = () => {
+        if (!currentBooking) return '#757575';
+        
+        switch (currentBooking.status) {
+            case 'confirmed':
+                return '#4CAF50';
+            case 'ongoing':
+                return '#FF9800';
+            case 'delivered':
+                return '#2196F3';
+            case 'awaiting_owner_confirmation':
+                return '#FF7043';
+            case 'completed':
+                return '#4CAF50';
+            default:
+                return '#757575';
+        }
+    };
+
     const currentPhase = getCurrentPhase();
 
     const renderProgressBar = () => (
         <View style={styles.progressContainer}>
-
             <View style={styles.progressLine}>
                 <View
                     style={[
@@ -301,7 +450,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                     />
                     <View style={styles.itemInfo}>
                         <Text style={styles.itemTitle}>{currentBooking.items?.title || 'Item Title'}</Text>
-                        <Text style={styles.itemPrice}>{currentBooking.items?.price_per_day || 'N/A'} per day</Text>
+                        <Text style={styles.itemPrice}>₱{currentBooking.items?.price_per_day || 'N/A'} per day</Text>
                         <Text style={styles.itemDates}>
                             {new Date(currentBooking.start_date).toLocaleDateString()} -{' '}
                             {new Date(currentBooking.end_date).toLocaleDateString()}
@@ -311,13 +460,23 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
                 {/* Status Section */}
                 <View style={styles.statusSection}>
-                    <Text style={styles.statusTitle}>
-                        Status: {currentBooking.status.replace(/_/g, ' ').toUpperCase()}
-                    </Text>
+                    <View style={styles.statusHeader}>
+                        <Text style={styles.statusTitle}>
+                            Current Status: {currentBooking.status.toUpperCase()}
+                        </Text>
+                    </View>
 
                     {getActionButtonLabel() && (
-                        <TouchableOpacity style={styles.confirmButton} onPress={handleActionPress} disabled={loading}>
-                            {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.confirmButtonText}>{getActionButtonLabel()}</Text>}
+                        <TouchableOpacity 
+                            style={[styles.confirmButton, { backgroundColor: getActionButtonColor() }]} 
+                            onPress={handleActionPress} 
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#FFF" />
+                            ) : (
+                                <Text style={styles.confirmButtonText}>{getActionButtonLabel()}</Text>
+                            )}
                         </TouchableOpacity>
                     )}
                 </View>
@@ -347,6 +506,18 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                             {getRenterName()}
                         </Text>
                     </View>
+
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Rental ID:</Text>
+                        <Text style={styles.detailValue}>{currentBooking.rental_id}</Text>
+                    </View>
+                </View>
+
+                {/* Last Updated */}
+                <View style={styles.updateSection}>
+                    <Text style={styles.updateText}>
+                        Last updated: {lastUpdated.toLocaleTimeString()}
+                    </Text>
                 </View>
             </ScrollView>
         );
@@ -422,9 +593,12 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         alignItems: 'center',
         paddingHorizontal: 20,
+        paddingVertical: 16,
         backgroundColor: '#F5F5F5',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
     },
-    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', flex: 1 },
+    modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#333', flex: 1, textAlign: 'center' },
     closeButton: {
         width: 32,
         height: 32,
@@ -443,12 +617,43 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 20,
         elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    connectionStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        padding: 8,
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+    },
+    connectionDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 8,
+    },
+    connected: {
+        backgroundColor: '#4CAF50',
+    },
+    disconnected: {
+        backgroundColor: '#FF9800',
+    },
+    connectionText: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '500',
     },
     progressLine: {
         height: 4,
         backgroundColor: '#E0E0E0',
         borderRadius: 2,
         marginBottom: 20,
+        position: 'relative',
     },
     progressFill: {
         height: '100%',
@@ -483,6 +688,10 @@ const styles = StyleSheet.create({
         padding: 16,
         marginBottom: 16,
         elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
         alignItems: 'center',
     },
     itemImage: { width: '100%', height: 200, borderRadius: 8, marginBottom: 16 },
@@ -498,22 +707,73 @@ const styles = StyleSheet.create({
         marginBottom: 16,
         alignItems: 'center',
         elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
-    statusTitle: { fontSize: 18, fontWeight: 'bold', textAlign: 'center', color: '#000' },
+    statusHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexWrap: 'wrap',
+    },
+    statusTitle: { 
+        fontSize: 18, 
+        fontWeight: 'bold', 
+        textAlign: 'center', 
+        color: '#000',
+        marginRight: 8,
+    },
+    statusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+    },
+    statusBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
+    },
     detailsSection: {
         backgroundColor: '#FFF',
         marginHorizontal: 16,
         borderRadius: 12,
         padding: 16,
-        marginBottom: 20,
+        marginBottom: 16,
         elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
     },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#000', marginBottom: 12 },
-    detailRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+    detailRow: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-between', 
+        paddingVertical: 8, 
+        borderBottomWidth: 1, 
+        borderBottomColor: '#f0f0f0' 
+    },
     detailLabel: { fontSize: 14, color: '#666' },
     detailValue: { fontSize: 14, fontWeight: '600', color: '#000' },
-    confirmButton: { marginTop: 16, backgroundColor: '#28A745', paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8, alignItems: 'center' },
+    confirmButton: { 
+        marginTop: 8, 
+        paddingVertical: 12, 
+        paddingHorizontal: 24, 
+        borderRadius: 8, 
+        alignItems: 'center',
+        minWidth: 160,
+    },
     confirmButtonText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
+    updateSection: {
+        alignItems: 'center',
+        padding: 16,
+    },
+    updateText: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
+    },
 });
 
 export default ItemTrackingLessorScreen;
