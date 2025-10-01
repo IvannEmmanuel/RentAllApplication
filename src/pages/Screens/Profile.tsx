@@ -3,7 +3,7 @@ import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import { useNavigation } from '@react-navigation/native'
 import { useFavorites } from '../../components/FavoritesContext'
-import BookItemModal from '../../components/BookItemModal' // Import BookItemModal
+import BookItemModal from '../../components/BookItemModal'
 import YourItemModal from '../../components/YourItemModal'
 import ActiveRentalModal from '../../components/ActiveRentalModal'
 import PendingRentalModal from '../../components/PendingRentalModal'
@@ -15,17 +15,18 @@ import SkeletonLoadingProfile from '../../components/skeletonComponents/Skeleton
 const Profile = () => {
   const navigation = useNavigation()
   const [recommendedItems, setRecommendedItems] = useState([])
-  const [userBookings, setUserBookings] = useState([]) // Track user's bookings - SHARED STATE
-  const [bookModalVisible, setBookModalVisible] = useState(false) // Add modal state
-  const [selectedItem, setSelectedItem] = useState(null) // Add selected item state
+  const [userBookings, setUserBookings] = useState([])
+  const [bookModalVisible, setBookModalVisible] = useState(false)
+  const [selectedItem, setSelectedItem] = useState(null)
   const [isYourItemModalVisible, setIsYourItemModalVisible] = useState(false)
   const [showActiveRental, setShowActiveRental] = useState(false);
   const [showPendingModal, setShowPendingModal] = useState(false);
   const [showCompletedModal, setShowCompletedModal] = useState(false);
   const [showRatingsModal, setShowRatingsModal] = useState(false);
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
+  const [isSubscribed, setIsSubscribed] = useState(false);
+  const [lessorRatings, setLessorRatings] = useState({});
 
-  // Use shared favorites context instead of local state
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
 
   const [itemRatings, setItemRatings] = useState({});
@@ -44,7 +45,43 @@ const Profile = () => {
     }
   }, [])
 
-  // Fetch user's bookings - SHARED FUNCTION
+  // Fetch lessor ratings
+  const fetchLessorRatings = useCallback(async (lessorIds) => {
+    if (!lessorIds || lessorIds.length === 0) return
+
+    try {
+      const { data, error } = await supabase
+        .from("lessor_reviews")
+        .select("lessor_id, rating")
+        .in("lessor_id", lessorIds)
+
+      if (error) {
+        console.error("Error fetching lessor ratings:", error)
+        return
+      }
+
+      const ratingsMap = {}
+      data.forEach((review) => {
+        if (!ratingsMap[review.lessor_id]) {
+          ratingsMap[review.lessor_id] = { total: 0, count: 0 }
+        }
+        ratingsMap[review.lessor_id].total += review.rating
+        ratingsMap[review.lessor_id].count += 1
+      })
+
+      const averageRatings = {}
+      Object.keys(ratingsMap).forEach((lessorId) => {
+        const { total, count } = ratingsMap[lessorId]
+        averageRatings[lessorId] = count > 0 ? (total / count).toFixed(1) : null
+      })
+
+      setLessorRatings(prev => ({ ...prev, ...averageRatings }))
+    } catch (error) {
+      console.error("Error calculating lessor ratings:", error)
+    }
+  }, [])
+
+  // Fetch user's bookings
   const fetchUserBookings = useCallback(async () => {
     if (!currentUser) {
       setUserBookings([])
@@ -52,7 +89,7 @@ const Profile = () => {
     }
 
     try {
-      console.log('Fetching user bookings for:', currentUser.id) // Debug log
+      console.log('Fetching user bookings for:', currentUser.id)
       const { data, error } = await supabase
         .from('rental_transactions')
         .select('item_id, status')
@@ -60,7 +97,7 @@ const Profile = () => {
         .in('status', ['pending', 'confirmed', 'ongoing'])
 
       if (!error && data) {
-        console.log('User bookings fetched:', data) // Debug log
+        console.log('User bookings fetched:', data)
         setUserBookings(data)
       } else if (error) {
         console.error('Error fetching bookings:', error)
@@ -70,7 +107,7 @@ const Profile = () => {
     }
   }, [currentUser])
 
-  // Check if user has pending/active booking for an item - SHARED FUNCTION
+  // Check if user has pending/active booking for an item
   const getUserBookingStatus = useCallback((itemId) => {
     const status = userBookings.find(booking => booking.item_id === itemId)?.status || null
     return status
@@ -81,7 +118,7 @@ const Profile = () => {
     return currentUser && currentUser.id === item.user_id
   }
 
-  // Get button text and style based on item status - SHARED FUNCTION
+  // Get button text and style based on item status
   const getButtonInfo = useCallback((item) => {
     const isOwner = isUserItem(item)
     const bookingStatus = getUserBookingStatus(item.item_id)
@@ -103,6 +140,15 @@ const Profile = () => {
       }
     }
 
+    // Check if item is out of stock
+    if (item.quantity <= 0) {
+      return {
+        text: 'Out of Stock',
+        disabled: true,
+        style: 'disabled'
+      }
+    }
+
     return {
       text: 'Rent Now',
       disabled: false,
@@ -110,7 +156,7 @@ const Profile = () => {
     }
   }, [getUserBookingStatus])
 
-  // Handle rent now button - UPDATED to show BookItemModal
+  // Handle rent now button
   const handleRentNow = (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to rent items')
@@ -119,6 +165,12 @@ const Profile = () => {
 
     if (currentUser.id === item.user_id) {
       Alert.alert('Your Item', 'You cannot rent your own item')
+      return
+    }
+
+    // Check if item is out of stock
+    if (item.quantity <= 0) {
+      Alert.alert('Out of Stock', 'This item is currently unavailable for rent.')
       return
     }
 
@@ -132,12 +184,12 @@ const Profile = () => {
       return
     }
 
-    // Show BookItemModal instead of alert
+    // Show BookItemModal
     setSelectedItem(item)
     setBookModalVisible(true)
   }
 
-  // Toggle favorites - SIMPLIFIED (now uses context)
+  // Toggle favorites
   const handleToggleFavorite = async (itemId) => {
     const result = await toggleFavorite(itemId)
     if (!result.success && result.message) {
@@ -183,7 +235,6 @@ const Profile = () => {
         return;
       }
 
-      // Build totals/counts
       const ratingsMap = {};
       (data || []).forEach((r) => {
         const id = String(r.item_id);
@@ -192,7 +243,6 @@ const Profile = () => {
         ratingsMap[id].count += 1;
       });
 
-      // Convert to averages
       const averageRatings = {};
       Object.keys(ratingsMap).forEach((id) => {
         const { total, count } = ratingsMap[id];
@@ -204,6 +254,99 @@ const Profile = () => {
       console.error('fetchItemRatings error:', err);
     }
   }, []);
+
+  // Real-time subscription for items
+  useEffect(() => {
+    console.log('Setting up real-time subscription for items');
+
+    const channel = supabase
+      .channel('profile_items_realtime')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to INSERT, UPDATE, DELETE
+          schema: 'public',
+          table: 'items',
+        },
+        (payload) => {
+          console.log('Real-time item change detected:', payload);
+          setLastUpdated(new Date());
+
+          // Handle different events
+          switch (payload.eventType) {
+            case 'INSERT':
+              // New item added - check if it should be in recommendations
+              if (payload.new.available && payload.new.item_status === 'approved') {
+                fetchRecommendedItems();
+              }
+              break;
+
+            case 'UPDATE':
+              // Item updated - refresh if it's in our current list
+              setRecommendedItems(prev =>
+                prev.map(item =>
+                  item.item_id === payload.new.item_id
+                    ? { ...item, ...payload.new }
+                    : item
+                )
+              );
+              break;
+
+            case 'DELETE':
+              // Item deleted - remove from list
+              setRecommendedItems(prev =>
+                prev.filter(item => item.item_id !== payload.old.item_id)
+              );
+              break;
+
+            default:
+              // For any other change, refresh the list
+              fetchRecommendedItems();
+              break;
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('Items real-time subscription status:', status);
+        setIsSubscribed(status === 'SUBSCRIBED');
+      });
+
+    return () => {
+      console.log('Cleaning up items real-time subscription');
+      supabase.removeChannel(channel);
+      setIsSubscribed(false);
+    };
+  }, []);
+
+  // Real-time subscription for rental transactions
+  useEffect(() => {
+    if (!currentUser) return
+
+    console.log('Setting up rental transactions real-time subscription')
+    const channel = supabase
+      .channel("rental_transactions_changes")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rental_transactions",
+          filter: `renter_id=eq.${currentUser.id}`
+        },
+        (payload) => {
+          console.log('Rental transaction change detected:', payload)
+          fetchUserBookings()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      console.log('Cleaning up rental transactions subscription')
+      supabase.removeChannel(channel)
+    }
+  }, [currentUser, fetchUserBookings])
+
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const fetchRecommendedItems = useCallback(async () => {
     try {
@@ -219,6 +362,7 @@ const Profile = () => {
         created_at,
         available,
         item_status,
+        quantity,
         users (
           first_name,
           last_name
@@ -226,6 +370,7 @@ const Profile = () => {
       `)
         .eq("available", true)
         .eq("item_status", "approved")
+        .gt("quantity", 0)  // Only show items with quantity > 0
 
       if (error) throw error
 
@@ -238,17 +383,23 @@ const Profile = () => {
           return {
             ...item,
             lessorName: item.users ? `${item.users.first_name} ${item.users.last_name}` : "Unknown",
+            lessorId: item.user_id, // Add lessorId for ratings
             imageUrl,
             formattedPrice: `₱${item.price_per_day}`,
-            formattedDate: new Date(item.created_at).toLocaleDateString()
+            formattedDate: new Date(item.created_at).toLocaleDateString(),
+            stockStatus: item.quantity > 0 ? `${item.quantity} available` : 'Out of stock'
           }
         })
       )
 
       const itemIds = withImages.map(i => i.item_id).filter(Boolean);
-      fetchItemRatings(itemIds);   // fetch ratings for those items
+      const lessorIds = withImages.map(i => i.lessorId).filter(Boolean);
+      
+      fetchItemRatings(itemIds);
+      fetchLessorRatings(lessorIds);
 
       setRecommendedItems(withImages)
+      setLastUpdated(new Date());
     } catch (e) {
       console.error("Failed to load recommended items:", e.message)
     }
@@ -262,7 +413,7 @@ const Profile = () => {
     }
   }, [currentUser, fetchUserBookings, fetchRecommendedItems])
 
-  // Handle message button press - UPDATED to navigate to Chat
+  // Handle message button press
   const handleMessage = async (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to send messages')
@@ -275,7 +426,6 @@ const Profile = () => {
     }
 
     try {
-      // First, get the other user's name
       const { data: otherUser, error: userError } = await supabase
         .from('users')
         .select('first_name, last_name')
@@ -288,22 +438,19 @@ const Profile = () => {
         return
       }
 
-      // Create the display name
       const otherUserName = otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User'
 
-      // Get or create conversation
       let { data: conversation, error } = await supabase
         .from('conversations')
         .select('*')
         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
         .single()
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
+      if (error && error.code !== 'PGRST116') {
         throw error
       }
 
       if (!conversation) {
-        // Create new conversation
         const { data: newConversation, error: createError } = await supabase
           .from('conversations')
           .insert([{
@@ -320,7 +467,6 @@ const Profile = () => {
         conversation = newConversation
       }
 
-      // Navigate to chat screen
       navigation.navigate('Chat', {
         conversationId: conversation.id,
         otherUserId: item.user_id,
@@ -335,62 +481,28 @@ const Profile = () => {
     }
   }
 
-  // Real-time updates for rental transactions - SHARED SUBSCRIPTION
-  useEffect(() => {
-    if (!currentUser) return
-
-    console.log('Setting up rental transactions real-time subscription') // Debug log
-    const channel = supabase
-      .channel("rental_transactions_changes") // Use same channel name as Home.tsx
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "rental_transactions",
-          filter: `renter_id=eq.${currentUser.id}`
-        },
-        (payload) => {
-          console.log('Rental transaction change detected:', payload) // Debug log
-          fetchUserBookings()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      console.log('Cleaning up rental transactions subscription') // Debug log
-      supabase.removeChannel(channel)
+  // Handle lessor name click - navigate to LessorReviews
+  const handleLessorNamePress = (lessorId, lessorName) => {
+    if (!lessorId) {
+      Alert.alert('Error', 'Lessor information not available');
+      return;
     }
-  }, [currentUser, fetchUserBookings])
 
-  // Real-time updates for items - SHARED SUBSCRIPTION
-  useEffect(() => {
-    const channel = supabase
-      .channel("items_changes") // Use same channel name as Home.tsx
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "items" },
-        () => {
-          fetchRecommendedItems()
-        }
-      )
-      .subscribe()
-
-    return () => {
-      supabase.removeChannel(channel)
-    }
-  }, [fetchRecommendedItems])
+    navigation.navigate('LessorReviews', { 
+      lessorId: lessorId,
+      lessorName: lessorName 
+    });
+  }
 
   const handleLogout = async () => {
     if (!currentUser) return
 
     try {
-      await logout() // logs out and clears context
+      await logout()
 
       setUserBookings([])
       setSelectedItem(null)
 
-      // Navigate to LandingPage
       navigation.reset({
         index: 0,
         routes: [{ name: 'LandingPage' }],
@@ -430,10 +542,23 @@ const Profile = () => {
               <Text> {itemRatings[String(item.item_id)] ?? 'No rating'}</Text>
             </View>
           </View>
+          
           <Text style={styles.itemName}>{item.title}</Text>
-          <Text style={styles.text}>{item.lessorName}</Text>
+          
+          {/* Lessor Name with Rating - Clickable */}
+          <TouchableOpacity
+            onPress={() => handleLessorNamePress(item.lessorId, item.lessorName)}
+            style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 4 }}
+          >
+            <Text style={styles.lessorText}>{item.lessorName}</Text>
+            <Image source={require('../../../assets/rate.png')} style={styles.lessorRateImage} />
+            <Text style={styles.lessorText}>{lessorRatings[item.lessorId] || 'No rating'}</Text>
+          </TouchableOpacity>
+
           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
           <Text style={styles.text}>{item.formattedDate}</Text>
+          <Text style={styles.text}>Quantity: {item.quantity <= 0 ? 'Out of Stock' : `${item.quantity}`}</Text>
+          
           <View style={styles.moneyRateContainer}>
             <Text style={styles.moneyText}>{item.formattedPrice}</Text>
             <View style={{ flexDirection: 'row' }}>
@@ -455,7 +580,8 @@ const Profile = () => {
               </TouchableOpacity>
             </View>
           </View>
-          {/* Rent Now Button with shared logic */}
+          
+          {/* Rent Now Button */}
           <View style={styles.rentNowContainer}>
             <TouchableOpacity
               style={[
@@ -491,7 +617,7 @@ const Profile = () => {
                 source={
                   currentUser?.face_image_url
                     ? { uri: currentUser.face_image_url }
-                    : require('../../../assets/splash-icon.png') // fallback
+                    : require('../../../assets/splash-icon.png')
                 }
                 style={styles.profileImage}
               />
@@ -547,7 +673,7 @@ const Profile = () => {
             <View style={styles.activitiesContainer}>
               <TouchableOpacity
                 style={styles.subActivitiesContainer}
-                onPress={() => setShowRatingsModal(true)} // new state
+                onPress={() => setShowRatingsModal(true)}
               >
                 <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
                 <Text>Ratings</Text>
@@ -556,7 +682,9 @@ const Profile = () => {
           </View>
 
           <View style={styles.mainItemContainer}>
-            <Text style={styles.itemText}>Items for you</Text>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.itemText}>Items for you</Text>
+            </View>
             {recommendedItems.length === 0 ? (
               <SkeletonLoadingProfile />
             ) : (
@@ -574,15 +702,14 @@ const Profile = () => {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* BookItemModal - Same as Home.tsx */}
+      {/* Modals */}
       <BookItemModal
         visible={bookModalVisible}
         onClose={() => setBookModalVisible(false)}
         item={selectedItem}
         currentUserId={currentUser?.id}
         onBooked={() => {
-          // Refresh user bookings and items after booking
-          console.log('Booking completed, refreshing data...') // Debug log
+          console.log('Booking completed, refreshing data...')
           fetchUserBookings()
           fetchRecommendedItems()
         }}
@@ -658,10 +785,10 @@ const styles = StyleSheet.create({
     paddingLeft: 10,
     elevation: 10,
   },
-  subProfileContainer: {
+  informationContainer: {
     flexDirection: 'column',
-    justifyContent: 'center',
-    paddingLeft: 10
+    alignSelf: 'center',
+    paddingLeft: 10,
   },
   nameText: {
     fontFamily: 'DM-Bold',
@@ -707,10 +834,41 @@ const styles = StyleSheet.create({
     marginTop: 10,
     paddingHorizontal: 20
   },
+  sectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
   itemText: {
     fontFamily: 'DM-Bold',
     fontSize: 20,
-    marginBottom: 10
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  connectionDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    marginRight: 4,
+  },
+  connected: {
+    backgroundColor: '#4CAF50',
+  },
+  disconnected: {
+    backgroundColor: '#FF9800',
+  },
+  connectionText: {
+    fontSize: 12,
+    color: '#666',
+    marginRight: 8,
+  },
+  lastUpdatedText: {
+    fontSize: 10,
+    color: '#999',
+    fontStyle: 'italic',
   },
   itemContainer: {
     width: '49%',
@@ -726,12 +884,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     elevation: 2,
+    position: 'relative',
   },
   itemImage: {
     width: '100%',
     height: 120,
     borderRadius: 10,
     marginBottom: 10
+  },
+  quantityBadge: {
+    position: 'absolute',
+    top: 15,
+    right: 15,
+    backgroundColor: '#4CAF50',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  quantityBadgeOutOfStock: {
+    backgroundColor: '#F44336',
+  },
+  quantityText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  quantityTextOutOfStock: {
+    color: '#FFF',
   },
   itemRateContainer: {
     flexDirection: 'row',
@@ -748,6 +927,18 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     marginRight: 3
+  },
+  lessorRateImage: {
+    width: 10,
+    height: 10,
+    marginRight: 3,
+    alignSelf: 'center'
+  },
+  lessorText: {
+    fontSize: 12,
+    color: '#555',
+    marginBottom: 2,
+    marginRight: 3,
   },
   text: {
     color: '#9C9894',
@@ -777,12 +968,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 8
   },
-  informationContainer: {
-    flexDirection: 'column',
-    alignSelf: 'center',
-    paddingLeft: 10,
-  },
-  // New styles for rent button
   rentNowContainer: {
     justifyContent: 'center',
     marginTop: 10,
@@ -799,7 +984,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#CCC',
   },
   pendingButtonContainer: {
-    backgroundColor: '#FF8C00', // Orange color for pending status
+    backgroundColor: '#FF8C00',
   },
   rentText: {
     color: '#FFF',
@@ -826,5 +1011,4 @@ const styles = StyleSheet.create({
     fontFamily: 'DM-Bold',
     fontSize: 16,
   }
-
 })
