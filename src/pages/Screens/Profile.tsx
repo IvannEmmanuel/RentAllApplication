@@ -10,6 +10,7 @@ import PendingRentalModal from '../../components/PendingRentalModal'
 import CompletedRentalModal from '../../components/CompletedRentalModal'
 import RatingsModal from '../../components/RatingsModal'
 import PictureModal from '../../components/PictureModal'
+import LessorReviews from '../../components/LessorReviewsModal'
 import SkeletonLoadingProfile from '../../components/skeletonComponents/SkeletonLoadingProfile'
 
 const Profile = () => {
@@ -26,6 +27,7 @@ const Profile = () => {
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [lessorRatings, setLessorRatings] = useState({});
+  const [lessorReviewsVisible, setLessorReviewsVisible] = useState(false);
 
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
 
@@ -394,7 +396,7 @@ const Profile = () => {
 
       const itemIds = withImages.map(i => i.item_id).filter(Boolean);
       const lessorIds = withImages.map(i => i.lessorId).filter(Boolean);
-      
+
       fetchItemRatings(itemIds);
       fetchLessorRatings(lessorIds);
 
@@ -488,9 +490,9 @@ const Profile = () => {
       return;
     }
 
-    navigation.navigate('LessorReviews', { 
+    navigation.navigate('LessorReviews', {
       lessorId: lessorId,
-      lessorName: lessorName 
+      lessorName: lessorName
     });
   }
 
@@ -542,9 +544,9 @@ const Profile = () => {
               <Text> {itemRatings[String(item.item_id)] ?? 'No rating'}</Text>
             </View>
           </View>
-          
+
           <Text style={styles.itemName}>{item.title}</Text>
-          
+
           {/* Lessor Name with Rating - Clickable */}
           <TouchableOpacity
             onPress={() => handleLessorNamePress(item.lessorId, item.lessorName)}
@@ -558,7 +560,7 @@ const Profile = () => {
           <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
           <Text style={styles.text}>{item.formattedDate}</Text>
           <Text style={styles.text}>Quantity: {item.quantity <= 0 ? 'Out of Stock' : `${item.quantity}`}</Text>
-          
+
           <View style={styles.moneyRateContainer}>
             <Text style={styles.moneyText}>{item.formattedPrice}</Text>
             <View style={{ flexDirection: 'row' }}>
@@ -580,7 +582,7 @@ const Profile = () => {
               </TouchableOpacity>
             </View>
           </View>
-          
+
           {/* Rent Now Button */}
           <View style={styles.rentNowContainer}>
             <TouchableOpacity
@@ -642,43 +644,69 @@ const Profile = () => {
           </View>
 
           <View style={styles.mainActivitiesContainer}>
-            <View style={styles.firstActivitiesContainer}>
-              <TouchableOpacity
-                style={styles.subActivitiesContainer} onPress={() => setShowPendingModal(true)}
-              >
-                <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
-                <Text>Pending</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesContainer}>
-              <TouchableOpacity onPress={() => setShowActiveRental(true)} style={styles.subActivitiesContainer}>
-                <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
-                <Text>Active Rental</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesContainer}>
-              <TouchableOpacity style={styles.subActivitiesContainer} onPress={() => setShowCompletedModal(true)}>
-                <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
-                <Text>Completed</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesContainer}>
-              <TouchableOpacity style={styles.subActivitiesContainer}
-                onPress={() => setIsYourItemModalVisible(true)}
-              >
-                <Image source={require('../../../assets/item.png')} style={styles.pendingImage} />
-                <Text>Your Item</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={styles.activitiesContainer}>
-              <TouchableOpacity
-                style={styles.subActivitiesContainer}
-                onPress={() => setShowRatingsModal(true)}
-              >
-                <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
-                <Text>Ratings</Text>
-              </TouchableOpacity>
-            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.activitiesScrollContent}
+            >
+              <View style={styles.firstActivitiesContainer}>
+                <TouchableOpacity
+                  style={styles.subActivitiesContainer}
+                  onPress={() => setShowPendingModal(true)}
+                >
+                  <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
+                  <Text>Pending</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.activitiesContainer}>
+                <TouchableOpacity
+                  onPress={() => setShowActiveRental(true)}
+                  style={styles.subActivitiesContainer}
+                >
+                  <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
+                  <Text>Active Rental</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.activitiesContainer}>
+                <TouchableOpacity
+                  style={styles.subActivitiesContainer}
+                  onPress={() => setShowCompletedModal(true)}
+                >
+                  <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
+                  <Text>Completed</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.activitiesContainer}>
+                <TouchableOpacity
+                  style={styles.subActivitiesContainer}
+                  onPress={() => setIsYourItemModalVisible(true)}
+                >
+                  <Image source={require('../../../assets/item.png')} style={styles.pendingImage} />
+                  <Text>Your Item</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.activitiesContainer}>
+                <TouchableOpacity
+                  style={styles.subActivitiesContainer}
+                  onPress={() => setShowRatingsModal(true)}
+                >
+                  <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
+                  <Text>Ratings</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={styles.activitiesContainer}>
+                <TouchableOpacity
+                  style={styles.subActivitiesContainer}
+                  onPress={() => navigation.navigate('LessorReviews', {
+                    lessorId: currentUser?.id,
+                    lessorName: currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : 'Unknown'
+                  })}
+                >
+                  <Image source={require('../../../assets/product.png')} style={styles.pendingImage} />
+                  <Text>Your Product</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
           </View>
 
           <View style={styles.mainItemContainer}>
@@ -810,8 +838,16 @@ const styles = StyleSheet.create({
   },
   firstActivitiesContainer: {
     flexDirection: 'row',
-    paddingLeft: 20,
     marginTop: 10
+  },
+  subActivitiesContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    minWidth: 70, // Ensure consistent width for all items
+  },
+  activitiesScrollContent: {
+    paddingHorizontal: 15, // Add some padding on the sides
+    alignItems: 'center',
   },
   activitiesContainer: {
     flexDirection: 'row',
