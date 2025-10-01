@@ -23,12 +23,36 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [processingIds, setProcessingIds] = useState(new Set());
-  const [activeTab, setActiveTab] = useState(initialTab); // Use initialTab here
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [highlightedRentalId, setHighlightedRentalId] = useState(rentalId);
   const [currentPage, setCurrentPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [categories, setCategories] = useState({}); // Store category names by ID
 
   const navigation = useNavigation();
+
+  // Fetch categories on component mount
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('category_id, name');
+
+      if (error) throw error;
+
+      const categoriesMap = {};
+      data.forEach(cat => {
+        categoriesMap[cat.category_id] = cat.name;
+      });
+      setCategories(categoriesMap);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   // Reset highlighted rental after 5s
   useEffect(() => {
@@ -70,7 +94,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
             price_per_day,
             user_id,
             location,
-            quantity
+            quantity,
+            category_id
           ),
           users!rental_transactions_renter_id_fkey(
             first_name,
@@ -88,6 +113,20 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
       const bookingsWithImages = await Promise.all(
         (transactions || []).map(async (booking) => {
           const imageUrl = await getItemImage(booking.items.user_id, booking.item_id);
+
+          // Check if item is Accommodation
+          const isAccommodation = categories[booking.items.category_id] === 'Accommodation';
+
+          // Check if current date is equal to or past end_date for accommodation
+          const today = new Date();
+          const endDate = new Date(booking.end_date);
+          today.setHours(0, 0, 0, 0);
+          endDate.setHours(0, 0, 0, 0);
+
+          const isCheckoutAvailable = isAccommodation &&
+            activeTab === 'active' &&
+            today >= endDate;
+
           return {
             ...booking,
             item_image: imageUrl,
@@ -98,7 +137,9 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
               created: new Date(booking.created_at).toLocaleDateString()
             },
             is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date(),
-            is_highlighted: booking.rental_id === highlightedRentalId
+            is_highlighted: booking.rental_id === highlightedRentalId,
+            is_accommodation: isAccommodation,
+            is_checkout_available: isCheckoutAvailable
           };
         })
       );
@@ -119,7 +160,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
       if (showLoading) setLoading(false);
       if (append) setLoadingMore(false);
     }
-  }, [currentUser, activeTab, highlightedRentalId]);
+  }, [currentUser, activeTab, highlightedRentalId, categories]);
 
   // Get item image
   const getItemImage = async (userId, itemId) => {
@@ -136,6 +177,12 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   };
 
   const handleActiveCardPress = (booking) => {
+    // Don't navigate if it's an Accommodation item
+    if (booking.is_accommodation) {
+      Alert.alert('Accommodation Item', 'Tracking is not available for accommodation items.');
+      return;
+    }
+
     onClose();
     navigation.navigate('ItemTrackingLessorScreen', {
       booking: { ...booking, items: { ...booking.items, main_image_url: booking.item_image } },
@@ -149,26 +196,117 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
     try {
       const oldBooking = bookings.find(b => b.rental_id === rentalId);
 
+      // CHECK IF ITEM IS ACCOMMODATION
+      const isAccommodation = categories[oldBooking.items.category_id] === 'Accommodation';
+
+      // FOR ACCOMMODATION: Change status directly to 'ongoing' instead of 'confirmed'
+      let actualNewStatus = newStatus;
+      if (isAccommodation && newStatus === 'confirmed') {
+        actualNewStatus = 'ongoing';
+        console.log('Accommodation item: Changing status directly to ongoing');
+
+        // MANUALLY DEDUCT QUANTITY FOR ACCOMMODATION ITEMS
+        const { data: itemData, error: itemError } = await supabase
+          .from('items')
+          .select('quantity')
+          .eq('item_id', oldBooking.item_id)
+          .single();
+
+        if (itemError) throw itemError;
+
+        const currentQuantity = itemData.quantity || 0;
+        const bookingQuantity = oldBooking.quantity || 1;
+
+        if (currentQuantity < bookingQuantity) {
+          throw new Error(`Not enough quantity available. Only ${currentQuantity} left, but booking requires ${bookingQuantity}.`);
+        }
+
+        const updatedQuantity = currentQuantity - bookingQuantity;
+
+        const { error: updateError } = await supabase
+          .from('items')
+          .update({ quantity: updatedQuantity })
+          .eq('item_id', oldBooking.item_id);
+
+        if (updateError) throw updateError;
+      }
+
+      // Update booking status
       const { error } = await supabase
         .from('rental_transactions')
-        .update({ status: newStatus })
+        .update({ status: actualNewStatus })
         .eq('rental_id', rentalId);
 
       if (error) throw error;
 
       setBookings(prev =>
         prev
-          .map(b => (b.rental_id === rentalId ? { ...b, status: newStatus } : b))
+          .map(b => (b.rental_id === rentalId ? { ...b, status: actualNewStatus } : b))
           .filter(b => !(activeTab === 'active' && b.status === 'cancelled'))
       );
 
       // Trigger notifications
-      await handleBookingStatusChange(oldBooking, oldBooking.status, newStatus);
+      await handleBookingStatusChange(oldBooking, oldBooking.status, actualNewStatus);
 
-      Alert.alert('Success', `Booking ${newStatus.toUpperCase()}`);
+      Alert.alert('Success', `Booking ${actualNewStatus.toUpperCase()}`);
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to update booking');
+      Alert.alert('Error', err.message || 'Failed to update booking');
+    } finally {
+      setProcessingIds(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(rentalId);
+        return newSet;
+      });
+    }
+  };
+
+  // Handle Check Out for Accommodation
+  const handleCheckOut = async (rentalId) => {
+    setProcessingIds(prev => new Set(prev).add(rentalId));
+    try {
+      const oldBooking = bookings.find(b => b.rental_id === rentalId);
+
+      // Update status to 'completed'
+      const { error } = await supabase
+        .from('rental_transactions')
+        .update({ status: 'completed' })
+        .eq('rental_id', rentalId);
+
+      if (error) throw error;
+
+      // Restore item quantity - AYAW HILABTI NI KAY DAPAT PAG ACCEPT MAKWAAN NA ANG QUANTITY
+      if (oldBooking.items) {
+        const { data: itemData, error: itemError } = await supabase
+          .from('items')
+          .select('quantity')
+          .eq('item_id', oldBooking.item_id)
+          .single();
+
+        if (!itemError && itemData) {
+          const updatedQuantity = (itemData.quantity || 0) + (oldBooking.quantity || 1);
+
+          const { error: updateError } = await supabase
+            .from('items')
+            .update({ quantity: updatedQuantity })
+            .eq('item_id', oldBooking.item_id);
+
+          if (updateError) throw updateError;
+        }
+      }
+
+      // Update local state
+      setBookings(prev =>
+        prev.filter(b => b.rental_id !== rentalId) // Remove from active tab
+      );
+
+      // Trigger notifications
+      await handleBookingStatusChange(oldBooking, oldBooking.status, 'completed');
+
+      Alert.alert('Success', 'Check out completed successfully!');
+    } catch (err) {
+      console.error('Check out error:', err);
+      Alert.alert('Error', 'Failed to process check out');
     } finally {
       setProcessingIds(prev => {
         const newSet = new Set(prev);
@@ -199,7 +337,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   const handleScroll = ({ nativeEvent }) => {
     const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
     const paddingToBottom = 20;
-    
+
     if (layoutMeasurement.height + contentOffset.y >= contentSize.height - paddingToBottom) {
       handleLoadMore();
     }
@@ -233,13 +371,29 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
 
   const renderBookingItem = (booking) => {
     const isActiveTab = activeTab === 'active';
+    const isAccommodation = booking.is_accommodation;
+    const isCheckoutAvailable = booking.is_checkout_available;
+    const isProcessing = processingIds.has(booking.rental_id);
+
     return (
       <TouchableOpacity
         key={booking.rental_id}
-        style={[styles.bookingCard, booking.is_highlighted && styles.highlightedCard]}
+        style={[
+          styles.bookingCard,
+          booking.is_highlighted && styles.highlightedCard,
+          isAccommodation && styles.accommodationCard
+        ]}
         activeOpacity={0.7}
         onPress={isActiveTab ? () => handleActiveCardPress(booking) : undefined}
+        disabled={isActiveTab && isAccommodation} // Disable if accommodation in active tab
       >
+        {/* Accommodation Badge */}
+        {isAccommodation && (
+          <View style={styles.accommodationBadge}>
+            <Text style={styles.accommodationBadgeText}>🏠 Accommodation</Text>
+          </View>
+        )}
+
         <View style={styles.cardHeader}>
           <View style={styles.renterInfo}>
             <Image
@@ -251,6 +405,14 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
               <Text style={styles.requestDate}>
                 {activeTab === 'pending' ? `Requested on ${booking.formatted_dates.created}` : `Rental Period: ${booking.formatted_dates.start} - ${booking.formatted_dates.end}`}
               </Text>
+              {isActiveTab && isAccommodation && (
+                <Text style={[
+                  styles.checkoutStatus,
+                  isCheckoutAvailable ? styles.checkoutAvailable : styles.checkoutNotAvailable
+                ]}>
+                  {isCheckoutAvailable ? 'Ready for check out' : '⏳ Check out available on end date'}
+                </Text>
+              )}
             </View>
           </View>
         </View>
@@ -260,7 +422,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
           <View style={styles.itemDetails}>
             <Text style={styles.itemTitle}>{booking.items.title}</Text>
             <Text style={styles.itemLocation}>{booking.items.location}</Text>
-            <Text style={styles.itemLocation}>Quantity: {booking.quantity || 1}</Text>
+            <Text style={styles.itemLocation}>Quantity: {booking.quantity || 0}</Text>
             <Text style={styles.totalCost}>Total: ₱{Number(booking.total_cost).toFixed(2)}</Text>
           </View>
         </View>
@@ -286,10 +448,35 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
           </View>
         )}
 
-        {isActiveTab && (
+        {/* Check Out button for Accommodation items */}
+        {isActiveTab && isAccommodation && isCheckoutAvailable && (
+          <TouchableOpacity
+            style={[styles.checkoutButton, isProcessing && styles.checkoutButtonDisabled]}
+            onPress={() => handleCheckOut(booking.rental_id)}
+            disabled={isProcessing}
+          >
+            {isProcessing ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <Text style={styles.checkoutButtonText}>Check Out</Text>
+            )}
+          </TouchableOpacity>
+        )}
+
+        {/* Track indicator - only show for non-accommodation items */}
+        {isActiveTab && !isAccommodation && (
           <View style={styles.trackIndicator}>
             <Text style={styles.trackText}>Tap to track order</Text>
             <Text style={styles.trackIcon}>👆</Text>
+          </View>
+        )}
+
+        {/* Accommodation message for active tab */}
+        {isActiveTab && isAccommodation && !isCheckoutAvailable && (
+          <View style={styles.accommodationMessage}>
+            <Text style={styles.accommodationMessageText}>
+              🏠 Accommodation booking - No tracking required
+            </Text>
           </View>
         )}
       </TouchableOpacity>
@@ -383,12 +570,16 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20 },
   bookingCard: { backgroundColor: '#FFF', borderRadius: 12, padding: 16, marginBottom: 16, elevation: 2 },
   highlightedCard: { borderWidth: 2, borderColor: '#FFAB00' },
+  accommodationCard: { borderLeftWidth: 4, borderLeftColor: '#8B4513' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   renterInfo: { flexDirection: 'row', alignItems: 'center' },
   renterImage: { width: 48, height: 48, borderRadius: 24, marginRight: 12 },
-  renterDetails: {},
+  renterDetails: { flex: 1 },
   renterName: { fontSize: 16, fontFamily: 'DM-Bold', color: '#333' },
   requestDate: { fontSize: 12, color: '#666' },
+  checkoutStatus: { fontSize: 11, marginTop: 2, fontWeight: '600' },
+  checkoutAvailable: { color: '#4CAF50' },
+  checkoutNotAvailable: { color: '#FF9800' },
   itemInfo: { flexDirection: 'row', marginTop: 12 },
   itemImage: { width: 64, height: 64, borderRadius: 12, marginRight: 12 },
   itemDetails: { flex: 1 },
@@ -401,6 +592,23 @@ const styles = StyleSheet.create({
   actionButtonsContainer: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12 },
   actionButton: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center', marginHorizontal: 4 },
   actionButtonText: { color: '#FFF', fontWeight: 'bold' },
+  checkoutButton: {
+    marginTop: 12,
+    backgroundColor: '#8B4513',
+    paddingVertical: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    elevation: 2,
+  },
+  checkoutButtonDisabled: {
+    backgroundColor: '#A9A9A9',
+    opacity: 0.7,
+  },
+  checkoutButtonText: {
+    color: '#FFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 50 },
   loadingText: { marginTop: 12, color: '#666', fontSize: 14 },
   loadingMoreContainer: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 20 },
@@ -412,6 +620,34 @@ const styles = StyleSheet.create({
   emptyTitle: { fontSize: 16, fontFamily: 'DM-Bold', color: '#333', marginBottom: 4 },
   emptyText: { fontSize: 12, color: '#666', textAlign: 'center', paddingHorizontal: 20 },
   bookingsList: { marginBottom: 20 },
+  // New styles for accommodation
+  accommodationBadge: {
+    backgroundColor: '#8B4513',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  accommodationBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  accommodationMessage: {
+    marginTop: 12,
+    padding: 8,
+    backgroundColor: '#FFF3E0',
+    borderRadius: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#8B4513',
+  },
+  accommodationMessageText: {
+    fontSize: 12,
+    color: '#8B4513',
+    fontStyle: 'italic',
+    textAlign: 'center',
+  },
 });
 
 export default YourItemsModal;
