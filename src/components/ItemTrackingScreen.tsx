@@ -16,8 +16,9 @@ const ItemTrackingScreen = ({ route, navigation }) => {
     const { rental } = route.params;
     const [currentRental, setCurrentRental] = useState(rental);
     const [loading, setLoading] = useState(false);
+    const [isSubscribed, setIsSubscribed] = useState(false);
 
-    console.log(currentRental)
+    console.log('Current rental:', currentRental);
 
     // Phase configurations for renter
     const phases = [
@@ -25,6 +26,109 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         { id: 2, title: 'On the Way', status: 'ongoing' },
         { id: 3, title: 'Delivered', status: 'delivered' },
     ];
+
+    // Real-time subscription for status updates
+    useEffect(() => {
+        if (!currentRental?.rental_id) return;
+
+        console.log('Setting up real-time subscription for rental:', currentRental.rental_id);
+
+        const channel = supabase
+            .channel(`rental_tracking_${currentRental.rental_id}`)
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'rental_transactions',
+                    filter: `rental_id=eq.${currentRental.rental_id}`,
+                },
+                async (payload) => {
+                    console.log('Real-time rental status update received:', payload);
+                    
+                    // Update the current rental with new status
+                    setCurrentRental(prev => ({
+                        ...prev,
+                        ...payload.new
+                    }));
+
+                    // If the update doesn't include item details, fetch them
+                    if (!payload.new.items) {
+                        await fetchUpdatedRentalDetails();
+                    }
+                }
+            )
+            .on(
+                'postgres_changes',
+                {
+                    event: 'UPDATE',
+                    schema: 'public',
+                    table: 'items',
+                    filter: `item_id=eq.${currentRental.item_id}`,
+                },
+                (payload) => {
+                    console.log('Real-time item update received:', payload);
+                    // Update item details if they change
+                    setCurrentRental(prev => ({
+                        ...prev,
+                        items: {
+                            ...prev.items,
+                            ...payload.new
+                        }
+                    }));
+                }
+            )
+            .subscribe((status) => {
+                console.log('Subscription status:', status);
+                setIsSubscribed(status === 'SUBSCRIBED');
+            });
+
+        return () => {
+            console.log('Cleaning up real-time subscription');
+            supabase.removeChannel(channel);
+            setIsSubscribed(false);
+        };
+    }, [currentRental?.rental_id, currentRental?.item_id]);
+
+    // Fetch complete rental details including item information
+    const fetchUpdatedRentalDetails = async () => {
+        try {
+            const { data, error } = await supabase
+                .from('rental_transactions')
+                .select(`
+                    rental_id,
+                    item_id,
+                    start_date,
+                    end_date,
+                    status,
+                    quantity,
+                    total_cost,
+                    created_at,
+                    items (
+                        title,
+                        price_per_day,
+                        location,
+                        main_image_url,
+                        users:user_id (
+                            first_name,
+                            last_name,
+                            face_image_url
+                        )
+                    )
+                `)
+                .eq('rental_id', currentRental.rental_id)
+                .single();
+
+            if (error) {
+                console.error('Error fetching updated rental details:', error);
+            } else {
+                console.log('Fetched updated rental details:', data);
+                setCurrentRental(data);
+            }
+        } catch (error) {
+            console.error('Error in fetchUpdatedRentalDetails:', error);
+        }
+    };
 
     const handleReturn = async () => {
         setLoading(true);
@@ -41,8 +145,8 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                 console.log('Error updating status:', error);
                 alert('Failed to return item. Please try again.');
             } else {
-                // Update local state
-                setCurrentRental(prev => ({ ...prev, status: 'awaiting_owner_confirmation' }));
+                // Note: Real-time subscription will handle the state update automatically
+                console.log('Return request submitted successfully');
 
                 // Fetch the complete rental data including renter_id
                 const { data: fullRental, error: fetchError } = await supabase
@@ -83,8 +187,8 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                 console.log('Error updating status:', error);
                 alert('Failed to confirm receipt. Please try again.');
             } else {
-                // Update local state
-                setCurrentRental(prev => ({ ...prev, status: 'delivered' }));
+                // Note: Real-time subscription will handle the state update automatically
+                console.log('Delivery confirmed successfully');
 
                 // Fetch the complete rental data including renter_id
                 const { data: fullRental, error: fetchError } = await supabase
@@ -110,7 +214,6 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         }
     };
 
-
     // Get current phase based on rental status
     const getCurrentPhase = () => {
         switch (currentRental.status) {
@@ -126,33 +229,6 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                 return 1;
         }
     };
-
-    // Real-time subscription for status updates
-    useEffect(() => {
-        const channel = supabase
-            .channel('rental_tracking')
-            .on(
-                'postgres_changes',
-                {
-                    event: 'UPDATE',
-                    schema: 'public',
-                    table: 'rental_transactions',
-                    filter: `rental_id=eq.${currentRental.rental_id}`,
-                },
-                (payload) => {
-                    console.log('Rental status updated:', payload);
-                    setCurrentRental(prev => ({
-                        ...prev,
-                        status: payload.new.status
-                    }));
-                }
-            )
-            .subscribe();
-
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [currentRental.rental_id]);
 
     const currentPhase = getCurrentPhase();
 
@@ -216,6 +292,21 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         }
     };
 
+    const getStatusColor = () => {
+        switch (currentRental.status) {
+            case 'confirmed':
+                return '#4CAF50';
+            case 'ongoing':
+                return '#FF9800';
+            case 'delivered':
+                return '#2196F3';
+            case 'awaiting_owner_confirmation':
+                return '#FF7043';
+            default:
+                return '#757575';
+        }
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             {/* Header */}
@@ -226,7 +317,6 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                     style={styles.backButton}
                     onPress={() => navigation.goBack()}
                 >
-                    {/* <Ionicons name="arrow-back" size={24} color="#000" /> */}
                     <Text style={styles.backButtonText}>✕</Text>
                 </TouchableOpacity>
             </View>
@@ -251,7 +341,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                             {currentRental.items?.title || 'Item Title'}
                         </Text>
                         <Text style={styles.itemPrice}>
-                            {currentRental.items?.price_per_day || 'N/A'} for 1 day
+                            ₱{currentRental.items?.price_per_day || 'N/A'} per day
                         </Text>
                         <Text style={styles.itemDates}>
                             {new Date(currentRental.start_date).toLocaleDateString('en-US', {
@@ -270,6 +360,13 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                 {/* Status Message */}
                 <View style={styles.statusSection}>
                     <Text style={styles.statusTitle}>Your order is {getStatusMessage()}.</Text>
+                    
+                    {/* Current Status Badge */}
+                    {/* <View style={[styles.statusBadge, { backgroundColor: getStatusColor() + '20' }]}>
+                        <Text style={[styles.statusBadgeText, { color: getStatusColor() }]}>
+                            {currentRental.status?.toUpperCase()}
+                        </Text>
+                    </View> */}
 
                     {currentRental.status === 'ongoing' && (
                         <TouchableOpacity
@@ -297,7 +394,9 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                             {loading ? (
                                 <ActivityIndicator color="#FFF" />
                             ) : (
-                                <Text style={styles.confirmButtonText}>Return</Text>
+                                <Text style={styles.confirmButtonText}>
+                                    {currentRental.status === 'awaiting_owner_confirmation' ? 'Return Requested' : 'Return Item'}
+                                </Text>
                             )}
                         </TouchableOpacity>
                     )}
@@ -328,6 +427,18 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                             {currentRental.items?.users?.first_name} {currentRental.items?.users?.last_name}
                         </Text>
                     </View>
+
+                    <View style={styles.detailRow}>
+                        <Text style={styles.detailLabel}>Rental ID:</Text>
+                        <Text style={styles.detailValue}>{currentRental.rental_id}</Text>
+                    </View>
+                </View>
+
+                {/* Last Updated */}
+                <View style={styles.updateSection}>
+                    <Text style={styles.updateText}>
+                        Last updated: {new Date().toLocaleTimeString()}
+                    </Text>
                 </View>
             </ScrollView>
         </SafeAreaView>
@@ -388,6 +499,32 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.1,
         shadowRadius: 4,
+    },
+    connectionStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+        padding: 8,
+        backgroundColor: '#F8F9FA',
+        borderRadius: 8,
+    },
+    connectionDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+        marginRight: 8,
+    },
+    connected: {
+        backgroundColor: '#4CAF50',
+    },
+    disconnected: {
+        backgroundColor: '#FF9800',
+    },
+    connectionText: {
+        fontSize: 12,
+        color: '#666',
+        fontWeight: '500',
     },
     progressLine: {
         height: 4,
@@ -501,14 +638,24 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
         textAlign: 'center',
-        color: '#000',
+        color: '#000'
+    },
+    statusBadge: {
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 16,
+        marginBottom: 16,
+    },
+    statusBadgeText: {
+        fontSize: 12,
+        fontWeight: '600',
     },
     detailsSection: {
         backgroundColor: '#FFF',
         marginHorizontal: 16,
         borderRadius: 12,
         padding: 16,
-        marginBottom: 20,
+        marginBottom: 16,
         elevation: 2,
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
@@ -539,17 +686,27 @@ const styles = StyleSheet.create({
         color: '#000',
     },
     confirmButton: {
-        marginTop: 16,
+        marginTop: 8,
         backgroundColor: '#FF9900',
         paddingVertical: 12,
         paddingHorizontal: 24,
         borderRadius: 8,
         alignItems: 'center',
+        minWidth: 160,
     },
     confirmButtonText: {
         color: '#FFF',
         fontSize: 16,
         fontWeight: 'bold',
+    },
+    updateSection: {
+        alignItems: 'center',
+        padding: 16,
+    },
+    updateText: {
+        fontSize: 12,
+        color: '#999',
+        fontStyle: 'italic',
     },
 });
 
