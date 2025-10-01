@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   TouchableOpacity,
+  RefreshControl,
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supbaseClient';
@@ -21,37 +22,41 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [returningIds, setReturningIds] = useState<string[]>([]);
+  const [refreshing, setRefreshing] = useState(false);
 
   const navigation = useNavigation();
 
+  // Fetch initial data and set up real-time subscription
   useEffect(() => {
     if (!currentUser || !visible) return;
+
+    let subscription;
 
     const fetchActiveRentals = async () => {
       setLoading(true);
       const { data, error } = await supabase
         .from('rental_transactions')
         .select(`
-    rental_id,
-    item_id,
-    start_date,
-    end_date,
-    status,
-    quantity,
-    total_cost,
-    created_at,
-    items (
-      title,
-      price_per_day,
-      location,
-      main_image_url,
-      users:user_id (
-        first_name,
-        last_name,
-        face_image_url
-      )
-    )
-  `)
+          rental_id,
+          item_id,
+          start_date,
+          end_date,
+          status,
+          quantity,
+          total_cost,
+          created_at,
+          items (
+            title,
+            price_per_day,
+            location,
+            main_image_url,
+            users:user_id (
+              first_name,
+              last_name,
+              face_image_url
+            )
+          )
+        `)
         .eq('renter_id', currentUser.id)
         .in('status', ['confirmed', 'ongoing', 'delivered'])
         .order('created_at', { ascending: false });
@@ -64,15 +69,191 @@ const ActiveRentalModal = ({ visible, onClose }) => {
       setLoading(false);
     };
 
+    const setupRealtimeSubscription = () => {
+      // Subscribe to changes in rental_transactions table
+      subscription = supabase
+        .channel('active-rentals-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'rental_transactions',
+            filter: `renter_id=eq.${currentUser.id}`,
+          },
+          (payload) => {
+            handleRealtimeUpdate(payload);
+          }
+        )
+        .subscribe();
+    };
+
+    const handleRealtimeUpdate = (payload) => {
+      console.log('Real-time update received for active rentals:', payload);
+      
+      switch (payload.eventType) {
+        case 'INSERT':
+          // New rental added - check if it should be in active status
+          if (['confirmed', 'ongoing', 'delivered'].includes(payload.new.status)) {
+            fetchItemDetailsAndAddRental(payload.new);
+          }
+          break;
+        
+        case 'UPDATE':
+          // Rental updated
+          const newStatus = payload.new.status;
+          
+          if (['confirmed', 'ongoing', 'delivered'].includes(newStatus)) {
+            // Update existing rental or add if it's a status change from pending
+            setRentals(prev => {
+              const existingIndex = prev.findIndex(rental => 
+                rental.rental_id === payload.new.rental_id
+              );
+              
+              if (existingIndex >= 0) {
+                // Update existing rental
+                return prev.map(rental =>
+                  rental.rental_id === payload.new.rental_id
+                    ? { ...rental, ...payload.new }
+                    : rental
+                );
+              } else {
+                // This was a pending rental that got confirmed - fetch details
+                fetchItemDetailsAndAddRental(payload.new);
+                return prev;
+              }
+            });
+          } else {
+            // Remove from list if status is no longer active
+            setRentals(prev => prev.filter(rental => 
+              rental.rental_id !== payload.new.rental_id
+            ));
+          }
+          break;
+        
+        case 'DELETE':
+          // Rental deleted
+          setRentals(prev => prev.filter(rental => 
+            rental.rental_id !== payload.old.rental_id
+          ));
+          break;
+        
+        default:
+          break;
+      }
+    };
+
+    const fetchItemDetailsAndAddRental = async (newRental) => {
+      try {
+        // Fetch item details for the new rental
+        const { data: itemData, error: itemError } = await supabase
+          .from('items')
+          .select(`
+            title,
+            price_per_day,
+            location,
+            main_image_url,
+            users:user_id (
+              first_name,
+              last_name,
+              face_image_url
+            )
+          `)
+          .eq('item_id', newRental.item_id)
+          .single();
+
+        if (!itemError && itemData) {
+          const completeRental = {
+            ...newRental,
+            items: itemData
+          };
+          
+          setRentals(prev => [completeRental, ...prev]);
+        }
+      } catch (error) {
+        console.error('Error fetching item details for new rental:', error);
+      }
+    };
+
+    // Initial fetch and setup
     fetchActiveRentals();
+    setupRealtimeSubscription();
+
+    // Cleanup function
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, [currentUser, visible]);
 
+  // Manual refresh function
+  const refreshRentals = async () => {
+    if (!currentUser) return;
+    
+    setRefreshing(true);
+    const { data, error } = await supabase
+      .from('rental_transactions')
+      .select(`
+        rental_id,
+        item_id,
+        start_date,
+        end_date,
+        status,
+        quantity,
+        total_cost,
+        created_at,
+        items (
+          title,
+          price_per_day,
+          location,
+          main_image_url,
+          users:user_id (
+            first_name,
+            last_name,
+            face_image_url
+          )
+        )
+      `)
+      .eq('renter_id', currentUser.id)
+      .in('status', ['confirmed', 'ongoing', 'delivered'])
+      .order('created_at', { ascending: false });
+
+    if (!error) {
+      setRentals(data);
+    }
+    setRefreshing(false);
+  };
+
+  const onRefresh = async () => {
+    await refreshRentals();
+  };
+
   const getStatusColor = (status) => {
-    return status === 'confirmed' ? '#4CAF50' : '#FF9800';
+    const statusColors = {
+      'confirmed': '#4CAF50',
+      'ongoing': '#FF9800',
+      'delivered': '#2196F3'
+    };
+    return statusColors[status] || '#FF9800';
   };
 
   const getStatusBgColor = (status) => {
-    return status === 'confirmed' ? '#E8F5E8' : '#FFF3E0';
+    const statusBgColors = {
+      'confirmed': '#E8F5E8',
+      'ongoing': '#FFF3E0',
+      'delivered': '#E3F2FD'
+    };
+    return statusBgColors[status] || '#FFF3E0';
+  };
+
+  const getStatusDisplayText = (status) => {
+    const statusTexts = {
+      'confirmed': '✓ Confirmed',
+      'ongoing': '🔄 Ongoing',
+      'delivered': '📦 Delivered'
+    };
+    return statusTexts[status] || '🔄 Active';
   };
 
   const getRemainingDays = (endDate) => {
@@ -81,58 +262,6 @@ const ActiveRentalModal = ({ visible, onClose }) => {
     const diffTime = end - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
-  };
-
-  const handleReturnNow = async (rentalId: string) => {
-    // Disable button while processing
-    setReturningIds((prev) => [...prev, rentalId]);
-
-    try {
-      // Update rental status in Supabase
-      const { data, error } = await supabase
-        .from("rental_transactions")
-        .update({ status: "awaiting_owner_confirmation" })
-        .eq("rental_id", rentalId)
-        .select(`
-        rental_id,
-        item_id,
-        renter_id,
-        items!inner(user_id, title)
-      `)
-        .single();
-
-      if (error) throw error;
-
-      // Update local state to reflect new status immediately
-      setRentals((prev) =>
-        prev.map((r) =>
-          r.rental_id === rentalId
-            ? { ...r, status: "awaiting_owner_confirmation" }
-            : r
-        )
-      );
-
-      // Notify the item owner / lessor
-      try {
-        await handleBookingStatusChange(
-          {
-            rental_id: rentalId,
-            item_id: data.item_id,
-            renter_id: data.renter_id,
-          },
-          "ongoing",
-          "awaiting_owner_confirmation"
-        );
-      } catch (notifyErr) {
-        console.error("Error sending notification:", notifyErr);
-      }
-
-    } catch (err) {
-      console.error("Error updating rental status:", err);
-    } finally {
-      // Re-enable button
-      setReturningIds((prev) => prev.filter((id) => id !== rentalId));
-    }
   };
 
   const handleCardPress = (rental) => {
@@ -148,9 +277,11 @@ const ActiveRentalModal = ({ visible, onClose }) => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerText}>Active Rentals</Text>
-          <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Body */}
@@ -174,15 +305,26 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#FFAB00']}
+                tintColor="#FFAB00"
+              />
+            }
           >
             {rentals.map((rental, index) => {
               const remainingDays = getRemainingDays(rental.end_date);
+              const isReturning = returningIds.includes(rental.rental_id);
+              
               return (
                 <TouchableOpacity
                   key={rental.rental_id}
                   style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}
                   onPress={() => handleCardPress(rental)}
                   activeOpacity={0.7}
+                  disabled={isReturning}
                 >
                   <View style={styles.cardHeader}>
                     <View style={[
@@ -190,7 +332,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                       { backgroundColor: getStatusBgColor(rental.status) }
                     ]}>
                       <Text style={[styles.statusText, { color: getStatusColor(rental.status) }]}>
-                        {rental.status === 'confirmed' ? '✓ Confirmed' : '🔄 Ongoing'}
+                        {getStatusDisplayText(rental.status)}
                       </Text>
                     </View>
                     {remainingDays > 0 && (
@@ -294,6 +436,18 @@ const styles = StyleSheet.create({
   headerText: {
     fontFamily: 'DM-Bold',
     fontSize: 18,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    marginRight: 12,
+    padding: 4,
+  },
+  refreshIcon: {
+    fontSize: 18,
+    color: '#FFAB00',
   },
   closeButtonContainer: {
     width: 30,
@@ -459,12 +613,15 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   returnButton: {
-    marginTop: 12,
+    marginTop: 8,
     backgroundColor: '#FF7043',
     paddingVertical: 10,
     borderRadius: 8,
     alignItems: 'center',
     marginBottom: 8,
+  },
+  returnButtonDisabled: {
+    backgroundColor: '#BDBDBD',
   },
   returnButtonText: {
     color: '#fff',
