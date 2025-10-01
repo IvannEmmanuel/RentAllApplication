@@ -28,7 +28,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     // Real-time subscription for booking updates
     useEffect(() => {
         const rentalIdToSubscribe = currentBooking?.rental_id || rentalId;
-        
+
         if (!rentalIdToSubscribe) return;
 
         console.log('Setting up real-time subscription for rental:', rentalIdToSubscribe);
@@ -46,7 +46,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 async (payload) => {
                     console.log('Real-time booking update received:', payload);
                     setLastUpdated(new Date());
-                    
+
                     // Update the current booking with new status
                     setCurrentBooking(prev => ({
                         ...prev,
@@ -70,7 +70,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 (payload) => {
                     console.log('Real-time item update received:', payload);
                     setLastUpdated(new Date());
-                    
+
                     // Update item details if they change
                     setCurrentBooking(prev => ({
                         ...prev,
@@ -262,7 +262,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
             } else if (currentBooking.status === 'awaiting_owner_confirmation') {
                 newStatus = 'completed';
 
-                // Restore item quantity in the Items table
+                // Restore item quantity in the Items table ONLY for completed status
                 if (currentBooking.items) {
                     const { data: itemData, error: itemError } = await supabase
                         .from('items')
@@ -356,7 +356,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
     const getStatusColor = () => {
         if (!currentBooking) return '#757575';
-        
+
         switch (currentBooking.status) {
             case 'confirmed':
                 return '#4CAF50';
@@ -467,9 +467,9 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                     </View>
 
                     {getActionButtonLabel() && (
-                        <TouchableOpacity 
-                            style={[styles.confirmButton, { backgroundColor: getActionButtonColor() }]} 
-                            onPress={handleActionPress} 
+                        <TouchableOpacity
+                            style={[styles.confirmButton, { backgroundColor: getActionButtonColor() }]}
+                            onPress={handleActionPress}
                             disabled={loading}
                         >
                             {loading ? (
@@ -718,10 +718,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         flexWrap: 'wrap',
     },
-    statusTitle: { 
-        fontSize: 18, 
-        fontWeight: 'bold', 
-        textAlign: 'center', 
+    statusTitle: {
+        fontSize: 18,
+        fontWeight: 'bold',
+        textAlign: 'center',
         color: '#000',
         marginRight: 8,
     },
@@ -747,20 +747,20 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
     },
     sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#000', marginBottom: 12 },
-    detailRow: { 
-        flexDirection: 'row', 
-        justifyContent: 'space-between', 
-        paddingVertical: 8, 
-        borderBottomWidth: 1, 
-        borderBottomColor: '#f0f0f0' 
+    detailRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        paddingVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f0f0f0'
     },
     detailLabel: { fontSize: 14, color: '#666' },
     detailValue: { fontSize: 14, fontWeight: '600', color: '#000' },
-    confirmButton: { 
-        marginTop: 8, 
-        paddingVertical: 12, 
-        paddingHorizontal: 24, 
-        borderRadius: 8, 
+    confirmButton: {
+        marginTop: 8,
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+        borderRadius: 8,
         alignItems: 'center',
         minWidth: 160,
     },
