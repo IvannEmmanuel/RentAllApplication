@@ -695,7 +695,7 @@ const Home = ({ route }) => {
             <View style={styles.topMenuBar}>
               <TextInput
                 placeholder="Search"
-                placeholderTextColor={"#000"}
+                placeholderTextColor={"#9c9c9cff"}
                 style={styles.searchContainer}
                 value={searchTerm}
                 onChangeText={setSearchTerm}
@@ -811,9 +811,9 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     width: "80%",
-    height: 50,
+    height: 40,
     borderWidth: 1,
-    borderColor: "#000",
+    borderColor: "#9c9c9cff",
     borderRadius: 20,
     paddingLeft: 20,
   },
@@ -823,8 +823,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   heartLogo: {
-    width: 34,
-    height: 30.5,
+    width: 30,
+    height: 26.5,
   },
   categoriesContainer: {
     paddingLeft: 10,
