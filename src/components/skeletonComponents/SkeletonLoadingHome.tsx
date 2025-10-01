@@ -1,129 +1,286 @@
-import React from "react";
-import { View, StyleSheet, Dimensions } from "react-native";
-import SkeletonPlaceholder from "react-native-skeleton-placeholder";
-
-const { width } = Dimensions.get("window");
-const itemWidth = (width - 60) / 2;
+import React from 'react';
+import {
+    StyleSheet,
+    View,
+    ScrollView,
+} from 'react-native';
 
 const SkeletonLoadingHome = () => {
-  return (
-    <View style={styles.itemsGrid}>
-      {[1, 2, 3, 4, 5, 6].map((_, index) => (
-        <View key={index} style={styles.itemContainer}>
-          <SkeletonPlaceholder borderRadius={10}>
-            <View style={styles.itemBox}>
-              {/* Image */}
-              <View style={styles.image} />
-              
-              {/* Rating */}
-              <View style={styles.rating} />
-              
-              {/* Item Name */}
-              <View style={styles.title} />
-              
-              {/* Lessor Info */}
-              <View style={styles.lessorInfo} />
-              
-              {/* Location, Date, Quantity */}
-              <View style={styles.text} />
-              <View style={styles.text} />
-              <View style={styles.text} />
-              
-              {/* Price and Icons */}
-              <View style={styles.moneyRateContainer}>
-                <View style={styles.money} />
-                <View style={styles.iconGroup}>
-                  <View style={styles.icon} />
-                  <View style={styles.icon} />
+    return (
+        <View style={styles.container}>
+            {/* Items Grid Skeleton */}
+            <View style={styles.itemsGrid}>
+                {/* Row 1 */}
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
                 </View>
-              </View>
-              
-              {/* Rent Button */}
-              <View style={styles.rentButton} />
+
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
+                </View>
+
+                {/* Row 2 */}
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
+                </View>
+
+                {/* Row 3 */}
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
+                </View>
+
+                <View style={styles.itemWrapper}>
+                    <View style={[styles.skeleton, styles.itemContainer]}>
+                        <View style={[styles.skeleton, styles.itemImageSkeleton]} />
+                        <View style={styles.itemContent}>
+                            <View style={[styles.skeleton, styles.ratingSkeleton]} />
+                            <View style={[styles.skeleton, styles.titleSkeleton]} />
+                            <View style={[styles.skeleton, styles.lessorSkeleton]} />
+                            <View style={[styles.skeleton, styles.locationSkeleton]} />
+                            <View style={[styles.skeleton, styles.dateSkeleton]} />
+                            <View style={[styles.skeleton, styles.quantitySkeleton]} />
+                            <View style={styles.bottomRow}>
+                                <View style={[styles.skeleton, styles.priceSkeleton]} />
+                                <View style={styles.actions}>
+                                    <View style={[styles.skeleton, styles.messageSkeleton]} />
+                                    <View style={[styles.skeleton, styles.likeSkeleton]} />
+                                </View>
+                            </View>
+                            <View style={[styles.skeleton, styles.rentButtonSkeleton]} />
+                        </View>
+                    </View>
+                </View>
             </View>
-          </SkeletonPlaceholder>
         </View>
-      ))}
-    </View>
-  );
+    );
 };
 
 const styles = StyleSheet.create({
-  itemsGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-    paddingHorizontal: 10,
-  },
-  itemContainer: {
-    width: "48%",
-    marginBottom: 15,
-  },
-  itemBox: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 10,
-    padding: 10,
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 2,
+    container: {
+        flex: 1,
+        backgroundColor: '#FAF5EF',
+        paddingHorizontal: 10,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 3.84,
-  },
-  image: {
-    width: "100%",
-    height: 120,
-    borderRadius: 10,
-    marginBottom: 10,
-  },
-  rating: {
-    width: 60,
-    height: 12,
-    marginBottom: 5,
-  },
-  title: {
-    width: "80%",
-    height: 16,
-    marginBottom: 5,
-  },
-  lessorInfo: {
-    width: "70%",
-    height: 12,
-    marginBottom: 8,
-  },
-  text: {
-    width: "90%",
-    height: 12,
-    marginBottom: 3,
-  },
-  moneyRateContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 8,
-    width: "100%",
-  },
-  money: {
-    width: 50,
-    height: 16,
-  },
-  iconGroup: {
-    flexDirection: "row",
-  },
-  icon: {
-    width: 20,
-    height: 20,
-    marginLeft: 10,
-  },
-  rentButton: {
-    width: "70%",
-    height: 30,
-    borderRadius: 10,
-    marginTop: 10,
-    alignSelf: "flex-end",
-  },
+    skeleton: {
+        backgroundColor: '#E5E5E5', // Changed to gray like SkeletonLoadingChat
+        borderRadius: 4,
+    },
+    topMenuBar: {
+        flexDirection: 'row',
+        alignSelf: 'center',
+        paddingHorizontal: 10,
+        marginBottom: 10,
+    },
+    searchSkeleton: {
+        width: '80%',
+        height: 40,
+        borderRadius: 20,
+    },
+    heartSkeleton: {
+        width: 60,
+        height: 40,
+        borderRadius: 10,
+        marginLeft: 10,
+    },
+    categoriesContainer: {
+        marginBottom: 10,
+    },
+    categoriesContent: {
+        paddingHorizontal: 10,
+    },
+    categorySkeleton: {
+        width: 80,
+        height: 35,
+        borderRadius: 15,
+        marginHorizontal: 5,
+    },
+    itemsGrid: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        justifyContent: 'space-between',
+        paddingHorizontal: 10,
+    },
+    itemWrapper: {
+        width: '48%',
+        marginBottom: 15,
+    },
+    itemContainer: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 10,
+        padding: 10,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: {
+            width: 0,
+            height: 2,
+        },
+        shadowOpacity: 0.1,
+        shadowRadius: 3.84,
+    },
+    itemImageSkeleton: {
+        width: '100%',
+        height: 120,
+        borderRadius: 10,
+        marginBottom: 10,
+    },
+    itemContent: {
+        width: '100%',
+    },
+    ratingSkeleton: {
+        width: 60,
+        height: 12,
+        marginBottom: 8,
+    },
+    titleSkeleton: {
+        width: '100%',
+        height: 16,
+        marginBottom: 6,
+    },
+    lessorSkeleton: {
+        width: '80%',
+        height: 12,
+        marginBottom: 4,
+    },
+    locationSkeleton: {
+        width: '70%',
+        height: 12,
+        marginBottom: 4,
+    },
+    dateSkeleton: {
+        width: '60%',
+        height: 12,
+        marginBottom: 4,
+    },
+    quantitySkeleton: {
+        width: '50%',
+        height: 12,
+        marginBottom: 8,
+    },
+    bottomRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        marginBottom: 8,
+    },
+    priceSkeleton: {
+        width: 60,
+        height: 16,
+    },
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    messageSkeleton: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+        marginRight: 8,
+    },
+    likeSkeleton: {
+        width: 20,
+        height: 20,
+        borderRadius: 10,
+    },
+    rentButtonSkeleton: {
+        width: '70%',
+        height: 30,
+        borderRadius: 10,
+        alignSelf: 'flex-end',
+    },
 });
 
 export default SkeletonLoadingHome;
