@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import {
     Modal,
     View,
@@ -11,8 +11,11 @@ import {
     ScrollView,
     ActivityIndicator,
     Image,
+    Platform,
+    KeyboardAvoidingView
 } from "react-native";
 import { supabase } from "../../supbaseClient";
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const [pendingReviews, setPendingReviews] = useState([]);
@@ -26,11 +29,52 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
     const [submitting, setSubmitting] = useState(false);
     const [showRatingForm, setShowRatingForm] = useState(false);
     const [itemImage, setItemImage] = useState(null);
-    
+
     // Pagination states
     const [page, setPage] = useState(0);
     const [hasMore, setHasMore] = useState(true);
     const PAGE_SIZE = 10;
+
+    const scrollViewRef = useRef(null);
+    const lessorInputRef = useRef(null);
+    const itemInputRef = useRef(null);
+
+    const handleFocus = (inputRef) => {
+        setTimeout(() => {
+            if (inputRef.current && scrollViewRef.current) {
+                inputRef.current.measureLayout(
+                    scrollViewRef.current.getInnerViewNode(),
+                    (x, y, width, height) => {
+                        scrollViewRef.current.scrollTo({
+                            y: y - 100, // Scroll a bit above the input
+                            animated: true
+                        });
+                    }
+                );
+            }
+        }, 300);
+    };
+
+    const handleInputFocus = (inputName) => {
+        setTimeout(() => {
+            if (scrollViewRef.current) {
+                let scrollPosition = 0;
+
+                if (inputName === 'lessor') {
+                    // Scroll to show lessor comment section
+                    scrollPosition = 600; // Adjust this value based on your layout
+                } else if (inputName === 'item') {
+                    // Scroll to show item comment section  
+                    scrollPosition = 200; // Adjust this value based on your layout
+                }
+
+                scrollViewRef.current.scrollTo({
+                    y: scrollPosition,
+                    animated: true
+                });
+            }
+        }, 300);
+    };
 
     // Get image URL for items
     const getImageUrl = async (userId, itemId) => {
@@ -408,6 +452,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
             </Modal>
 
             {/* Rating Form Modal */}
+            {/* Rating Form Modal - FIXED VERSION */}
             <Modal
                 visible={showRatingForm}
                 animationType="slide"
@@ -425,7 +470,15 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                         </TouchableOpacity>
                     </View>
 
-                    <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+                    {/* Use ONLY KeyboardAwareScrollView - NO KeyboardAvoidingView */}
+                    <KeyboardAwareScrollView
+                        style={styles.content}
+                        showsVerticalScrollIndicator={false}
+                        extraScrollHeight={100}
+                        enableOnAndroid={true}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={styles.scrollContent} // Add this
+                    >
                         {/* Item Rating Section */}
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>Rate the Item</Text>
@@ -461,12 +514,14 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                     Item Review (Optional)
                                 </Text>
                                 <TextInput
+                                    ref={itemInputRef}
                                     style={styles.commentInput}
                                     placeholder="How was the item quality, condition, etc.?"
+                                    placeholderTextColor="#999"
                                     value={itemComment}
                                     onChangeText={setItemComment}
                                     multiline
-                                    numberOfLines={3}
+                                    numberOfLines={4}
                                     textAlignVertical="top"
                                     maxLength={500}
                                 />
@@ -521,12 +576,14 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                     Lessor Review (Optional)
                                 </Text>
                                 <TextInput
+                                    ref={lessorInputRef}
                                     style={styles.commentInput}
                                     placeholder="How was the communication, responsiveness, etc.?"
+                                    placeholderTextColor="#999"
                                     value={lessorComment}
                                     onChangeText={setLessorComment}
                                     multiline
-                                    numberOfLines={3}
+                                    numberOfLines={4}
                                     textAlignVertical="top"
                                     maxLength={500}
                                 />
@@ -535,9 +592,9 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                 </Text>
                             </View>
                         </View>
-                    </ScrollView>
+                    </KeyboardAwareScrollView>
 
-                    {/* Footer */}
+                    {/* Footer - This stays completely separate and won't move */}
                     <View style={styles.footer}>
                         <TouchableOpacity
                             style={[styles.button, styles.cancelButton]}
