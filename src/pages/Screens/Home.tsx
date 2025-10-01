@@ -21,6 +21,7 @@ import { useNavigation } from "@react-navigation/native"
 import { useFavorites } from "../../components/FavoritesContext"
 import { useFocusEffect } from '@react-navigation/native'
 import SkeletonLoadingHome from "../../components/skeletonComponents/SkeletonLoadingHome"
+import SkeletonLoadingMore from "../../components/skeletonComponents/SkeletonLoadingMore"
 
 const Home = ({ route }) => {
   const navigation = useNavigation()
@@ -447,7 +448,7 @@ const Home = ({ route }) => {
       } catch (e) {
         console.error("Fetch items failed:", e.message)
       } finally {
-        if (pageNum === 1) setLoading(false)
+        setLoading(false)
       }
     },
     [selectedCategoryId, searchTerm], // 👈 searchTerm dependency added
@@ -742,13 +743,15 @@ const Home = ({ route }) => {
           </>
         }
         ListFooterComponent={
-          loading && page > 1 ? (
-            <ActivityIndicator size="large" color="#FFAB00" style={{ marginVertical: 20 }} />
-          ) : hasMore ? (
-            <ActivityIndicator size="large" color="#FFAB00" style={{ marginVertical: 20 }} />
-          ) : (
-            <Text style={{ textAlign: "center", marginVertical: 20 }}>No more items</Text>
-          )
+          items.length > 0 ? (
+            loading && page > 1 ? (
+              <SkeletonLoadingHome />
+            ) : hasMore ? (
+              <SkeletonLoadingMore />
+            ) : (
+              <Text style={{ textAlign: "center", marginVertical: 20 }}>No more items</Text>
+            )
+          ) : null
         }
         onEndReached={() => {
           if (hasMore && !loading) {
