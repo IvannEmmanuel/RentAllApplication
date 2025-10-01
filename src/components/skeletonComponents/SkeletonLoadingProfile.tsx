@@ -1,6 +1,5 @@
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
-import SkeletonPlaceholder from "react-native-skeleton-placeholder";
 
 const { width } = Dimensions.get("window");
 const itemWidth = (width - 60) / 2;
@@ -10,24 +9,22 @@ const SkeletonLoadingProfile = () => {
     <View style={styles.itemsGrid}>
       {[1, 2, 3, 4].map((_, index) => (
         <View key={index} style={styles.itemContainer}>
-          <SkeletonPlaceholder borderRadius={10}>
-            <View style={styles.itemBox}>
-              <View style={styles.image} />
-              <View style={styles.rating} />
-              <View style={styles.title} />
-              <View style={styles.text} />
-              <View style={styles.text} />
-              <View style={styles.text} />
-              <View style={styles.moneyRateContainer}>
-                <View style={styles.money} />
-                <View style={styles.iconGroup}>
-                  <View style={styles.icon} />
-                  <View style={styles.icon} />
-                </View>
+          <View style={styles.itemBox}>
+            <View style={[styles.skeleton, styles.image]} />
+            <View style={[styles.skeleton, styles.rating]} />
+            <View style={[styles.skeleton, styles.title]} />
+            <View style={[styles.skeleton, styles.text]} />
+            <View style={[styles.skeleton, styles.text]} />
+            <View style={[styles.skeleton, styles.text]} />
+            <View style={styles.moneyRateContainer}>
+              <View style={[styles.skeleton, styles.money]} />
+              <View style={styles.iconGroup}>
+                <View style={[styles.skeleton, styles.icon]} />
+                <View style={[styles.skeleton, styles.icon]} />
               </View>
-              <View style={styles.rentButton} />
             </View>
-          </SkeletonPlaceholder>
+            <View style={[styles.skeleton, styles.rentButton]} />
+          </View>
         </View>
       ))}
     </View>
@@ -35,6 +32,10 @@ const SkeletonLoadingProfile = () => {
 };
 
 const styles = StyleSheet.create({
+  skeleton: {
+    backgroundColor: '#E5E5E5',
+    borderRadius: 4,
+  },
   itemsGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -48,6 +49,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#FFF",
     borderRadius: 10,
     padding: 10,
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 3.84,
   },
   image: {
     width: "100%",
