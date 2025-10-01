@@ -2,7 +2,6 @@ import {
     StyleSheet,
     Text,
     View,
-    ScrollView,
     TextInput,
     TouchableOpacity,
     KeyboardAvoidingView,
@@ -23,6 +22,7 @@ import { useUnread } from '../../hooks/useUnreadMessages'
 import * as ImagePicker from 'expo-image-picker'
 import * as FileSystem from "expo-file-system/legacy";
 import SkeletonLoadingChat from '../../components/skeletonComponents/SkeletonLoadingChat'
+import { KeyboardAwareScrollView } from 'react-native-keyboard-aware-scroll-view';
 
 function base64ToUint8Array(base64: string) {
     const binary = atob(base64);
@@ -50,6 +50,7 @@ const Chat = () => {
     const [showImageModal, setShowImageModal] = useState(false)
     const [otherUserProfile, setOtherUserProfile] = useState(null)
     const [uploadingImages, setUploadingImages] = useState({}) // Track uploading images by message ID
+    const [keyboardHeight, setKeyboardHeight] = useState(0)
 
     const { refreshUnreadCount } = useUnread();
 
@@ -57,16 +58,24 @@ const Chat = () => {
     console.log("Current User ID:", currentUser?.id)
 
     useEffect(() => {
-        const showSub = Keyboard.addListener("keyboardDidShow", () => {
-            scrollToBottom();
-        });
-        const hideSub = Keyboard.addListener("keyboardDidHide", () => {
-            scrollToBottom();
-        });
+        const keyboardDidShowListener = Keyboard.addListener(
+            'keyboardDidShow',
+            (e) => {
+                setKeyboardHeight(e.endCoordinates.height);
+                scrollToBottom();
+            }
+        );
+        const keyboardDidHideListener = Keyboard.addListener(
+            'keyboardDidHide',
+            () => {
+                setKeyboardHeight(0);
+                scrollToBottom();
+            }
+        );
 
         return () => {
-            showSub.remove();
-            hideSub.remove();
+            keyboardDidShowListener.remove();
+            keyboardDidHideListener.remove();
         };
     }, []);
 
@@ -387,7 +396,6 @@ const Chat = () => {
     }, [conversationId])
 
     // --- Send text message ---
-    // --- Send text message ---
     const sendMessage = async () => {
         if (!newMessage.trim() || !currentUser || sending) return
 
@@ -527,7 +535,7 @@ const Chat = () => {
             console.log('🔴 Removing real-time channel');
             supabase.removeChannel(channel);
         }
-    }, [conversationId, currentUser?.id, markMessagesAsRead]) // Remove messages dependency
+    }, [conversationId, currentUser?.id, markMessagesAsRead])
 
     // --- Render message ---
     const renderMessage = (message, index) => {
@@ -620,11 +628,7 @@ const Chat = () => {
 
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
-            <KeyboardAvoidingView
-                style={styles.container}
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
-            >
+            <View style={styles.container}>
                 {/* Show skeleton while loading */}
                 {loading ? (
                     <SkeletonLoadingChat />
@@ -653,13 +657,17 @@ const Chat = () => {
                             <View style={styles.headerSpacer} />
                         </View>
 
-                        {/* Messages */}
-                        <ScrollView
+                        {/* Messages with KeyboardAwareScrollView */}
+                        <KeyboardAwareScrollView
                             ref={scrollViewRef}
                             style={styles.messagesContainer}
                             contentContainerStyle={styles.messagesContent}
                             showsVerticalScrollIndicator={false}
+                            extraScrollHeight={50}
+                            enableOnAndroid={true}
+                            keyboardShouldPersistTaps="handled"
                             onContentSizeChange={scrollToBottom}
+                            extraHeight={100}
                         >
                             {messages.length === 0 ? (
                                 <View style={styles.emptyContainer}>
@@ -669,10 +677,10 @@ const Chat = () => {
                             ) : (
                                 messages.map((message, index) => renderMessage(message, index))
                             )}
-                        </ScrollView>
+                        </KeyboardAwareScrollView>
 
-                        {/* Input */}
-                        <View style={styles.inputContainer}>
+                        {/* Input Container - Fixed at bottom with manual keyboard height adjustment */}
+                        <View style={[styles.inputContainer, { marginBottom: keyboardHeight }]}>
                             <TouchableOpacity
                                 style={styles.attachButton}
                                 onPress={() => {
@@ -742,7 +750,7 @@ const Chat = () => {
                         </Modal>
                     </>
                 )}
-            </KeyboardAvoidingView>
+            </View>
         </SafeAreaView>
     )
 }
@@ -807,6 +815,7 @@ const styles = StyleSheet.create({
     },
     messagesContent: {
         paddingVertical: 10,
+        paddingBottom: 20, // Extra padding at bottom
     },
     loadingContainer: {
         flex: 1,
