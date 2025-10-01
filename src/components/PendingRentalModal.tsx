@@ -1,5 +1,3 @@
-// src/components/PendingRentalModal.tsx
-
 import {
   StyleSheet,
   Text,
@@ -8,6 +6,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  RefreshControl,
   TouchableOpacity,
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
@@ -19,8 +18,11 @@ const PendingRentalModal = ({ visible, onClose }) => {
   const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Fetch initial data and set up real-time subscription
   useEffect(() => {
     if (!currentUser || !visible) return;
+
+    let subscription;
 
     const fetchPendingRentals = async () => {
       setLoading(true);
@@ -58,8 +60,153 @@ const PendingRentalModal = ({ visible, onClose }) => {
       setLoading(false);
     };
 
+    const setupRealtimeSubscription = () => {
+      // Subscribe to changes in rental_transactions table
+      subscription = supabase
+        .channel('pending-rentals-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*', // Listen to INSERT, UPDATE, DELETE
+            schema: 'public',
+            table: 'rental_transactions',
+            filter: `renter_id=eq.${currentUser.id}`,
+          },
+          (payload) => {
+            handleRealtimeUpdate(payload);
+          }
+        )
+        .subscribe();
+    };
+
+    const handleRealtimeUpdate = (payload) => {
+      console.log('Real-time update received:', payload);
+
+      switch (payload.eventType) {
+        case 'INSERT':
+          // New rental added
+          if (payload.new.status === 'pending') {
+            fetchItemDetailsAndAddRental(payload.new);
+          }
+          break;
+
+        case 'UPDATE':
+          // Rental updated (status changed, etc.)
+          if (payload.new.status !== 'pending') {
+            // Remove from list if status is no longer pending
+            setRentals(prev => prev.filter(rental =>
+              rental.rental_id !== payload.new.rental_id
+            ));
+          } else {
+            // Update existing rental
+            setRentals(prev => prev.map(rental =>
+              rental.rental_id === payload.new.rental_id
+                ? { ...rental, ...payload.new }
+                : rental
+            ));
+          }
+          break;
+
+        case 'DELETE':
+          // Rental deleted
+          setRentals(prev => prev.filter(rental =>
+            rental.rental_id !== payload.old.rental_id
+          ));
+          break;
+
+        default:
+          break;
+      }
+    };
+
+    const fetchItemDetailsAndAddRental = async (newRental) => {
+      try {
+        // Fetch item details for the new rental
+        const { data: itemData, error: itemError } = await supabase
+          .from('items')
+          .select(`
+            title,
+            price_per_day,
+            location,
+            main_image_url,
+            user: user_id (
+              first_name,
+              last_name
+            )
+          `)
+          .eq('item_id', newRental.item_id)
+          .single();
+
+        if (!itemError && itemData) {
+          const completeRental = {
+            ...newRental,
+            items: itemData
+          };
+
+          setRentals(prev => [completeRental, ...prev]);
+        }
+      } catch (error) {
+        console.error('Error fetching item details for new rental:', error);
+      }
+    };
+
+    // Initial fetch and setup
     fetchPendingRentals();
+    setupRealtimeSubscription();
+
+    // Cleanup function
+    return () => {
+      if (subscription) {
+        subscription.unsubscribe();
+      }
+    };
   }, [currentUser, visible]);
+
+  // Optional: Manual refresh function
+  const refreshRentals = async () => {
+    if (!currentUser) return;
+
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('rental_transactions')
+      .select(`
+        rental_id,
+        item_id,
+        start_date,
+        end_date,
+        status,
+        quantity,
+        total_cost,
+        created_at,
+        items (
+          title,
+          price_per_day,
+          location,
+          main_image_url,
+          user: user_id (
+            first_name,
+            last_name
+          )
+        )
+      `)
+      .eq('renter_id', currentUser.id)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false });
+
+    if (!error) {
+      setRentals(data);
+    }
+    setLoading(false);
+  };
+
+  // Add pull-to-refresh functionality
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await refreshRentals();
+    setRefreshing(false);
+  };
 
   const getTimeAgo = (createdAt) => {
     const now = new Date();
@@ -94,9 +241,11 @@ const PendingRentalModal = ({ visible, onClose }) => {
         {/* Header */}
         <View style={styles.header}>
           <Text style={styles.headerText}>Pending Rentals</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.closeButton}>✕</Text>
-          </TouchableOpacity>
+          <View style={styles.headerButtons}>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.closeButton}>✕</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Body */}
@@ -122,6 +271,14 @@ const PendingRentalModal = ({ visible, onClose }) => {
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                colors={['#FFAB00']}
+                tintColor="#FFAB00"
+              />
+            }
           >
             {rentals.map((rental, index) => {
               const daysUntilStart = getDaysUntilStart(rental.start_date);
@@ -400,5 +557,17 @@ const styles = StyleSheet.create({
     color: '#7F8C8D',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  refreshButton: {
+    marginRight: 16,
+    padding: 4,
+  },
+  refreshIcon: {
+    fontSize: 18,
+    color: '#FFAB00',
   },
 });
