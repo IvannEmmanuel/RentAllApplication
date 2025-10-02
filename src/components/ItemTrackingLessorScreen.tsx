@@ -24,6 +24,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     const [fetchingBooking, setFetchingBooking] = useState(isModal && !bookingFromRoute);
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(new Date());
+    const [depositImageModalVisible, setDepositImageModalVisible] = useState(false);
 
     // Real-time subscription for booking updates
     useEffect(() => {
@@ -45,12 +46,13 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 },
                 async (payload) => {
                     console.log('Real-time booking update received:', payload);
+                    console.log('Payload new:', payload.new); // DEBUG: See what's actually coming
                     setLastUpdated(new Date());
 
                     // Update the current booking with new status
                     setCurrentBooking(prev => ({
                         ...prev,
-                        ...payload.new
+                        ...payload.new,
                     }));
 
                     // If the update doesn't include complete item details, fetch them
@@ -115,6 +117,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 status,
                 quantity,
                 created_at,
+                proof_of_deposit_url,
                 items!inner(
                     title,
                     price_per_day,
@@ -132,6 +135,9 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 .single();
 
             if (error) throw error;
+
+            console.log('📦 Fetched booking data:', data); // ADD THIS
+            console.log('🖼️ Proof of deposit URL:', data.proof_of_deposit_url); // ADD THIS
 
             // Get item image
             const imageUrl = await getItemImage(data.items.user_id, data.item_id);
@@ -172,6 +178,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 status,
                 quantity,
                 created_at,
+                proof_of_deposit_url,
                 items!inner(
                     title,
                     price_per_day,
@@ -227,28 +234,38 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         }
     };
 
+    // UPDATED: Phases to include Deposit Review
     const phases = [
         { id: 1, title: 'Ready for Pickup', status: 'confirmed' },
-        { id: 2, title: 'On the Way', status: 'ongoing' },
-        { id: 3, title: 'Delivered', status: 'delivered' },
+        { id: 2, title: 'Deposit Review', status: 'deposit_submitted' },
+        { id: 3, title: 'On the Way', status: 'on_the_way' },
+        { id: 4, title: 'Ongoing', status: 'ongoing' },
+        { id: 5, title: 'Delivered', status: 'delivered' },
     ];
 
+    // UPDATED: Get current phase based on booking status
+    // UPDATED: Get current phase based on booking status
     const getCurrentPhase = () => {
         if (!currentBooking) return 1;
         switch (currentBooking.status) {
             case 'confirmed':
                 return 1;
-            case 'ongoing':
+            case 'deposit_submitted':
                 return 2;
-            case 'delivered':
-            case 'awaiting_owner_confirmation':
-            case 'completed':
+            case 'on_the_way':
                 return 3;
+            case 'ongoing':
+                return 4;
+            case 'awaiting_owner_confirmation':
+                return 5;
+            case 'completed':
+                return 5; // Completed also goes to delivered phase
             default:
                 return 1;
         }
     };
 
+    // UPDATED: Handle action press with deposit review logic
     const handleActionPress = async () => {
         if (!currentBooking) return;
 
@@ -258,29 +275,34 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
             let newStatus = currentBooking.status;
 
             if (currentBooking.status === 'confirmed') {
+                // Wait for deposit submission before proceeding
+                Alert.alert('Info', 'Waiting for renter to submit deposit proof.');
+                setLoading(false);
+                return;
+            } else if (currentBooking.status === 'deposit_submitted') {
                 newStatus = 'ongoing';
             } else if (currentBooking.status === 'awaiting_owner_confirmation') {
                 newStatus = 'completed';
 
-                // Restore item quantity in the Items table ONLY for completed status
-                if (currentBooking.items) {
-                    const { data: itemData, error: itemError } = await supabase
-                        .from('items')
-                        .select('quantity')
-                        .eq('item_id', currentBooking.item_id)
-                        .single();
+                // // Restore item quantity in the Items table ONLY for completed status
+                // if (currentBooking.items) {
+                //     const { data: itemData, error: itemError } = await supabase
+                //         .from('items')
+                //         .select('quantity')
+                //         .eq('item_id', currentBooking.item_id)
+                //         .single();
 
-                    if (itemError) throw itemError;
+                //     if (itemError) throw itemError;
 
-                    const updatedQuantity = (itemData.quantity || 0) + (currentBooking.quantity || 1);
+                //     const updatedQuantity = (itemData.quantity || 0) + (currentBooking.quantity || 1);
 
-                    const { error: updateError } = await supabase
-                        .from('items')
-                        .update({ quantity: updatedQuantity })
-                        .eq('item_id', currentBooking.item_id);
+                //     const { error: updateError } = await supabase
+                //         .from('items')
+                //         .update({ quantity: updatedQuantity })
+                //         .eq('item_id', currentBooking.item_id);
 
-                    if (updateError) throw updateError;
-                }
+                //     if (updateError) throw updateError;
+                // }
             }
 
             // Update booking status - real-time subscription will handle the UI update
@@ -314,16 +336,105 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         }
     };
 
+    // NEW: Handle deposit approval
+    const handleApproveDeposit = async () => {
+        if (!currentBooking) return;
+
+        setLoading(true);
+        try {
+            const oldStatus = currentBooking.status;
+            const newStatus = 'on_the_way';
+
+            // Update booking status
+            const { error } = await supabase
+                .from('rental_transactions')
+                .update({ status: newStatus })
+                .eq('rental_id', currentBooking.rental_id);
+
+            if (error) throw error;
+
+            // Fetch complete rental for notifications
+            const { data: fullRental, error: fetchError } = await supabase
+                .from('rental_transactions')
+                .select('*')
+                .eq('rental_id', currentBooking.rental_id)
+                .single();
+
+            if (!fetchError && fullRental) {
+                await handleBookingStatusChange(fullRental, oldStatus, newStatus);
+            }
+
+            Alert.alert('Success', 'Deposit approved! Item is now on the way.');
+        } catch (err) {
+            console.error(err);
+            Alert.alert('Error', 'Failed to approve deposit');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    // NEW: Handle deposit rejection
+    const handleRejectDeposit = async () => {
+        Alert.alert(
+            'Reject Deposit',
+            'Are you sure you want to reject this deposit proof? The renter will need to upload a new one.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Reject',
+                    style: 'destructive',
+                    onPress: async () => {
+                        setLoading(true);
+                        try {
+                            const oldStatus = currentBooking.status;
+                            const newStatus = 'confirmed';
+
+                            // Update booking status back to confirmed
+                            const { error } = await supabase
+                                .from('rental_transactions')
+                                .update({
+                                    status: newStatus,
+                                    proof_of_deposit_url: null
+                                })
+                                .eq('rental_id', currentBooking.rental_id);
+
+                            if (error) throw error;
+
+                            // Fetch complete rental for notifications
+                            const { data: fullRental, error: fetchError } = await supabase
+                                .from('rental_transactions')
+                                .select('*')
+                                .eq('rental_id', currentBooking.rental_id)
+                                .single();
+
+                            if (!fetchError && fullRental) {
+                                await handleBookingStatusChange(fullRental, oldStatus, newStatus);
+                            }
+
+                            Alert.alert('Deposit Rejected', 'The renter has been notified to upload a new deposit proof.');
+                        } catch (err) {
+                            console.error(err);
+                            Alert.alert('Error', 'Failed to reject deposit');
+                        } finally {
+                            setLoading(false);
+                        }
+                    }
+                }
+            ]
+        );
+    };
+
+    // UPDATED: Get action button label
     const getActionButtonLabel = () => {
         if (!currentBooking) return null;
-        if (currentBooking.status === 'confirmed') return 'Mark as On The Way';
+        if (currentBooking.status === 'deposit_submitted') return 'Review Deposit';
         if (currentBooking.status === 'awaiting_owner_confirmation') return 'Item Received';
         return null;
     };
 
     const getActionButtonColor = () => {
         if (!currentBooking) return '#28A745';
-        if (currentBooking.status === 'confirmed') return '#FF9900';
+        if (currentBooking.status === 'deposit_submitted') return '#FF9900';
         if (currentBooking.status === 'awaiting_owner_confirmation') return '#28A745';
         return '#28A745';
     };
@@ -360,8 +471,10 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         switch (currentBooking.status) {
             case 'confirmed':
                 return '#4CAF50';
-            case 'ongoing':
+            case 'deposit_submitted':
                 return '#FF9800';
+            case 'ongoing':
+                return '#2196F3';
             case 'delivered':
                 return '#2196F3';
             case 'awaiting_owner_confirmation':
@@ -415,6 +528,65 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         </View>
     );
 
+    // NEW: Render deposit review section
+    const renderDepositReviewSection = () => {
+        if (currentBooking.status !== 'deposit_submitted') return null;
+
+        return (
+            <View style={styles.depositSection}>
+                <Text style={styles.sectionTitle}>Deposit Proof Review</Text>
+
+                {currentBooking.proof_of_deposit_url ? (
+                    <View style={styles.depositProofContainer}>
+                        <Text style={styles.depositText}>
+                            Renter has submitted deposit proof. Please review:
+                        </Text>
+
+                        <TouchableOpacity
+                            style={styles.depositImageContainer}
+                            onPress={() => setDepositImageModalVisible(true)}
+                        >
+                            <Image
+                                source={{ uri: currentBooking.proof_of_deposit_url }}
+                                style={styles.depositImage}
+                                resizeMode="cover"
+                            />
+                            <View style={styles.depositImageOverlay}>
+                                <Text style={styles.depositImageText}>Tap to view full image</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        <View style={styles.depositActions}>
+                            <TouchableOpacity
+                                style={[styles.depositButton, styles.rejectButton]}
+                                onPress={handleRejectDeposit}
+                                disabled={loading}
+                            >
+                                <Text style={styles.depositButtonText}>Reject</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity
+                                style={[styles.depositButton, styles.approveButton]}
+                                onPress={handleApproveDeposit}
+                                disabled={loading}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator color="#FFF" />
+                                ) : (
+                                    <Text style={styles.depositButtonText}>Approve & Continue</Text>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                ) : (
+                    <Text style={styles.noDepositText}>
+                        Waiting for renter to upload deposit proof...
+                    </Text>
+                )}
+            </View>
+        );
+    };
+
     const renderContent = () => {
         if (fetchingBooking) {
             return (
@@ -466,7 +638,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                         </Text>
                     </View>
 
-                    {getActionButtonLabel() && (
+                    {getActionButtonLabel() && currentBooking.status === 'awaiting_owner_confirmation' && (
                         <TouchableOpacity
                             style={[styles.confirmButton, { backgroundColor: getActionButtonColor() }]}
                             onPress={handleActionPress}
@@ -480,6 +652,9 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                         </TouchableOpacity>
                     )}
                 </View>
+
+                {/* Deposit Review Section */}
+                {renderDepositReviewSection()}
 
                 {/* Details Section */}
                 <View style={styles.detailsSection}>
@@ -511,6 +686,15 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                         <Text style={styles.detailLabel}>Rental ID:</Text>
                         <Text style={styles.detailValue}>{currentBooking.rental_id}</Text>
                     </View>
+
+                    {currentBooking.proof_of_deposit_url && (
+                        <View style={styles.detailRow}>
+                            <Text style={styles.detailLabel}>Deposit Status:</Text>
+                            <Text style={[styles.detailValue, styles.depositSubmitted]}>
+                                {currentBooking.status === 'deposit_submitted' ? 'Under Review' : 'Submitted ✓'}
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* Last Updated */}
@@ -519,6 +703,33 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                         Last updated: {lastUpdated.toLocaleTimeString()}
                     </Text>
                 </View>
+
+                {/* Deposit Image Modal */}
+                <Modal
+                    visible={depositImageModalVisible}
+                    transparent={true}
+                    animationType="fade"
+                    onRequestClose={() => setDepositImageModalVisible(false)}
+                >
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeader}>
+                                <Text style={styles.modalTitle}>Deposit Proof</Text>
+                                <TouchableOpacity
+                                    style={styles.closeModalButton}
+                                    onPress={() => setDepositImageModalVisible(false)}
+                                >
+                                    <Text style={styles.closeModalButtonText}>✕</Text>
+                                </TouchableOpacity>
+                            </View>
+                            <Image
+                                source={{ uri: currentBooking.proof_of_deposit_url }}
+                                style={styles.fullSizeImage}
+                                resizeMode="contain"
+                            />
+                        </View>
+                    </View>
+                </Modal>
             </ScrollView>
         );
     };
@@ -734,6 +945,125 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: '600',
     },
+    // NEW: Deposit Review Styles
+    depositSection: {
+        backgroundColor: '#FFF',
+        marginHorizontal: 16,
+        borderRadius: 12,
+        padding: 16,
+        marginBottom: 16,
+        elevation: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+    },
+    depositProofContainer: {
+        alignItems: 'center',
+    },
+    depositText: {
+        fontSize: 14,
+        color: '#666',
+        textAlign: 'center',
+        marginBottom: 16,
+    },
+    noDepositText: {
+        fontSize: 14,
+        color: '#999',
+        textAlign: 'center',
+        fontStyle: 'italic',
+    },
+    depositImageContainer: {
+        width: '100%',
+        height: 200,
+        borderRadius: 8,
+        overflow: 'hidden',
+        marginBottom: 16,
+        position: 'relative',
+    },
+    depositImage: {
+        width: '100%',
+        height: '100%',
+    },
+    depositImageOverlay: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        padding: 8,
+        alignItems: 'center',
+    },
+    depositImageText: {
+        color: '#FFF',
+        fontSize: 12,
+        fontWeight: '600',
+    },
+    depositActions: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        width: '100%',
+        gap: 12,
+    },
+    depositButton: {
+        flex: 1,
+        paddingVertical: 12,
+        borderRadius: 8,
+        alignItems: 'center',
+    },
+    rejectButton: {
+        backgroundColor: '#FF4444',
+    },
+    approveButton: {
+        backgroundColor: '#4CAF50',
+    },
+    depositButtonText: {
+        color: '#FFF',
+        fontSize: 14,
+        fontWeight: 'bold',
+    },
+    // Modal Styles
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.9)',
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    modalContent: {
+        width: '90%',
+        height: '80%',
+        backgroundColor: '#FFF',
+        borderRadius: 12,
+        overflow: 'hidden',
+    },
+    modalHeader: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: '#F5F5F5',
+        borderBottomWidth: 1,
+        borderBottomColor: '#E0E0E0',
+    },
+    closeModalButton: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: '#FFF',
+        justifyContent: 'center',
+        alignItems: 'center',
+        elevation: 2,
+    },
+    closeModalButtonText: {
+        fontSize: 18,
+        color: '#666',
+        fontWeight: 'bold',
+    },
+    fullSizeImage: {
+        width: '100%',
+        height: '100%',
+        flex: 1,
+    },
     detailsSection: {
         backgroundColor: '#FFF',
         marginHorizontal: 16,
@@ -756,6 +1086,10 @@ const styles = StyleSheet.create({
     },
     detailLabel: { fontSize: 14, color: '#666' },
     detailValue: { fontSize: 14, fontWeight: '600', color: '#000' },
+    depositSubmitted: {
+        color: '#4CAF50',
+        fontWeight: 'bold',
+    },
     confirmButton: {
         marginTop: 8,
         paddingVertical: 12,
