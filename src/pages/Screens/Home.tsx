@@ -455,6 +455,7 @@ const Home = ({ route }) => {
   )
 
   // SMART UPDATE: Handle real-time payload intelligently
+  // SMART UPDATE: Handle real-time payload intelligently
   const handleItemsRealtimeUpdate = useCallback(
     async (payload) => {
       console.log("Items realtime update:", payload)
@@ -526,11 +527,17 @@ const Home = ({ route }) => {
           break
 
         case "DELETE":
-          setItems((prevItems) => prevItems.filter((item) => item.item_id !== oldRecord.item_id))
+          console.log("DELETE detected for item:", oldRecord.item_id)
+          setItems((prevItems) => {
+            const filteredItems = prevItems.filter((item) => item.item_id !== oldRecord.item_id)
+            console.log(`Removed item ${oldRecord.item_id}, remaining items:`, filteredItems.length)
+            return filteredItems
+          })
           break
 
         default:
-          fetchItems(false)
+          console.log("Unknown event type, refetching items")
+          fetchItems(1, false)
       }
     },
     [fetchItems],
@@ -554,10 +561,22 @@ const Home = ({ route }) => {
 
   // OPTIMIZED: Smart real-time updates for items
   useEffect(() => {
+    console.log("Setting up items real-time subscription")
+
     const channel = supabase
       .channel("items_changes")
-      .on("postgres_changes", { event: "*", schema: "public", table: "items" }, handleItemsRealtimeUpdate)
-      .subscribe()
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "items"
+        },
+        handleItemsRealtimeUpdate
+      )
+      .subscribe((status) => {
+        console.log("Items subscription status:", status)
+      })
 
     return () => {
       console.log("Cleaning up items subscription")
