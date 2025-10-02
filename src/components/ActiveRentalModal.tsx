@@ -10,6 +10,7 @@ import {
   Modal,
   TouchableOpacity,
   RefreshControl,
+  Alert,
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supbaseClient';
@@ -23,8 +24,32 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   const [loading, setLoading] = useState(true);
   const [returningIds, setReturningIds] = useState<string[]>([]);
   const [refreshing, setRefreshing] = useState(false);
+  const [categories, setCategories] = useState({}); // Store category names by ID
 
   const navigation = useNavigation();
+
+  // Fetch categories on component mount
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('category_id, name');
+
+      if (error) throw error;
+
+      const categoriesMap = {};
+      data.forEach(cat => {
+        categoriesMap[cat.category_id] = cat.name;
+      });
+      setCategories(categoriesMap);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
 
   // Fetch initial data and set up real-time subscription
   useEffect(() => {
@@ -50,6 +75,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             price_per_day,
             location,
             main_image_url,
+            category_id,
             users:user_id (
               first_name,
               last_name,
@@ -58,13 +84,18 @@ const ActiveRentalModal = ({ visible, onClose }) => {
           )
         `)
         .eq('renter_id', currentUser.id)
-        .in('status', ['confirmed', 'ongoing', 'delivered'])
+        .in('status', ['confirmed', 'ongoing', 'delivered', 'deposit_submitted', 'on_the_way', 'awaiting_owner_confirmation'])
         .order('created_at', { ascending: false });
 
       if (error) {
         console.error('Error fetching active rentals:', error);
       } else {
-        setRentals(data);
+        // Add accommodation info to rentals
+        const rentalsWithAccommodationInfo = data.map(rental => ({
+          ...rental,
+          is_accommodation: categories[rental.items?.category_id] === 'Accommodation'
+        }));
+        setRentals(rentalsWithAccommodationInfo);
       }
       setLoading(false);
     };
@@ -112,9 +143,14 @@ const ActiveRentalModal = ({ visible, onClose }) => {
               
               if (existingIndex >= 0) {
                 // Update existing rental
+                const updatedRental = { 
+                  ...prev[existingIndex], 
+                  ...payload.new,
+                  is_accommodation: categories[payload.new.items?.category_id] === 'Accommodation'
+                };
                 return prev.map(rental =>
                   rental.rental_id === payload.new.rental_id
-                    ? { ...rental, ...payload.new }
+                    ? updatedRental
                     : rental
                 );
               } else {
@@ -153,6 +189,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             price_per_day,
             location,
             main_image_url,
+            category_id,
             users:user_id (
               first_name,
               last_name,
@@ -165,7 +202,8 @@ const ActiveRentalModal = ({ visible, onClose }) => {
         if (!itemError && itemData) {
           const completeRental = {
             ...newRental,
-            items: itemData
+            items: itemData,
+            is_accommodation: categories[itemData.category_id] === 'Accommodation'
           };
           
           setRentals(prev => [completeRental, ...prev]);
@@ -185,7 +223,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
         subscription.unsubscribe();
       }
     };
-  }, [currentUser, visible]);
+  }, [currentUser, visible, categories]);
 
   // Manual refresh function
   const refreshRentals = async () => {
@@ -208,6 +246,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
           price_per_day,
           location,
           main_image_url,
+          category_id,
           users:user_id (
             first_name,
             last_name,
@@ -220,7 +259,11 @@ const ActiveRentalModal = ({ visible, onClose }) => {
       .order('created_at', { ascending: false });
 
     if (!error) {
-      setRentals(data);
+      const rentalsWithAccommodationInfo = data.map(rental => ({
+        ...rental,
+        is_accommodation: categories[rental.items?.category_id] === 'Accommodation'
+      }));
+      setRentals(rentalsWithAccommodationInfo);
     }
     setRefreshing(false);
   };
@@ -265,9 +308,19 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   };
 
   const handleCardPress = (rental) => {
+    // Check if the item is an Accommodation
+    if (rental.is_accommodation) {
+      Alert.alert(
+        'Accommodation Item',
+        'Tracking is not available for accommodation items.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+
     // Close the modal first
     onClose();
-    // Navigate to tracking screen
+    // Navigate to tracking screen only for non-accommodation items
     navigation.navigate('ItemTrackingScreen', { rental });
   };
 
@@ -317,24 +370,28 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             {rentals.map((rental, index) => {
               const remainingDays = getRemainingDays(rental.end_date);
               const isReturning = returningIds.includes(rental.rental_id);
+              const isAccommodation = rental.is_accommodation;
               
               return (
                 <TouchableOpacity
                   key={rental.rental_id}
-                  style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}
+                  style={[
+                    styles.card, 
+                    { marginTop: index === 0 ? 8 : 12 },
+                    isAccommodation && styles.accommodationCard
+                  ]}
                   onPress={() => handleCardPress(rental)}
                   activeOpacity={0.7}
                   disabled={isReturning}
                 >
-                  <View style={styles.cardHeader}>
-                    <View style={[
-                      styles.statusBadge,
-                      { backgroundColor: getStatusBgColor(rental.status) }
-                    ]}>
-                      <Text style={[styles.statusText, { color: getStatusColor(rental.status) }]}>
-                        {getStatusDisplayText(rental.status)}
-                      </Text>
+                  {/* Accommodation Badge */}
+                  {isAccommodation && (
+                    <View style={styles.accommodationBadge}>
+                      <Text style={styles.accommodationBadgeText}>🏠 Accommodation</Text>
                     </View>
+                  )}
+
+                  <View style={styles.cardHeader}>
                     {remainingDays > 0 && (
                       <View style={styles.daysBadge}>
                         <Text style={styles.daysText}>
@@ -402,10 +459,18 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                         </Text>
                       </View>
                       
-                      {/* Tap to track indicator */}
+                      {/* Track indicator - Show different message for accommodation */}
                       <View style={styles.trackIndicator}>
-                        <Text style={styles.trackText}>Tap to track order</Text>
-                        <Text style={styles.trackIcon}>👆</Text>
+                        {isAccommodation ? (
+                          <Text style={styles.accommodationTrackText}>
+                            🏠 Accommodation - No tracking available
+                          </Text>
+                        ) : (
+                          <>
+                            <Text style={styles.trackText}>Tap to track order</Text>
+                            <Text style={styles.trackIcon}>👆</Text>
+                          </>
+                        )}
                       </View>
                     </View>
                   </View>
@@ -479,6 +544,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
     elevation: 3,
+  },
+  accommodationCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#8B4513',
   },
   cardHeader: {
     flexDirection: 'row',
@@ -662,5 +731,25 @@ const styles = StyleSheet.create({
   },
   trackIcon: {
     fontSize: 12,
+  },
+  accommodationTrackText: {
+    fontSize: 12,
+    color: '#8B4513',
+    fontWeight: '500',
+    fontStyle: 'italic',
+  },
+  accommodationBadge: {
+    backgroundColor: '#8B4513',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+    marginLeft: 16,
+    marginTop: 8,
+  },
+  accommodationBadgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '600',
   },
 });
