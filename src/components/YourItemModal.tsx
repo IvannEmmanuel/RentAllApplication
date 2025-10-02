@@ -71,7 +71,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
     try {
       let statusFilter;
       if (activeTab === 'pending') statusFilter = ['pending'];
-      else if (activeTab === 'active') statusFilter = ['confirmed', 'ongoing', 'delivered', 'awaiting_owner_confirmation'];
+      else if (activeTab === 'active') statusFilter = ['confirmed', 'ongoing', 'delivered', 'awaiting_owner_confirmation', 'deposit_submitted'];
       else statusFilter = ['completed'];
 
       const from = page * ITEMS_PER_PAGE;
@@ -89,6 +89,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
           status,
           quantity,
           created_at,
+          proof_of_deposit_url,
           items!inner(
             title,
             price_per_day,
@@ -206,29 +207,29 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         console.log('Accommodation item: Changing status directly to ongoing');
 
         // MANUALLY DEDUCT QUANTITY FOR ACCOMMODATION ITEMS
-        const { data: itemData, error: itemError } = await supabase
-          .from('items')
-          .select('quantity')
-          .eq('item_id', oldBooking.item_id)
-          .single();
+        // const { data: itemData, error: itemError } = await supabase
+        //   .from('items')
+        //   .select('quantity')
+        //   .eq('item_id', oldBooking.item_id)
+        //   .single();
 
-        if (itemError) throw itemError;
+        // if (itemError) throw itemError;
 
-        const currentQuantity = itemData.quantity || 0;
-        const bookingQuantity = oldBooking.quantity || 1;
+        // const currentQuantity = itemData.quantity || 0;
+        // const bookingQuantity = oldBooking.quantity || 1;
 
-        if (currentQuantity < bookingQuantity) {
-          throw new Error(`Not enough quantity available. Only ${currentQuantity} left, but booking requires ${bookingQuantity}.`);
-        }
+        // if (currentQuantity < bookingQuantity) {
+        //   throw new Error(`Not enough quantity available. Only ${currentQuantity} left, but booking requires ${bookingQuantity}.`);
+        // }
 
-        const updatedQuantity = currentQuantity - bookingQuantity;
+        // const updatedQuantity = currentQuantity - bookingQuantity;
 
-        const { error: updateError } = await supabase
-          .from('items')
-          .update({ quantity: updatedQuantity })
-          .eq('item_id', oldBooking.item_id);
+        // const { error: updateError } = await supabase
+        //   .from('items')
+        //   .update({ quantity: updatedQuantity })
+        //   .eq('item_id', oldBooking.item_id);
 
-        if (updateError) throw updateError;
+        // if (updateError) throw updateError;
       }
 
       // Update booking status
@@ -275,25 +276,25 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
 
       if (error) throw error;
 
-      // Restore item quantity - AYAW HILABTI NI KAY DAPAT PAG ACCEPT MAKWAAN NA ANG QUANTITY
-      if (oldBooking.items) {
-        const { data: itemData, error: itemError } = await supabase
-          .from('items')
-          .select('quantity')
-          .eq('item_id', oldBooking.item_id)
-          .single();
+      // // // Restore item quantity - AYAW HILABTI NI KAY DAPAT PAG ACCEPT MAKWAAN NA ANG QUANTITY
+      // // if (oldBooking.items) {
+      // //   const { data: itemData, error: itemError } = await supabase
+      // //     .from('items')
+      // //     .select('quantity')
+      // //     .eq('item_id', oldBooking.item_id)
+      // //     .single();
 
-        if (!itemError && itemData) {
-          const updatedQuantity = (itemData.quantity || 0) + (oldBooking.quantity || 1);
+      // //   if (!itemError && itemData) {
+      // //     const updatedQuantity = (itemData.quantity || 0) + (oldBooking.quantity || 1);
 
-          const { error: updateError } = await supabase
-            .from('items')
-            .update({ quantity: updatedQuantity })
-            .eq('item_id', oldBooking.item_id);
+      // //     const { error: updateError } = await supabase
+      // //       .from('items')
+      // //       .update({ quantity: updatedQuantity })
+      // //       .eq('item_id', oldBooking.item_id);
 
-          if (updateError) throw updateError;
-        }
-      }
+      // //     if (updateError) throw updateError;
+      // //   }
+      // }
 
       // Update local state
       setBookings(prev =>
