@@ -436,7 +436,7 @@ const AddItem = ({ navigation }) => {
         />
 
         {/* Available Checkbox */}
-        <TouchableOpacity
+        {/* <TouchableOpacity
           style={styles.checkboxContainer}
           onPress={() => updateForm('available', !form.available)}
         >
@@ -444,7 +444,7 @@ const AddItem = ({ navigation }) => {
             {form.available && <Text style={styles.checkmark}>✓</Text>}
           </View>
           <Text style={styles.checkboxLabel}>Available</Text>
-        </TouchableOpacity>
+        </TouchableOpacity> */}
 
         {/* Image Picker */}
         <Text style={styles.label}>Image (optional)</Text>
