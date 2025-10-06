@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useFavorites } from './FavoritesContext';
 import BookItemModal from './BookItemModal';
 import PictureModal from './PictureModal';
+import ReportModal from './ReportModal';
 
 const LessorReviews = ({ route }) => {
   const { lessorId } = route.params;
@@ -36,6 +37,7 @@ const LessorReviews = ({ route }) => {
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
   const [pictureItem, setPictureItem] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null);
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   // Fetch user's bookings - SAME AS HOME.TSX
   const fetchUserBookings = useCallback(async () => {
@@ -117,6 +119,20 @@ const LessorReviews = ({ route }) => {
     },
     [getUserBookingStatus],
   );
+
+  const handleReportPress = () => {
+    if (!currentUser) {
+      Alert.alert('Login Required', 'Please log in to submit a report.');
+      return;
+    }
+
+    if (currentUser.id === lessorId) {
+      Alert.alert('Cannot Report', 'You cannot report yourself.');
+      return;
+    }
+
+    setReportModalVisible(true);
+  };
 
   // Handle rent now button - SAME AS HOME.TSX
   const handleRentNow = (item) => {
@@ -571,6 +587,12 @@ const LessorReviews = ({ route }) => {
           <Text style={styles.backButtonText}>‹</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Lessor Profile</Text>
+        <TouchableOpacity
+          style={{ left: 120 }}
+          onPress={handleReportPress} // Updated handler
+        >
+          <Image source={require('../../assets/report.png')} style={styles.reportPhoto} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -594,9 +616,11 @@ const LessorReviews = ({ route }) => {
             </View>
 
             <View style={styles.profileInfo}>
-              <Text style={styles.lessorName}>
-                {lessorInfo ? `${lessorInfo.first_name} ${lessorInfo.last_name}` : 'Unknown Lessor'}
-              </Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Text style={styles.lessorName}>
+                  {lessorInfo ? `${lessorInfo.first_name} ${lessorInfo.last_name}` : 'Unknown Lessor'}
+                </Text>
+              </View>
 
               <View style={styles.ratingContainer}>
                 <Image source={require('../../assets/rate.png')} style={styles.rateImage} />
@@ -672,6 +696,16 @@ const LessorReviews = ({ route }) => {
         visible={pictureModalVisible}
         onClose={() => setPictureModalVisible(false)}
         item={pictureItem}
+      />
+
+      <ReportModal
+        visible={reportModalVisible}
+        onClose={() => setReportModalVisible(false)}
+        senderId={currentUser?.id}
+        targetUserId={lessorId}
+        rentalId={null} // No specific rental for lessor report
+        title="Report Lessor"
+        description="Please provide details about why you are reporting this lessor. Our team will review your report and take appropriate action."
       />
     </View>
   );
@@ -874,7 +908,7 @@ const styles = StyleSheet.create({
   },
   messageImage: {
     width: 20,
-    height: 20,
+    height: 20
   },
   messageContainer: {
     right: 5,
@@ -935,6 +969,10 @@ const styles = StyleSheet.create({
     color: '#9C9894',
     fontSize: 14,
   },
+  reportPhoto: {
+    width: 25,
+    height: 25
+  }
 });
 
 export default LessorReviews;
