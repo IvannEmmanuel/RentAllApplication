@@ -402,8 +402,11 @@ const Home = ({ route }) => {
 
         // 👇 add this for searching
         if (searchTerm.trim() !== "") {
+          const term = searchTerm.trim()
+
+          // generalized search across multiple fields
           query = query.or(
-            `title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%`
+            `title.ilike.%${term}%,description.ilike.%${term}%,location.ilike.%${term}%,price_per_day.eq.${term},quantity.eq.${term}`
           )
         }
 
