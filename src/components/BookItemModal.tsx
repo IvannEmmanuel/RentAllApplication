@@ -13,6 +13,7 @@ import React, { useState, useEffect, useMemo } from 'react'
 import { Calendar } from 'react-native-calendars'
 import { supabase } from '../../supbaseClient'
 import { handleBookingStatusChange } from '../notifications/notifications'
+import ReportItemModal from './ReportItemModal'
 
 const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   const [loading, setLoading] = useState(false)
@@ -30,6 +31,8 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   //Ratings
   const [ratings, setRatings] = useState([])
   const [averageRating, setAverageRating] = useState<number | null>(null);
+
+  const [reportModalVisible, setReportModalVisible] = useState(false);
 
   useEffect(() => {
     if (!visible || !item?.item_id) return;
@@ -494,6 +497,11 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
                   <Text style={styles.locationValue}>{item.location}</Text>
                 </View>
               )}
+
+              <TouchableOpacity onPress={() => setReportModalVisible(true)} style={{ marginTop: 12, flexDirection: 'row', alignItems: 'center' }}>
+                <Image source={require('../../assets/report.png')} style={{ width: 20, height: 20, marginRight: 6 }} />
+                <Text style={{ color: '#FF4B4B', fontWeight: '600' }}>Report this item</Text>
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -653,6 +661,16 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
           </TouchableOpacity>
         </View>
       </View>
+      {item && (
+        <ReportItemModal
+          visible={reportModalVisible}
+          onClose={() => setReportModalVisible(false)}
+          targetUserId={item.user_id}
+          senderId={currentUserId}
+          itemId={item.item_id}
+          rentalId={null}  // Add this explicitly
+        />
+      )}
     </Modal>
   )
 }
