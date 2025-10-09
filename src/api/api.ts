@@ -1,1 +1,3 @@
-export const baseURL = 'http://192.168.1.5:3000'
+import { NOTIF_URL } from "../../supabaseConfig"
+
+export const baseURL = NOTIF_URL
