@@ -151,6 +151,7 @@ import { CameraView, type CameraType, useCameraPermissions } from "expo-camera"
 import { useNavigation } from "@react-navigation/native"
 import { supabase } from "../../../supbaseClient"
 import { useRegistration } from "../../hooks/RegistrationContext"
+import * as ImageManipulator from 'expo-image-manipulator'
 
 const Face = () => {
   const [facing, setFacing] = useState<CameraType>("front")
@@ -217,16 +218,73 @@ const Face = () => {
       setLoading(true)
       setResult("🔄 Comparing faces...")
 
-      // Method 1: Try base64 approach (more reliable for React Native)
-      console.log('Converting images to base64...')
+      // Compression function
+      const compressImageToLimit = async (uri: string, maxSizeBytes: number = 2097152): Promise<string> => {
+        let compressedUri = uri
+        let quality = 0.9 // Start with 90% quality
+        let attempts = 0
+        const maxAttempts = 5
 
+        while (attempts < maxAttempts) {
+          try {
+            console.log(`Compression attempt ${attempts + 1}, quality: ${quality}`)
+
+            const result = await ImageManipulator.manipulateAsync(
+              uri,
+              [], // No manipulations, just compression
+              {
+                compress: quality,
+                format: ImageManipulator.SaveFormat.JPEG,
+                base64: false
+              }
+            )
+
+            // Check the file size
+            const response = await fetch(result.uri)
+            const blob = await response.blob()
+            const fileSize = blob.size
+
+            console.log(`Compressed size: ${fileSize} bytes, target: ${maxSizeBytes} bytes`)
+
+            if (fileSize <= maxSizeBytes || quality <= 0.3) {
+              console.log(`✅ Compression successful: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)}MB)`)
+              return result.uri
+            }
+
+            // Reduce quality for next attempt
+            quality -= 0.15
+            attempts++
+            compressedUri = result.uri
+
+          } catch (error) {
+            console.error('Compression error:', error)
+            throw new Error('Failed to compress image')
+          }
+        }
+
+        // If we still exceed size after all attempts, use the smallest we got
+        console.log('⚠️ Using smallest compressed version despite exceeding limit')
+        return compressedUri
+      }
+
+      console.log('Starting image compression...')
+
+      // Compress both images
+      const [compressedIdUri, compressedSelfieUri] = await Promise.all([
+        compressImageToLimit(registrationData.idImage.uri),
+        compressImageToLimit(selfieUri)
+      ])
+
+      console.log('Image compression complete, converting to base64...')
+
+      // Convert compressed images to base64
       const [idResponse, selfieResponse] = await Promise.all([
-        fetch(registrationData.idImage.uri),
-        fetch(selfieUri)
+        fetch(compressedIdUri),
+        fetch(compressedSelfieUri)
       ])
 
       if (!idResponse.ok || !selfieResponse.ok) {
-        throw new Error('Cannot access image files')
+        throw new Error('Cannot access compressed image files')
       }
 
       const [idBlob, selfieBlob] = await Promise.all([
@@ -234,11 +292,16 @@ const Face = () => {
         selfieResponse.blob()
       ])
 
-      console.log('Image sizes - ID:', idBlob.size, 'bytes, Selfie:', selfieBlob.size, 'bytes')
+      console.log('Final image sizes - ID:', idBlob.size, 'bytes, Selfie:', selfieBlob.size, 'bytes')
 
-      // Check file sizes (Face++ limit is usually 2MB)
-      if (idBlob.size > 2000000 || selfieBlob.size > 2000000) {
-        throw new Error('Image file too large (max 2MB)')
+      // Final size check (should pass now, but good to have)
+      if (idBlob.size > 2097152 || selfieBlob.size > 2097152) {
+        console.warn('Images still exceed limit after compression:', {
+          idSize: idBlob.size,
+          selfieSize: selfieBlob.size
+        })
+        // Continue anyway with a warning
+        setResult("⚠️ Using compressed images (slightly over limit)")
       }
 
       const idBase64 = await new Promise<string>((resolve, reject) => {
@@ -265,7 +328,7 @@ const Face = () => {
 
       console.log('Base64 conversion complete, sending to Face++ API...')
 
-      // Send using URL-encoded form data (more reliable than multipart)
+      // Rest of your API call remains the same...
       const formBody = new URLSearchParams()
       formBody.append('api_key', 'W9-sl3ggHVQ2DsAuGh8abK4GJe-6LWY7')
       formBody.append('api_secret', 'IKs0rowIo3yVqLB8FS3kpOkpFhJ3qTt3')
@@ -313,31 +376,16 @@ const Face = () => {
 
     } catch (error: any) {
       console.error("Face++ API error:", error)
-      console.error("Error details:", {
-        name: error.name,
-        message: error.message,
-        stack: error.stack
-      })
 
       if (error.name === 'AbortError') {
         setResult("⚠️ Request timeout - please try again")
         Alert.alert("Timeout", "Request timed out. Please try again.")
       } else if (error.message.includes('Network request failed')) {
         setResult("⚠️ Network error")
-        Alert.alert(
-          "Network Error",
-          "Could not connect to Face++ API. Please check:\n\n" +
-          "• Internet connection\n" +
-          "• VPN settings\n" +
-          "• Firewall/proxy settings\n\n" +
-          "Try again in a moment."
-        )
-      } else if (error.message.includes('Image file too large')) {
-        setResult("⚠️ Image too large")
-        Alert.alert("Error", "Image files are too large. Please try with smaller images.")
-      } else if (error.message.includes('Cannot access image files')) {
-        setResult("⚠️ Cannot access images")
-        Alert.alert("Error", "Cannot access image files. Please try capturing them again.")
+        Alert.alert("Network Error", "Could not connect to Face++ API. Please check your internet connection.")
+      } else if (error.message.includes('Failed to compress image')) {
+        setResult("⚠️ Compression failed")
+        Alert.alert("Error", "Failed to process images. Please try again with different photos.")
       } else {
         setResult("⚠️ API error")
         Alert.alert("API Error", `Face comparison failed: ${error.message}`)
