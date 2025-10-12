@@ -1,2 +1,3 @@
 export const VITE_SUPABASE_URL = 'https://lkeifqciacuzdslcezxd.supabase.co'
 export const VITE_SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxrZWlmcWNpYWN1emRzbGNlenhkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTYyMzAsImV4cCI6MjA3MzQ5MjIzMH0.vyHZSY9v2qicCB2-wgFYJGNh1VvMOHfvAQkG-RW71h8'
+export const NOTIF_URL = 'https://rentall-backend-1.onrender.com'
