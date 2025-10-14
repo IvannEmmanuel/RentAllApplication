@@ -30,6 +30,10 @@ const Login = () => {
 
   const { setCurrentUser } = useFavorites()
 
+  const handleForgotPassword = () => {
+    navigation.navigate("ForgotPassword")
+  }
+
   const handleRegister = () => {
     navigation.navigate("Register")
   }
@@ -353,7 +357,7 @@ const Login = () => {
 
           <View style={styles.bottomActionsContainer}>
             <View style={styles.bottomContainer}>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={handleForgotPassword}>
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
             </View>
