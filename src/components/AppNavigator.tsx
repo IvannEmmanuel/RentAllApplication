@@ -21,6 +21,7 @@ import LessorReviewee from './LessorReviewee';
 import ItemTrackingScreen from './ItemTrackingScreen';
 import ItemTrackingLessorScreen from './ItemTrackingLessorScreen';
 import Terms from '../pages/Register/Terms';
+import ForgotPassword from '../pages/Login/ForgotPassword';
 
 const Stack = createNativeStackNavigator();
 
@@ -84,6 +85,7 @@ export default function AppNavigator() {
                             <Stack.Screen name="ItemTrackingScreen" component={ItemTrackingScreen} />
                             <Stack.Screen name="ItemTrackingLessorScreen" component={ItemTrackingLessorScreen} />
                             <Stack.Screen name="Terms" component={Terms} />
+                            <Stack.Screen name="ForgotPassword" component={ForgotPassword} />
                         </Stack.Navigator>
                         <AppModals currentUser={currentUser} />
                     </NavigationContainer>
