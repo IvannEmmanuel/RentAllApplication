@@ -20,6 +20,7 @@ import Chat from '../pages/Screens/Chat';
 import LessorReviewee from './LessorReviewee';
 import ItemTrackingScreen from './ItemTrackingScreen';
 import ItemTrackingLessorScreen from './ItemTrackingLessorScreen';
+import Terms from '../pages/Register/Terms';
 
 const Stack = createNativeStackNavigator();
 
@@ -82,6 +83,7 @@ export default function AppNavigator() {
                             <Stack.Screen name="LessorReviewee" component={LessorReviewee} />
                             <Stack.Screen name="ItemTrackingScreen" component={ItemTrackingScreen} />
                             <Stack.Screen name="ItemTrackingLessorScreen" component={ItemTrackingLessorScreen} />
+                            <Stack.Screen name="Terms" component={Terms} />
                         </Stack.Navigator>
                         <AppModals currentUser={currentUser} />
                     </NavigationContainer>
