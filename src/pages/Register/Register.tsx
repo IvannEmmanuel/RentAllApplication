@@ -87,6 +87,10 @@ const Register = () => {
         }
     };
 
+    const handleTerms = () => {
+        navigation.navigate('Terms' as never);
+    }
+
     const handleLogin = () => {
         navigation.navigate('Login' as never);
     };
@@ -284,7 +288,7 @@ const Register = () => {
 
                         <View style={{ flexDirection: 'row', marginBottom: 20 }}>
                             <Text>By clicking next, you agree to our</Text>
-                            <TouchableOpacity>
+                            <TouchableOpacity onPress={handleTerms}>
                                 <Text style={{ color: '#FFAB00', paddingLeft: 10 }}>Terms and Conditions</Text>
                             </TouchableOpacity>
                         </View>
