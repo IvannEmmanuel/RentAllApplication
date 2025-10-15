@@ -603,7 +603,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                         </View>
                     )}
 
-                    {/* View Deposit Proof Section - Show for all statuses except confirmed */}
+                    {/* View Deposit Proof Section - Show for all statuses except confirmed
                     {currentRental.proof_of_deposit_url && currentRental.status !== 'confirmed' && (
                         <View style={styles.depositProofSection}>
                             <Text style={styles.depositProofText}>
@@ -616,7 +616,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                                 <Text style={styles.viewProofButtonText}>View Proof</Text>
                             </TouchableOpacity>
                         </View>
-                    )}
+                    )} */}
 
                     {/* Mark as Delivered Section (for on_the_way status) */}
                     {currentRental.status === 'on_the_way' && (
