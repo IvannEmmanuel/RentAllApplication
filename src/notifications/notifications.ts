@@ -439,6 +439,14 @@ export async function handleBookingStatusChange(
 
       case 'confirmed':
       case 'ongoing':
+        // Notify lessor
+        await sendNotificationToUser(
+          item.user_id,
+          'Delivered Item',
+          `${renterName} received the item "${item.title}"`,
+          { type: 'booking_ongoing', rental_id: rental.rental_id, item_id: rental.item_id }
+        );
+        break;
       case 'cancelled':
         // Notify renter about status update
         await sendNotificationToUser(
@@ -451,17 +459,17 @@ export async function handleBookingStatusChange(
 
       case 'completed':
         // Notify both renter and lessor
-        await sendNotificationToUser(
-          rental.renter_id,
-          'Rental Completed',
-          `Your rental of "${item.title}" is complete. Please rate your experience!`,
-          { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
-        );
+        // await sendNotificationToUser(
+        //   rental.renter_id,
+        //   'Rental Completed',
+        //   `Your rental of "${item.title}" is complete. Please rate your experience!`,
+        //   { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
+        // );
 
         await sendNotificationToUser(
           item.user_id,
           'Rental Completed',
-          `${renterName}'s rental of your "${item.title}" is complete`,
+          `Your rental of your "${item.title}" is complete. Please rate your experience!`,
           { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
@@ -487,6 +495,30 @@ export async function handleBookingStatusChange(
             rental_id: rental.rental_id,
             item_id: rental.item_id
           }
+        );
+        break;
+
+      case 'deposit_submitted':
+        // Notify lessor that renter submitted a deposit
+        await sendNotificationToUser(
+          item.user_id, // lessor
+          'Deposit Submitted',
+          `${renterName} has submitted a deposit for "${item.title}". Please verify it.`,
+          {
+            type: 'deposit_submitted',
+            rental_id: rental.rental_id,
+            item_id: rental.item_id,
+          }
+        );
+        break;
+
+      case 'on_the_way':
+        // Notify renter that lessor is delivering the item
+        await sendNotificationToUser(
+          rental.renter_id, // renter
+          'Item On The Way',
+          `${lessorName} is delivering the "${item.title}" to you.`,
+          { type: 'booking_ongoing', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
