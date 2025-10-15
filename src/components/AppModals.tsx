@@ -72,7 +72,6 @@ export default function AppModals({ currentUser }) {
         (
           modalData.type === 'booking_confirmed' ||
           modalData.type === 'booking_started' ||
-          modalData.type === 'booking_ongoing' ||
           (modalData.type === 'booking_started' && userRole === 'renter')
         ) &&
         !isLoadingRole && (
@@ -124,6 +123,8 @@ export default function AppModals({ currentUser }) {
         (modalData.type === 'booking_return' ||
           modalData.type === 'booking_started' ||
           modalData.type === 'booking_ongoing' ||
+          modalData.type === 'deposit_submitted' ||
+          modalData.type === 'on_the_way' ||
           modalData.type === 'booking_delivered') && (
           <ItemTrackingLessorScreen
             visible={true}
