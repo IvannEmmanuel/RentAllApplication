@@ -12,6 +12,9 @@ import RatingsModal from '../../components/RatingsModal'
 import PictureModal from '../../components/PictureModal'
 import LessorReviews from '../../components/LessorReviewsModal'
 import SkeletonLoadingProfile from '../../components/skeletonComponents/SkeletonLoadingProfile'
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import EditProfileModal from '../../components/EditProfileModal'
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -28,6 +31,7 @@ const Profile = () => {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [lessorRatings, setLessorRatings] = useState({});
   const [lessorReviewsVisible, setLessorReviewsVisible] = useState(false);
+  const [isEditModalVisible, setEditModalVisible] = useState(false);
 
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
 
@@ -629,84 +633,83 @@ const Profile = () => {
                     ? `${currentUser.first_name} ${currentUser.last_name}`
                     : 'Loading...'}
                 </Text>
-
                 <Text style={styles.birthdayText}>
                   {currentUser?.dob
                     ? new Date(currentUser.dob).toLocaleDateString()
                     : 'Birthdate not available'}
                 </Text>
+                <View style={styles.editButton}>
+                  <TouchableOpacity onPress={() => setEditModalVisible(true)}>
+                    <Text style={styles.editText}>Edit Profile</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           </View>
+
 
           <View style={styles.transactContainer}>
             <Text style={styles.transactionText}>Transaction Management</Text>
           </View>
 
           <View style={styles.mainActivitiesContainer}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.activitiesScrollContent}
+            <View style={styles.firstActivitiesContainer}>
+              <TouchableOpacity
+                style={styles.subActivitiesContainer}
+                onPress={() => setShowPendingModal(true)}
+              >
+                <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
+                <Text>Pending</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity
+                onPress={() => setShowActiveRental(true)}
+                style={styles.subActivitiesContainer}
+              >
+                <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
+                <Text>Active Rental</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity
+                style={styles.subActivitiesContainer}
+                onPress={() => setShowCompletedModal(true)}
+              >
+                <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
+                <Text>Completed</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity
+                style={styles.subActivitiesContainer}
+                onPress={() => setIsYourItemModalVisible(true)}
+              >
+                <Image source={require('../../../assets/item.png')} style={styles.pendingImage} />
+                <Text>Your Item</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.activitiesContainer}>
+              <TouchableOpacity
+                style={styles.subActivitiesContainer}
+                onPress={() => setShowRatingsModal(true)}
+              >
+                <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
+                <Text>Ratings</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          <View style={styles.mainActivitiesContainer}>
+            <TouchableOpacity
+              style={styles.subActivitiesContainer}
+              onPress={() => navigation.navigate('LessorReviews', {
+                lessorId: currentUser?.id,
+                lessorName: currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : 'Unknown'
+              })}
             >
-              <View style={styles.firstActivitiesContainer}>
-                <TouchableOpacity
-                  style={styles.subActivitiesContainer}
-                  onPress={() => setShowPendingModal(true)}
-                >
-                  <Image source={require('../../../assets/pending.png')} style={styles.pendingImage} />
-                  <Text>Pending</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.activitiesContainer}>
-                <TouchableOpacity
-                  onPress={() => setShowActiveRental(true)}
-                  style={styles.subActivitiesContainer}
-                >
-                  <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
-                  <Text>Active Rental</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.activitiesContainer}>
-                <TouchableOpacity
-                  style={styles.subActivitiesContainer}
-                  onPress={() => setShowCompletedModal(true)}
-                >
-                  <Image source={require('../../../assets/completed.png')} style={styles.pendingImage} />
-                  <Text>Completed</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.activitiesContainer}>
-                <TouchableOpacity
-                  style={styles.subActivitiesContainer}
-                  onPress={() => setIsYourItemModalVisible(true)}
-                >
-                  <Image source={require('../../../assets/item.png')} style={styles.pendingImage} />
-                  <Text>Your Item</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.activitiesContainer}>
-                <TouchableOpacity
-                  style={styles.subActivitiesContainer}
-                  onPress={() => setShowRatingsModal(true)}
-                >
-                  <Image source={require("../../../assets/rating.png")} style={styles.pendingImage} />
-                  <Text>Ratings</Text>
-                </TouchableOpacity>
-              </View>
-              <View style={styles.activitiesContainer}>
-                <TouchableOpacity
-                  style={styles.subActivitiesContainer}
-                  onPress={() => navigation.navigate('LessorReviews', {
-                    lessorId: currentUser?.id,
-                    lessorName: currentUser ? `${currentUser.first_name} ${currentUser.last_name}` : 'Unknown'
-                  })}
-                >
-                  <Image source={require('../../../assets/product.png')} style={styles.pendingImage} />
-                  <Text>Your Product</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
+              <Image source={require('../../../assets/product.png')} style={styles.pendingImage} />
+              <Text>Product</Text>
+            </TouchableOpacity>
           </View>
 
           <View style={styles.mainItemContainer}>
@@ -775,6 +778,13 @@ const Profile = () => {
         onClose={() => setPictureModalVisible(false)}
         item={selectedItem}
       />
+
+      <EditProfileModal
+        visible={isEditModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+      />
     </>
   )
 }
@@ -834,11 +844,12 @@ const styles = StyleSheet.create({
     marginTop: 5
   },
   mainActivitiesContainer: {
-    flexDirection: 'row'
+    flexDirection: 'row',
+    paddingLeft: 20,
+    marginTop: 10
   },
   firstActivitiesContainer: {
     flexDirection: 'row',
-    marginTop: 10
   },
   subActivitiesContainer: {
     flexDirection: 'column',
@@ -852,7 +863,6 @@ const styles = StyleSheet.create({
   activitiesContainer: {
     flexDirection: 'row',
     paddingLeft: 10,
-    marginTop: 10
   },
   image: {
     width: 19,
@@ -1046,5 +1056,18 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontFamily: 'DM-Bold',
     fontSize: 16,
+  },
+  editButton: {
+    backgroundColor: '#FFAB00',
+    borderRadius: 20,
+    height: 25,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 5,
+    width: '70%'
+  },
+  editText: {
+    fontFamily: 'DM-Medium',
+    fontSize: 12
   }
 })
