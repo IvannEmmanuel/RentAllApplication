@@ -453,8 +453,8 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAF5EF",
     paddingTop: 40,
   },
-  contentContainer: {
-    paddingBottom: 50,
+    contentContainer: {
+    paddingBottom: 20,
   },
   columnWrapper: {
     justifyContent: "space-between",
