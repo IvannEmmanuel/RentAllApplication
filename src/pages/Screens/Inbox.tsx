@@ -131,7 +131,7 @@ const Inbox = () => {
         let preview = 'No messages yet'
         if (lastMessage) {
           if (lastMessage.message_type === 'image') {
-            preview = '📷 Image'
+            preview = 'Image'
           } else {
             preview = conv.last_message || lastMessage.content || 'No messages yet'
           }
@@ -181,20 +181,14 @@ const Inbox = () => {
   }
 
   // Load conversations when user is available
-  useEffect(() => {
-    if (currentUser) {
-      fetchConversations()
-    }
-  }, [currentUser, fetchConversations])
-
-  // Refresh conversations when screen is focused
   useFocusEffect(
     useCallback(() => {
       if (currentUser) {
-        fetchConversations()
+        console.log("Inbox focused, fetching conversations...");
+        fetchConversations();
       }
-    }, [currentUser, fetchConversations])
-  )
+    }, [currentUser, fetchConversations]) // Pass fetchConversations here
+  );
 
   // Real-time updates for conversations
   useEffect(() => {
