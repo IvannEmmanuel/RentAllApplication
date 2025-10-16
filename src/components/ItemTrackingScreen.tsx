@@ -171,7 +171,6 @@ const ItemTrackingScreen = ({ route, navigation }) => {
             const result = await ImagePicker.launchImageLibraryAsync({
                 mediaTypes: ImagePicker.MediaTypeOptions.Images,
                 allowsEditing: true,
-                aspect: [16, 9],
                 quality: 0.8,
             });
 
@@ -448,7 +447,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
     const renderProgressBar = () => {
         return (
             <View style={styles.progressContainer}>
-                {/* Progress Line */}
+                {/* Progress Line
                 <View style={styles.progressLine}>
                     <View
                         style={[
@@ -456,7 +455,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                             { width: `${((currentPhase - 1) / (phases.length - 1)) * 100}%` }
                         ]}
                     />
-                </View>
+                </View> */}
 
                 {/* Phase Indicators */}
                 <View style={styles.phaseIndicators}>

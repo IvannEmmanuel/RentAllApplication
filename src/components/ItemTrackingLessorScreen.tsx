@@ -490,14 +490,14 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
     const renderProgressBar = () => (
         <View style={styles.progressContainer}>
-            <View style={styles.progressLine}>
+            {/* <View style={styles.progressLine}>
                 <View
                     style={[
                         styles.progressFill,
                         { width: `${((currentPhase - 1) / (phases.length - 1)) * 100}%` },
                     ]}
                 />
-            </View>
+            </View> */}
             <View style={styles.phaseIndicators}>
                 {phases.map(phase => (
                     <View key={phase.id} style={styles.phaseItem}>
