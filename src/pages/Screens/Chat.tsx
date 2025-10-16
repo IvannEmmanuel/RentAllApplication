@@ -321,7 +321,8 @@ const Chat = () => {
                 .from('conversations')
                 .update({
                     last_message: '📷 Image',
-                    last_message_at: new Date().toISOString()
+                    last_message_at: new Date().toISOString(),
+                    item_id: itemId // <-- This is the crucial addition
                 })
                 .eq('id', conversationId);
 
@@ -427,7 +428,8 @@ const Chat = () => {
                 .from('conversations')
                 .update({
                     last_message: messageContent,
-                    last_message_at: new Date().toISOString()
+                    last_message_at: new Date().toISOString(),
+                    item_id: itemId // <-- This is the crucial addition
                 })
                 .eq('id', conversationId)
 
