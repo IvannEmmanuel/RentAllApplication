@@ -77,7 +77,6 @@ const CompletedRentalModal = ({ visible, onClose }) => {
           setRentals((prev) => [...prev, ...data])
         }
 
-        // if less than PAGE_SIZE returned, no more data
         if (data.length < PAGE_SIZE) {
           setHasMore(false)
         }
@@ -107,7 +106,6 @@ const CompletedRentalModal = ({ visible, onClose }) => {
     }
   }, [page])
 
-  // helpers unchanged...
   const getTimeAgo = (updatedAt) => {
     const now = new Date()
     const updated = new Date(updatedAt)
@@ -148,15 +146,6 @@ const CompletedRentalModal = ({ visible, onClose }) => {
 
     return (
       <View key={rental.rental_id} style={[styles.card, { marginTop: index === 0 ? 8 : 12 }]}>
-        <View style={styles.cardHeader}>
-          <View style={styles.statusBadge}>
-            <Text style={styles.statusText}>✅ Completed</Text>
-          </View>
-          <View style={styles.timeBadge}>
-            <Text style={styles.timeText}>{timeAgo}</Text>
-          </View>
-        </View>
-
         <View style={styles.cardContent}>
           <Image
             source={
@@ -168,46 +157,39 @@ const CompletedRentalModal = ({ visible, onClose }) => {
           />
 
           <View style={styles.info}>
-            <Text style={styles.title} numberOfLines={2}>
-              {rental.items?.title}
-            </Text>
+            <View style={styles.titleContainer}>
+              <Text style={styles.title} numberOfLines={2}>
+                {rental.items?.title}
+              </Text>
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>Completed</Text>
+              </View>
+            </View>
 
-            <Text style={styles.detailText}>
+            <Text style={styles.ownerText}>
               {rental.items?.user?.first_name} {rental.items?.user?.last_name}
             </Text>
 
-            <View style={styles.detailRow}>
-              <Text style={styles.detailIcon}>📅</Text>
-              <Text style={styles.detailText}>{dateRange}</Text>
-            </View>
-
-            <View style={styles.detailRow}>
-              <Text style={styles.detailIcon}>⏱️</Text>
-              <Text style={styles.detailText}>
-                {duration} day{duration !== 1 ? "s" : ""} rental
-              </Text>
-            </View>
-
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Quantity</Text>
-                <Text style={styles.detailValue}>{rental.quantity}</Text>
+            <View style={styles.metaContainer}>
+              <View style={styles.metaItem}>
+                <Text style={styles.metaLabel}>Duration</Text>
+                <Text style={styles.metaValue}>{duration}d</Text>
               </View>
-              <View style={styles.detailItem}>
-                <Text style={styles.detailLabel}>Total Paid</Text>
+              <View style={styles.divider} />
+              <View style={styles.metaItem}>
+                <Text style={styles.metaLabel}>Quantity</Text>
+                <Text style={styles.metaValue}>{rental.quantity}</Text>
+              </View>
+              <View style={styles.divider} />
+              <View style={styles.metaItem}>
+                <Text style={styles.metaLabel}>Total</Text>
                 <Text style={styles.priceText}>₱{rental.total_cost}</Text>
               </View>
             </View>
 
-            <View style={styles.locationContainer}>
-              <Text style={styles.detailIcon}>📍</Text>
-              <Text style={styles.locationText} numberOfLines={1}>
-                {rental.items?.location}
-              </Text>
-            </View>
-
-            <View style={styles.completedContainer}>
-              <Text style={styles.completedText}>🎉 Rental successfully completed</Text>
+            <View style={styles.detailsContainer}>
+              <Text style={styles.detailSmall}>{dateRange}</Text>
+              <Text style={styles.detailSmall}>📍 {rental.items?.location}</Text>
             </View>
           </View>
         </View>
@@ -220,19 +202,20 @@ const CompletedRentalModal = ({ visible, onClose }) => {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.headerText}>Completed Rentals</Text>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.closeButton}>✕</Text>
+          <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
+            <Text style={styles.closeButton}>×</Text>
           </TouchableOpacity>
         </View>
 
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator size="large" color="#FFAB00" />
+            <ActivityIndicator size="large" color="#1a1a1a" />
             <Text style={styles.loadingText}>Loading rental history...</Text>
           </View>
         ) : rentals.length === 0 ? (
           <View style={styles.center}>
             <Text style={styles.emptyTitle}>No Completed Rentals</Text>
+            <Text style={styles.emptySubtitle}>Your completed rentals will appear here</Text>
           </View>
         ) : (
           <FlatList
@@ -244,7 +227,9 @@ const CompletedRentalModal = ({ visible, onClose }) => {
             onEndReachedThreshold={0.5}
             ListFooterComponent={
               loadingMore ? (
-                <ActivityIndicator style={{ marginVertical: 12 }} color="#FFAB00" />
+                <View style={styles.footerLoader}>
+                  <ActivityIndicator color="#1a1a1a" />
+                </View>
               ) : null
             }
           />
@@ -254,194 +239,171 @@ const CompletedRentalModal = ({ visible, onClose }) => {
   )
 }
 
-export default CompletedRentalModal;
+export default CompletedRentalModal
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FAF5EF'
+    backgroundColor: '#FAFAFA',
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
-    marginTop: 30
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 30,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
   },
   headerText: {
-    fontFamily: 'DM-Bold',
-    fontSize: 18,
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#1a1a1a',
+    letterSpacing: -0.5,
+  },
+  closeButtonContainer: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   closeButton: {
-    fontSize: 20,
-    color: '#FF4444',
-  },
-  scrollView: {
-    flex: 1,
+    fontSize: 28,
+    color: '#999',
+    fontWeight: '300',
   },
   scrollContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     paddingBottom: 20,
   },
   card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    marginHorizontal: 4,
     marginBottom: 12,
     overflow: 'hidden',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
-    elevation: 3,
-    borderLeftWidth: 4,
-    borderLeftColor: '#4CAF50',
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 8,
-  },
-  statusBadge: {
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  timeBadge: {
-    backgroundColor: '#F5F5F5',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  timeText: {
-    fontSize: 11,
-    color: '#757575',
-    fontWeight: '500',
+    elevation: 2,
   },
   cardContent: {
     flexDirection: 'row',
-    padding: 16,
-    paddingTop: 8,
+    padding: 12,
   },
   image: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    marginRight: 16,
+    width: 88,
+    height: 88,
+    borderRadius: 8,
+    marginRight: 12,
+    backgroundColor: '#f5f5f5',
   },
   info: {
     flex: 1,
+    justifyContent: 'space-between',
+  },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 4,
   },
   title: {
-    fontFamily: 'DM-Bold',
     fontSize: 16,
-    marginBottom: 8,
-    color: '#2C3E50',
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  detailIcon: {
-    fontSize: 14,
-    marginRight: 6,
-  },
-  detailText: {
-    fontSize: 14,
-    color: '#5D6D7E',
-    flex: 1,
-  },
-  detailsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 12,
-  },
-  detailItem: {
-    flex: 1,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: '#7F8C8D',
-    marginBottom: 2,
-  },
-  detailValue: {
-    fontSize: 14,
     fontWeight: '600',
-    color: '#2C3E50',
+    color: '#1a1a1a',
+    flex: 1,
+    marginRight: 8,
+    lineHeight: 22,
   },
-  priceText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#4CAF50',
+  badge: {
+    backgroundColor: '#e8f5e9',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 4,
+    minWidth: 70,
   },
-  locationContainer: {
+  badgeText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#2e7d32',
+    textAlign: 'center',
+  },
+  ownerText: {
+    fontSize: 13,
+    color: '#666',
+    marginBottom: 8,
+  },
+  metaContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#f9f9f9',
     paddingHorizontal: 8,
     paddingVertical: 6,
-    borderRadius: 8,
-    marginBottom: 10,
+    borderRadius: 6,
+    marginBottom: 8,
   },
-  locationText: {
-    fontSize: 12,
-    color: '#5D6D7E',
+  metaItem: {
     flex: 1,
+    alignItems: 'center',
   },
-  completedContainer: {
-    backgroundColor: '#E8F5E8',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#C8E6C9',
-  },
-  completedText: {
-    fontSize: 12,
-    color: '#2E7D32',
+  metaLabel: {
+    fontSize: 10,
+    color: '#999',
+    marginBottom: 2,
     fontWeight: '500',
-    textAlign: 'center',
+  },
+  metaValue: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#1a1a1a',
+  },
+  divider: {
+    width: 1,
+    height: 20,
+    backgroundColor: '#e0e0e0',
+  },
+  priceText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#000',
+  },
+  detailsContainer: {
+    gap: 4,
+  },
+  detailSmall: {
+    fontSize: 12,
+    color: '#666',
+    fontWeight: '500',
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-  },
-  loadingContainer: {
-    alignItems: 'center',
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#7F8C8D',
-  },
-  emptyContainer: {
-    alignItems: 'center',
     paddingHorizontal: 40,
   },
-  emptyIcon: {
-    fontSize: 48,
-    marginBottom: 16,
+  loadingText: {
+    marginTop: 16,
+    fontSize: 14,
+    color: '#999',
   },
   emptyTitle: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#2C3E50',
+    color: '#1a1a1a',
     marginBottom: 8,
   },
   emptySubtitle: {
     fontSize: 14,
-    color: '#7F8C8D',
+    color: '#999',
     textAlign: 'center',
     lineHeight: 20,
   },
-});
+  footerLoader: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+})
