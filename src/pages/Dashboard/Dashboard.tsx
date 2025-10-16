@@ -297,12 +297,21 @@ const Tabs = () => {
             <Tab.Screen
                 name="Home"
                 component={HomeStack}
-                options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })}
                 listeners={({ navigation }) => ({
                     tabPress: (e) => {
-                        // Navigate to the nested HomeMain and pass a param instructing it to reset to "All"
-                        navigation.navigate('Home', { screen: 'HomeMain' }); //, params: { resetToAll: true } 
+                        // Prevent the default action
+                        e.preventDefault();
+
+                        // Navigate to the Home screen, but add a timestamp to ensure
+                        // the params are always new, triggering the focus effect.
+                        navigation.navigate('Home', {
+                            screen: 'HomeMain',
+                            params: { resetToAll: true, timestamp: Date.now() }
+                        });
                     },
+                })}
+                options={({ route }) => ({
+                    tabBarStyle: getTabBarVisibility(route),
                 })}
             />
             <Tab.Screen name="Inbox" component={InboxStack} options={({ route }) => ({ tabBarStyle: getTabBarVisibility(route) })} />
