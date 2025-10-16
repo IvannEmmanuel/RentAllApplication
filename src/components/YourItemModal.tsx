@@ -475,7 +475,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         {isActiveTab && isAccommodation && !isCheckoutAvailable && (
           <View style={styles.accommodationMessage}>
             <Text style={styles.accommodationMessageText}>
-              🏠 Accommodation booking - No tracking required
+              Accommodation booking - No tracking required
             </Text>
           </View>
         )}
