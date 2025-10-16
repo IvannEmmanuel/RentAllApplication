@@ -391,7 +391,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         {/* Accommodation Badge */}
         {isAccommodation && (
           <View style={styles.accommodationBadge}>
-            <Text style={styles.accommodationBadgeText}>🏠 Accommodation</Text>
+            <Text style={styles.accommodationBadgeText}>Accommodation</Text>
           </View>
         )}
 
