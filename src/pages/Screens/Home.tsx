@@ -171,8 +171,28 @@ const Home = ({ route }: HomeProps) => {
         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
         .single();
 
+      // If conversation exists, UPDATE the item_id to the new item
+      if (conversation) {
+        console.log("Updating existing conversation with new item:", item.item_id);
+
+        const { data: updatedConversation, error: updateError } = await supabase
+          .from("conversations")
+          .update({
+            item_id: item.item_id, // Update to the new item
+            last_message: `Interested in renting: ${item.title}`,
+            last_message_at: new Date().toISOString(),
+          })
+          .eq("id", conversation.id)
+          .select()
+          .single();
+
+        if (updateError) throw updateError;
+        conversation = updatedConversation;
+      }
       // If no conversation is found, create a new one
-      if (convError && convError.code === "PGRST116") { // 'PGRST116' means no rows found
+      else if (convError && convError.code === "PGRST116") {
+        console.log("Creating new conversation for item:", item.item_id);
+
         const { data: newConversation, error: createError } = await supabase
           .from("conversations")
           .insert([
