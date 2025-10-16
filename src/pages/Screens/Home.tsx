@@ -68,6 +68,18 @@ const Home = ({ route }: HomeProps) => {
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
   const [selectedItem, setSelectedItem] = useState<any>(null);
 
+  // --- Reset when click home tab ---
+  useFocusEffect(
+    useCallback(() => {
+      // When the screen comes into focus, check for the reset parameter
+      if (route.params?.resetToAll) {
+        // Clear the local search term state
+        setSearchTerm("");
+        // The useHomeData hook will handle resetting the category and params
+      }
+    }, [route.params?.resetToAll])
+  );
+
   // --- Business Logic & Callbacks ---
   const isUserItem = useCallback(
     (item: any) => currentUser?.id === item.user_id,
@@ -139,31 +151,70 @@ const Home = ({ route }: HomeProps) => {
       Alert.alert("Cannot Message", "You cannot send a message to yourself");
       return;
     }
-    // Your existing handleMessage logic for creating/navigating to a conversation
-    // This logic can also be moved to a service for even cleaner code
+
     try {
-      let { data: conversation, error } = await supabase
+      // First, get the other user's details for the chat header
+      const { data: otherUser, error: userError } = await supabase
+        .from("users")
+        .select("first_name, last_name")
+        .eq("id", item.user_id)
+        .single();
+
+      if (userError) throw userError;
+
+      const otherUserName = otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : "Unknown User";
+
+      // Check for an existing conversation
+      let { data: conversation, error: convError } = await supabase
         .from("conversations")
         .select("*")
         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
         .single();
 
-      if (error && error.code !== "PGRST116") throw error;
+      // If no conversation is found, create a new one
+      if (convError && convError.code === "PGRST116") { // 'PGRST116' means no rows found
+        const { data: newConversation, error: createError } = await supabase
+          .from("conversations")
+          .insert([
+            {
+              user1_id: currentUser.id,
+              user2_id: item.user_id,
+              item_id: item.item_id,
+              last_message: `Interested in renting: ${item.title}`,
+              last_message_at: new Date().toISOString(),
+            },
+          ])
+          .select()
+          .single();
 
-      if (!conversation) {
-        // ... create new conversation logic ...
+        if (createError) throw createError;
+        conversation = newConversation;
+      } else if (convError) {
+        // Handle other potential errors
+        throw convError;
       }
 
+      // Ensure we have a valid conversation before navigating
+      if (!conversation || !conversation.id) {
+        throw new Error("Could not find or create a conversation.");
+      }
+
+      console.log("Navigating to Chat with Conversation ID:", conversation.id);
+
+      // Navigate to the chat screen with all required parameters
       navigation.navigate("Chat", {
-        // ... navigation params ...
+        conversationId: conversation.id,
+        otherUserId: item.user_id,
+        otherUserName: otherUserName,
+        itemTitle: item.title,
+        itemId: item.item_id,
       });
+
     } catch (error: any) {
       console.error("Error handling message:", error);
-      Alert.alert("Error", "Could not start conversation.");
+      Alert.alert("Error", "Could not start the conversation. Please try again.");
     }
-  },
-    [currentUser, isUserItem, navigation]
-  );
+  }, [currentUser, isUserItem, navigation]);
 
   const handlePicturePress = useCallback((item: any) => {
     setSelectedItem(item);
@@ -260,16 +311,7 @@ const Home = ({ route }: HomeProps) => {
           )}
 
           {!isSearching && searchResults.items.length > 0 && (
-            <>
-              <Text style={styles.sectionTitle}>Items</Text>
-              <View style={styles.itemsGrid}>
-                {searchResults.items.map((item) => (
-                  <View key={item.item_id} style={{ width: '100%' }}>
-                    {renderItemCard({ item })}
-                  </View>
-                ))}
-              </View>
-            </>
+            <Text style={styles.sectionTitle}>Items</Text>
           )}
 
           {!isSearching && searchResults.users.length === 0 && searchResults.items.length === 0 && (
@@ -338,7 +380,7 @@ const Home = ({ route }: HomeProps) => {
           </ScrollView>
         ) : (
           <FlatList
-            data={showResults ? [] : items}
+            data={showResults ? searchResults.items : items}
             renderItem={renderItemCard}
             keyExtractor={(item) => item.item_id.toString()}
             numColumns={2}
@@ -546,6 +588,17 @@ const styles = StyleSheet.create({
     color: "#9C9894",
     fontSize: 14,
   },
+  searchResultsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    paddingHorizontal: 10,
+  },
+  itemWrapper: {
+    width: '48%', // Creates a two-column layout with a small gap
+    marginBottom: 15,
+  },
+
 });
 
 export default Home;
