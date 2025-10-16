@@ -463,12 +463,11 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                       <View style={styles.trackIndicator}>
                         {isAccommodation ? (
                           <Text style={styles.accommodationTrackText}>
-                            🏠 Accommodation - No tracking available
+                            Accommodation - No tracking available
                           </Text>
                         ) : (
                           <>
                             <Text style={styles.trackText}>Tap to track order</Text>
-                            <Text style={styles.trackIcon}>👆</Text>
                           </>
                         )}
                       </View>

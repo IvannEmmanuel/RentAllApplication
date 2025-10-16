@@ -468,7 +468,6 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         {isActiveTab && !isAccommodation && (
           <View style={styles.trackIndicator}>
             <Text style={styles.trackText}>Tap to track order</Text>
-            <Text style={styles.trackIcon}>👆</Text>
           </View>
         )}
 
