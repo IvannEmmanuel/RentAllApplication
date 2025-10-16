@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native'
+import { Image, StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList } from 'react-native'
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import { useNavigation } from '@react-navigation/native'
@@ -15,6 +15,7 @@ import SkeletonLoadingProfile from '../../components/skeletonComponents/Skeleton
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import EditProfileModal from '../../components/EditProfileModal'
+import ItemCard from '../../components/ItemCard' // Import the same ItemCard component
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -32,10 +33,10 @@ const Profile = () => {
   const [lessorRatings, setLessorRatings] = useState({});
   const [lessorReviewsVisible, setLessorReviewsVisible] = useState(false);
   const [isEditModalVisible, setEditModalVisible] = useState(false);
+  const [itemRatings, setItemRatings] = useState({});
+  const [lastUpdated, setLastUpdated] = useState(new Date());
 
   const { favorites, currentUser, setCurrentUser, toggleFavorite, isFavorited, logout } = useFavorites()
-
-  const [itemRatings, setItemRatings] = useState({});
 
   useEffect(() => {
     if (!currentUser) {
@@ -120,88 +121,52 @@ const Profile = () => {
   }, [userBookings])
 
   // Check if item belongs to current user
-  const isUserItem = (item) => {
+  const isUserItem = useCallback((item) => {
     return currentUser && currentUser.id === item.user_id
-  }
+  }, [currentUser])
 
-  // Get button text and style based on item status
+  // Get button text and style based on item status - SAME AS HOME.tsx
   const getButtonInfo = useCallback((item) => {
-    const isOwner = isUserItem(item)
-    const bookingStatus = getUserBookingStatus(item.item_id)
+    if (isUserItem(item)) {
+      return { text: "Your Item", disabled: true, style: "disabled" };
+    }
 
-    if (isOwner) {
+    const bookingStatus = getUserBookingStatus(item.item_id);
+    if (bookingStatus && !["completed", "cancelled", "rejected"].includes(bookingStatus)) {
       return {
-        text: 'Your Item',
+        text: bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1),
         disabled: true,
-        style: 'disabled'
-      }
+        style: "pending",
+      };
     }
 
-    if (bookingStatus) {
-      let statusText = bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1)
-      return {
-        text: statusText,
-        disabled: true,
-        style: 'pending'
-      }
+    if (item.quantity === 0) {
+      return { text: "Out of Stock", disabled: true, style: "disabled" };
     }
 
-    // Check if item is out of stock
-    if (item.quantity <= 0) {
-      return {
-        text: 'Out of Stock',
-        disabled: true,
-        style: 'disabled'
-      }
-    }
+    return { text: "Rent Now", disabled: false, style: "normal" };
+  }, [getUserBookingStatus, isUserItem])
 
-    return {
-      text: 'Rent Now',
-      disabled: false,
-      style: 'normal'
-    }
-  }, [getUserBookingStatus])
-
-  // Handle rent now button
-  const handleRentNow = (item) => {
+  // Handle rent now button - SAME AS HOME.tsx
+  const handleRentNow = useCallback((item) => {
     if (!currentUser) {
-      Alert.alert('Login Required', 'Please log in to rent items')
-      return
+      Alert.alert("Login Required", "Please log in to rent items");
+      return;
     }
-
-    if (currentUser.id === item.user_id) {
-      Alert.alert('Your Item', 'You cannot rent your own item')
-      return
+    if (getButtonInfo(item).disabled) {
+      return;
     }
+    setSelectedItem(item);
+    setBookModalVisible(true);
+  }, [currentUser, getButtonInfo])
 
-    // Check if item is out of stock
-    if (item.quantity <= 0) {
-      Alert.alert('Out of Stock', 'This item is currently unavailable for rent.')
-      return
-    }
-
-    // Check if user already has a booking for this item
-    const bookingStatus = getUserBookingStatus(item.item_id)
-    if (bookingStatus) {
-      Alert.alert(
-        'Already Booked',
-        `You already have a ${bookingStatus} booking for this item.`
-      )
-      return
-    }
-
-    // Show BookItemModal
-    setSelectedItem(item)
-    setBookModalVisible(true)
-  }
-
-  // Toggle favorites
-  const handleToggleFavorite = async (itemId) => {
-    const result = await toggleFavorite(itemId)
+  // Toggle favorites - SAME AS HOME.tsx
+  const handleToggleFavorite = useCallback(async (itemId) => {
+    const result = await toggleFavorite(itemId);
     if (!result.success && result.message) {
-      Alert.alert('Error', result.message)
+      Alert.alert("Error", result.message);
     }
-  }
+  }, [toggleFavorite])
 
   const getImageUrl = async (userId, itemId) => {
     try {
@@ -270,7 +235,7 @@ const Profile = () => {
       .on(
         'postgres_changes',
         {
-          event: '*', // Listen to INSERT, UPDATE, DELETE
+          event: '*',
           schema: 'public',
           table: 'items',
         },
@@ -278,17 +243,14 @@ const Profile = () => {
           console.log('Real-time item change detected:', payload);
           setLastUpdated(new Date());
 
-          // Handle different events
           switch (payload.eventType) {
             case 'INSERT':
-              // New item added - check if it should be in recommendations
               if (payload.new.available && payload.new.item_status === 'approved') {
                 fetchRecommendedItems();
               }
               break;
 
             case 'UPDATE':
-              // Item updated - refresh if it's in our current list
               setRecommendedItems(prev =>
                 prev.map(item =>
                   item.item_id === payload.new.item_id
@@ -299,14 +261,12 @@ const Profile = () => {
               break;
 
             case 'DELETE':
-              // Item deleted - remove from list
               setRecommendedItems(prev =>
                 prev.filter(item => item.item_id !== payload.old.item_id)
               );
               break;
 
             default:
-              // For any other change, refresh the list
               fetchRecommendedItems();
               break;
           }
@@ -352,8 +312,6 @@ const Profile = () => {
     }
   }, [currentUser, fetchUserBookings])
 
-  const [lastUpdated, setLastUpdated] = useState(new Date());
-
   const fetchRecommendedItems = useCallback(async () => {
     try {
       let { data, error } = await supabase
@@ -376,11 +334,11 @@ const Profile = () => {
       `)
         .eq("available", true)
         .eq("item_status", "approved")
-        .gt("quantity", 0)  // Only show items with quantity > 0
+        .gt("quantity", 0)
 
       if (error) throw error
 
-      // Shuffle and select 4
+      // Shuffle and select 4 items only
       const shuffled = data.sort(() => 0.5 - Math.random()).slice(0, 4)
 
       const withImages = await Promise.all(
@@ -389,7 +347,7 @@ const Profile = () => {
           return {
             ...item,
             lessorName: item.users ? `${item.users.first_name} ${item.users.last_name}` : "Unknown",
-            lessorId: item.user_id, // Add lessorId for ratings
+            lessorId: item.user_id,
             imageUrl,
             formattedPrice: `₱${item.price_per_day}`,
             formattedDate: new Date(item.created_at).toLocaleDateString(),
@@ -419,8 +377,8 @@ const Profile = () => {
     }
   }, [currentUser, fetchUserBookings, fetchRecommendedItems])
 
-  // Handle message button press
-  const handleMessage = async (item) => {
+  // Handle message button press - SAME AS HOME.tsx
+  const handleMessage = useCallback(async (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to send messages')
       return
@@ -485,20 +443,19 @@ const Profile = () => {
       console.error('Error creating/finding conversation:', error)
       Alert.alert('Error', 'Failed to start conversation')
     }
-  }
+  }, [currentUser, navigation])
 
-  // Handle lessor name click - navigate to LessorReviews
-  const handleLessorNamePress = (lessorId, lessorName) => {
-    if (!lessorId) {
-      Alert.alert('Error', 'Lessor information not available');
-      return;
+  // Handle lessor name click - SAME AS HOME.tsx
+  const handleLessorPress = useCallback((lessorId) => {
+    if (lessorId) {
+      navigation.navigate("LessorReviews", { lessorId });
     }
+  }, [navigation])
 
-    navigation.navigate('LessorReviews', {
-      lessorId: lessorId,
-      lessorName: lessorName
-    });
-  }
+  const handlePicturePress = useCallback((item) => {
+    setSelectedItem(item);
+    setPictureModalVisible(true);
+  }, []);
 
   const handleLogout = async () => {
     if (!currentUser) return
@@ -519,98 +476,21 @@ const Profile = () => {
     }
   }
 
-  const renderItem = (item) => {
-    const isOwner = isUserItem(item)
-    const buttonInfo = getButtonInfo(item)
-
-    return (
-      <View key={item.item_id} style={styles.itemContainer}>
-        <View style={styles.itemImageContainer}>
-          <TouchableOpacity
-            onPress={() => {
-              setSelectedItem(item)
-              setPictureModalVisible(true)
-            }}
-          >
-            <Image
-              source={
-                item?.imageUrl
-                  ? { uri: item.imageUrl }
-                  : require('../../../assets/splash-icon.png')
-              }
-              style={styles.itemImage}
-            />
-          </TouchableOpacity>
-
-          <View style={styles.itemRateContainer}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <Image source={require('../../../assets/rate.png')} style={styles.rateImage} />
-              <Text> {itemRatings[String(item.item_id)] ?? 'No rating'}</Text>
-            </View>
-          </View>
-
-          <Text style={styles.itemName}>{item.title}</Text>
-
-          {/* Lessor Name with Rating - Clickable */}
-          <TouchableOpacity
-            onPress={() => handleLessorNamePress(item.lessorId, item.lessorName)}
-            style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginBottom: 4 }}
-          >
-            <Text style={styles.lessorText}>{item.lessorName}</Text>
-            <Image source={require('../../../assets/rate.png')} style={styles.lessorRateImage} />
-            <Text style={styles.lessorText}>{lessorRatings[item.lessorId] || 'No rating'}</Text>
-          </TouchableOpacity>
-
-          <Text style={styles.text}>{item.location || 'Location not specified'}</Text>
-          <Text style={styles.text}>{item.formattedDate}</Text>
-          <Text style={styles.text}>Quantity: {item.quantity <= 0 ? 'Out of Stock' : `${item.quantity}`}</Text>
-
-          <View style={styles.moneyRateContainer}>
-            <Text style={styles.moneyText}>{item.formattedPrice}</Text>
-            <View style={{ flexDirection: 'row' }}>
-              {!isOwner && (
-                <TouchableOpacity
-                  style={styles.messageContainer}
-                  onPress={() => handleMessage(item)}
-                >
-                  <Image source={require('../../../assets/message.png')} style={styles.messageImage} />
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={() => handleToggleFavorite(item.item_id)}>
-                <Image
-                  source={isFavorited(item.item_id)
-                    ? require('../../../assets/liked.png')
-                    : require('../../../assets/like.png')}
-                  style={styles.likeImage}
-                />
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* Rent Now Button */}
-          <View style={styles.rentNowContainer}>
-            <TouchableOpacity
-              style={[
-                styles.buttonContainer,
-                buttonInfo.style === 'disabled' && styles.disabledButtonContainer,
-                buttonInfo.style === 'pending' && styles.pendingButtonContainer
-              ]}
-              onPress={() => handleRentNow(item)}
-              disabled={buttonInfo.disabled}
-            >
-              <Text style={[
-                styles.rentText,
-                buttonInfo.style === 'disabled' && styles.disabledRentText,
-                buttonInfo.style === 'pending' && styles.pendingRentText
-              ]}>
-                {buttonInfo.text}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-    )
-  }
+  // Render item using the same ItemCard component as Home.tsx
+  const renderItemCard = useCallback(({ item }) => (
+    <ItemCard
+      item={item}
+      itemRating={itemRatings[item.item_id]}
+      lessorRating={lessorRatings[item.lessorId]}
+      isFavorited={isFavorited(item.item_id)}
+      buttonInfo={getButtonInfo(item)}
+      onPicturePress={handlePicturePress}
+      onLessorPress={handleLessorPress}
+      onMessage={handleMessage}
+      onToggleFavorite={handleToggleFavorite}
+      onRentNow={handleRentNow}
+    />
+  ), [itemRatings, lessorRatings, isFavorited, getButtonInfo, handleToggleFavorite, handleRentNow, handleMessage, handleLessorPress, handlePicturePress])
 
   return (
     <>
@@ -646,7 +526,6 @@ const Profile = () => {
               </View>
             </View>
           </View>
-
 
           <View style={styles.transactContainer}>
             <Text style={styles.transactionText}>Transaction Management</Text>
@@ -712,16 +591,25 @@ const Profile = () => {
             </TouchableOpacity>
           </View>
 
+          {/* Items for you section with same design as Home */}
           <View style={styles.mainItemContainer}>
             <View style={styles.sectionHeader}>
               <Text style={styles.itemText}>Items for you</Text>
             </View>
+            
             {recommendedItems.length === 0 ? (
               <SkeletonLoadingProfile />
             ) : (
-              <View style={styles.itemsGrid}>
-                {recommendedItems.map(renderItem)}
-              </View>
+              <FlatList
+                data={recommendedItems}
+                renderItem={renderItemCard}
+                keyExtractor={(item) => item.item_id.toString()}
+                numColumns={2}
+                scrollEnabled={false} // Disable scrolling since we only have 4 items
+                columnWrapperStyle={styles.columnWrapper}
+                contentContainerStyle={styles.itemsGrid}
+                showsVerticalScrollIndicator={false}
+              />
             )}
           </View>
         </View>
@@ -851,15 +739,6 @@ const styles = StyleSheet.create({
   firstActivitiesContainer: {
     flexDirection: 'row',
   },
-  subActivitiesContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    minWidth: 70, // Ensure consistent width for all items
-  },
-  activitiesScrollContent: {
-    paddingHorizontal: 15, // Add some padding on the sides
-    alignItems: 'center',
-  },
   activitiesContainer: {
     flexDirection: 'row',
     paddingLeft: 10,
@@ -878,7 +757,7 @@ const styles = StyleSheet.create({
   },
   mainItemContainer: {
     marginTop: 10,
-    paddingHorizontal: 20
+    paddingHorizontal: 15
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -890,158 +769,13 @@ const styles = StyleSheet.create({
     fontFamily: 'DM-Bold',
     fontSize: 20,
   },
-  connectionStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  connectionDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginRight: 4,
-  },
-  connected: {
-    backgroundColor: '#4CAF50',
-  },
-  disconnected: {
-    backgroundColor: '#FF9800',
-  },
-  connectionText: {
-    fontSize: 12,
-    color: '#666',
-    marginRight: 8,
-  },
-  lastUpdatedText: {
-    fontSize: 10,
-    color: '#999',
-    fontStyle: 'italic',
-  },
-  itemContainer: {
-    width: '49%',
-    marginBottom: 20
-  },
+  // Items grid styles to match Home.tsx
   itemsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+    paddingBottom: 10,
+  },
+  columnWrapper: {
     justifyContent: 'space-between',
-  },
-  itemImageContainer: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    padding: 10,
-    elevation: 2,
-    position: 'relative',
-  },
-  itemImage: {
-    width: '100%',
-    height: 120,
-    borderRadius: 10,
-    marginBottom: 10
-  },
-  quantityBadge: {
-    position: 'absolute',
-    top: 15,
-    right: 15,
-    backgroundColor: '#4CAF50',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  quantityBadgeOutOfStock: {
-    backgroundColor: '#F44336',
-  },
-  quantityText: {
-    color: '#FFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  quantityTextOutOfStock: {
-    color: '#FFF',
-  },
-  itemRateContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 5,
-  },
-  itemName: {
-    flex: 1,
-    fontFamily: 'DM-Medium',
-    fontSize: 14
-  },
-  rateImage: {
-    width: 12,
-    height: 12,
-    marginRight: 3
-  },
-  lessorRateImage: {
-    width: 10,
-    height: 10,
-    marginRight: 3,
-    alignSelf: 'center'
-  },
-  lessorText: {
-    fontSize: 12,
-    color: '#555',
-    marginBottom: 2,
-    marginRight: 3,
-  },
-  text: {
-    color: '#9C9894',
-    fontSize: 12,
-    marginBottom: 2
-  },
-  moneyText: {
-    color: '#FFAB00',
-    fontFamily: 'DM-Bold',
-    fontSize: 16
-  },
-  likeImage: {
-    width: 20,
-    height: 20,
-    marginLeft: 10
-  },
-  messageImage: {
-    width: 20,
-    height: 20
-  },
-  messageContainer: {
-    marginRight: 10
-  },
-  moneyRateContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8
-  },
-  rentNowContainer: {
-    justifyContent: 'center',
-    marginTop: 10,
-  },
-  buttonContainer: {
-    backgroundColor: '#000',
-    borderRadius: 10,
-    height: 30,
-    justifyContent: 'center',
-    alignSelf: 'flex-end',
-    width: '70%'
-  },
-  disabledButtonContainer: {
-    backgroundColor: '#CCC',
-  },
-  pendingButtonContainer: {
-    backgroundColor: '#FF8C00',
-  },
-  rentText: {
-    color: '#FFF',
-    fontFamily: 'DM-Medium',
-    textAlign: 'center'
-  },
-  disabledRentText: {
-    color: '#999',
-  },
-  pendingRentText: {
-    color: '#FFF',
+    marginBottom: 10,
   },
   logoutButton: {
     backgroundColor: '#EA4141',
