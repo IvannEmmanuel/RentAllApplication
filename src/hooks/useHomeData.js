@@ -1,13 +1,14 @@
 // src/hooks/useHomeData.js
 import { useState, useCallback, useEffect } from "react";
 import { useFocusEffect } from "@react-navigation/native";
+import { supabase } from "../../supbaseClient"; // Import supabase
 import {
     ItemsService,
     CategoriesService,
     BookingsService,
     RatingsService,
     ITEMS_PER_PAGE,
-} from "../services/supabaseServices"; // Adjust path
+} from "../services/supabaseServices";
 
 const deduplicateItems = (items) => {
     const map = new Map();
@@ -65,8 +66,14 @@ export const useHomeData = (currentUser, navigation, route) => {
 
     const loadUserBookings = useCallback(async () => {
         if (currentUser) {
-            const bookings = await BookingsService.fetchUserBookings(currentUser.id);
-            setUserBookings(bookings);
+            console.log("Fetching user bookings for:", currentUser.id);
+            try {
+                const bookings = await BookingsService.fetchUserBookings(currentUser.id);
+                console.log("User bookings fetched:", bookings);
+                setUserBookings(bookings);
+            } catch (error) {
+                console.error("Error fetching bookings:", error);
+            }
         }
     }, [currentUser]);
 
@@ -75,7 +82,7 @@ export const useHomeData = (currentUser, navigation, route) => {
     }, []);
 
     useEffect(() => {
-        setPage(1); // Reset page when category changes
+        setPage(1);
         loadItems(1, false);
     }, [selectedCategoryId]);
 
@@ -87,10 +94,46 @@ export const useHomeData = (currentUser, navigation, route) => {
         useCallback(() => {
             if (route?.params?.resetToAll) {
                 setSelectedCategoryId("");
-                navigation.setParams({ resetToAll: false }); // Clear the param
+                navigation.setParams({ resetToAll: false });
             }
         }, [route?.params?.resetToAll, navigation])
     );
+
+    // ========== REAL-TIME SUBSCRIPTION: Rental Transactions ==========
+    // This matches your BACKUP code exactly
+    useEffect(() => {
+        if (!currentUser?.id) {
+            console.log("No current user, skipping rental transactions subscription");
+            return;
+        }
+
+        console.log("Setting up rental_transactions real-time subscription for user:", currentUser.id);
+        
+        const channel = supabase
+            .channel(`rental_transactions_${currentUser.id}`)
+            .on(
+                "postgres_changes",
+                {
+                    event: "*", // Listen to all events
+                    schema: "public",
+                    table: "rental_transactions",
+                    filter: `renter_id=eq.${currentUser.id}`,
+                },
+                (payload) => {
+                    console.log("Rental transaction change detected:", payload);
+                    // Re-fetch bookings to update the UI in real-time
+                    loadUserBookings();
+                }
+            )
+            .subscribe((status) => {
+                console.log("Rental transactions subscription status:", status);
+            });
+
+        return () => {
+            console.log("Cleaning up rental_transactions subscription");
+            supabase.removeChannel(channel);
+        };
+    }, [currentUser?.id, loadUserBookings]);
 
     const handleLoadMore = useCallback(async () => {
         if (hasMore && !loading && !loadingMore) {
