@@ -96,7 +96,7 @@ const Register = () => {
     };
 
     const handleNext = async () => {
-        // Validation
+        // Validations (keep your existing ones)
         if (!formData.firstName || !formData.lastName) {
             Alert.alert('Error', 'Please enter your first and last name.');
             return;
@@ -129,20 +129,29 @@ const Register = () => {
         try {
             setLoading(true);
 
-            const dataToStore = {
-                firstName: formData.firstName,
-                lastName: formData.lastName,
+            // ✅ Step 1: Check if email already exists in Supabase
+            const { error: existingUserError } = await supabase.auth.signInWithOtp({
                 email: formData.email,
-                password: formData.password,
-                phone: formData.phone,
+                options: { shouldCreateUser: false }, // do NOT create user if email doesn't exist
+            });
+
+            if (!existingUserError) {
+                // Means email already exists, stop registration
+                Alert.alert('Email Exists', 'This email is already registered. Please use a different email or login.');
+                setLoading(false);
+                return;
+            }
+
+            // If error.code == 'user_not_found', it means email is new → proceed with sending OTP
+
+            // ✅ Step 2: Save data to context
+            updateRegistrationData({
+                ...formData,
                 dob: formData.dob?.toISOString(),
-                idImage: formData.idImage,
-                location: location
-            };
+                location: location,
+            });
 
-            updateRegistrationData(dataToStore);
-
-            // Send OTP using Supabase
+            // ✅ Step 3: Send OTP & create user
             const { error } = await supabase.auth.signInWithOtp({
                 email: formData.email,
                 options: {
@@ -153,16 +162,10 @@ const Register = () => {
             if (error) throw error;
 
             Alert.alert('Success', `OTP sent to ${formData.email}`);
-
-            // Navigate to OTP screen with form data
-            navigation.navigate('Otp' as never, {
-                formData: {
-                    email: formData.email
-                }
-            } as never);
+            navigation.navigate('Otp' as never, { formData: { email: formData.email } } as never);
 
         } catch (error: any) {
-            Alert.alert('Error', `Failed to send OTP: ${error.message}`);
+            Alert.alert('Error', error.message);
         } finally {
             setLoading(false);
         }
