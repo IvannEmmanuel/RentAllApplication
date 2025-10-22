@@ -18,6 +18,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     // Handle both navigation route params and direct props
     const isModal = visible !== undefined;
     const bookingFromRoute = route?.params?.booking;
+    const { booking, userRole, isAccommodation } = route.params;
 
     const [currentBooking, setCurrentBooking] = useState(bookingFromRoute || null);
     const [loading, setLoading] = useState(false);
@@ -25,6 +26,47 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     const [isSubscribed, setIsSubscribed] = useState(false);
     const [lastUpdated, setLastUpdated] = useState(new Date());
     const [depositImageModalVisible, setDepositImageModalVisible] = useState(false);
+
+    const getDisplayStatus = () => {
+        if (!currentBooking) return '';
+
+        if (isAccommodation) {
+            switch (currentBooking.status) {
+                case 'confirmed':
+                    return 'Waiting for renter to upload deposit';
+                case 'deposit_submitted':
+                    return 'Deposit submitted — please review';
+                case 'on_the_way':
+                    return 'Guest ready for check-in';
+                case 'ongoing':
+                    return 'Guest is checked-in';
+                case 'awaiting_owner_confirmation':
+                    return 'Checkout requested';
+                case 'completed':
+                    return 'Stay completed';
+                default:
+                    return currentBooking.status;
+            }
+        } else {
+            // fallback for non-accommodation items
+            switch (currentBooking.status) {
+                case 'confirmed':
+                    return 'Confirmed';
+                case 'deposit_submitted':
+                    return 'Deposit submitted';
+                case 'on_the_way':
+                    return 'On the way';
+                case 'ongoing':
+                    return 'Ongoing';
+                case 'awaiting_owner_confirmation':
+                    return 'Awaiting owner confirmation';
+                case 'completed':
+                    return 'Completed';
+                default:
+                    return currentBooking.status;
+            }
+        }
+    };
 
     // Real-time subscription for booking updates
     useEffect(() => {
@@ -235,7 +277,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     };
 
     // UPDATED: Phases to include Deposit Review
-    const phases = [
+    const defaultPhases = [
         { id: 1, title: 'Ready for Pickup', status: 'confirmed' },
         { id: 2, title: 'Deposit Review', status: 'deposit_submitted' },
         { id: 3, title: 'On the Way', status: 'on_the_way' },
@@ -243,25 +285,42 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
         { id: 5, title: 'Delivered', status: 'delivered' },
     ];
 
+    const accommodationPhases = [
+        { id: 1, title: 'Confirmed', status: 'confirmed' },
+        { id: 2, title: 'Deposit Review', status: 'deposit_submitted' },
+        { id: 3, title: 'Check-In', status: 'on_the_way' },
+        { id: 4, title: 'Checked-in', status: 'ongoing' },
+        { id: 5, title: 'Completed', status: 'completed' },
+    ];
+
+    const phases = isAccommodation ? accommodationPhases : defaultPhases;
+
+
     // UPDATED: Get current phase based on booking status
     // UPDATED: Get current phase based on booking status
     const getCurrentPhase = () => {
         if (!currentBooking) return 1;
-        switch (currentBooking.status) {
-            case 'confirmed':
-                return 1;
-            case 'deposit_submitted':
-                return 2;
-            case 'on_the_way':
-                return 3;
-            case 'ongoing':
-                return 4;
-            case 'awaiting_owner_confirmation':
-                return 5;
-            case 'completed':
-                return 5; // Completed also goes to delivered phase
-            default:
-                return 1;
+
+        if (isAccommodation) {
+            switch (currentBooking.status) {
+                case 'confirmed': return 1;
+                case 'deposit_submitted': return 2;
+                case 'on_the_way': return 3; // Check-In
+                case 'ongoing': return 4;    // Checked-in
+                case 'awaiting_owner_confirmation':
+                case 'completed': return 5;
+                default: return 1;
+            }
+        } else {
+            switch (currentBooking.status) {
+                case 'confirmed': return 1;
+                case 'deposit_submitted': return 2;
+                case 'on_the_way': return 3;
+                case 'ongoing': return 4;
+                case 'awaiting_owner_confirmation':
+                case 'completed': return 5;
+                default: return 1;
+            }
         }
     };
 
@@ -427,8 +486,15 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
     // UPDATED: Get action button label
     const getActionButtonLabel = () => {
         if (!currentBooking) return null;
-        if (currentBooking.status === 'deposit_submitted') return 'Review Deposit';
-        if (currentBooking.status === 'awaiting_owner_confirmation') return 'Item Received';
+
+        if (isAccommodation) {
+            if (currentBooking.status === 'deposit_submitted') return 'Review Deposit';
+            if (currentBooking.status === 'on_the_way') return 'Mark Checked-In';
+            if (currentBooking.status === 'awaiting_owner_confirmation') return 'Confirm Checkout';
+        } else {
+            if (currentBooking.status === 'deposit_submitted') return 'Review Deposit';
+            if (currentBooking.status === 'awaiting_owner_confirmation') return 'Item Received';
+        }
         return null;
     };
 
@@ -634,7 +700,7 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 <View style={styles.statusSection}>
                     <View style={styles.statusHeader}>
                         <Text style={styles.statusTitle}>
-                            Current Status: {currentBooking.status.toUpperCase()}
+                            {getDisplayStatus()}
                         </Text>
                     </View>
 

@@ -181,16 +181,14 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   };
 
   const handleActiveCardPress = (booking) => {
-    // Don't navigate if it's an Accommodation item
-    if (booking.is_accommodation) {
-      Alert.alert('Accommodation Item', 'Tracking is not available for accommodation items.');
-      return;
-    }
-
     onClose();
     navigation.navigate('ItemTrackingLessorScreen', {
-      booking: { ...booking, items: { ...booking.items, main_image_url: booking.item_image } },
-      userRole: 'lessor'
+      booking: {
+        ...booking,
+        items: { ...booking.items, main_image_url: booking.item_image }
+      },
+      userRole: 'lessor',
+      isAccommodation: booking.is_accommodation   // 👈 add this
     });
   };
 
@@ -206,8 +204,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
       // FOR ACCOMMODATION: Change status directly to 'ongoing' instead of 'confirmed'
       let actualNewStatus = newStatus;
       if (isAccommodation && newStatus === 'confirmed') {
-        actualNewStatus = 'ongoing';
-        console.log('Accommodation item: Changing status directly to ongoing');
+        // actualNewStatus = 'ongoing';
+        // console.log('Accommodation item: Changing status directly to ongoing');
 
         // MANUALLY DEDUCT QUANTITY FOR ACCOMMODATION ITEMS
         // const { data: itemData, error: itemError } = await supabase
@@ -389,7 +387,6 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         ]}
         activeOpacity={0.7}
         onPress={isActiveTab ? () => handleActiveCardPress(booking) : undefined}
-        disabled={isActiveTab && isAccommodation} // Disable if accommodation in active tab
       >
         {/* Accommodation Badge */}
         {isAccommodation && (
@@ -460,18 +457,28 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
         )}
 
         {/* Check Out button for Accommodation items */}
-        {isActiveTab && isAccommodation && isCheckoutAvailable && (
-          <TouchableOpacity
-            style={[styles.checkoutButton, isProcessing && styles.checkoutButtonDisabled]}
-            onPress={() => handleCheckOut(booking.rental_id)}
-            disabled={isProcessing}
-          >
-            {isProcessing ? (
-              <ActivityIndicator size="small" color="#FFF" />
+        {isActiveTab && (
+          <>
+            {isAccommodation ? (
+              booking.status === 'confirmed' ? (
+                <View style={styles.trackIndicator}>
+                  <Text style={styles.trackText}>Tap to track order</Text>
+                </View>
+              ) : (
+                !isCheckoutAvailable && (
+                  <View style={styles.accommodationMessage}>
+                    <Text style={styles.accommodationMessageText}>
+                      Accommodation booking - No tracking required
+                    </Text>
+                  </View>
+                )
+              )
             ) : (
-              <Text style={styles.checkoutButtonText}>Check Out</Text>
+              <View style={styles.trackIndicator}>
+                <Text style={styles.trackText}>Tap to track order</Text>
+              </View>
             )}
-          </TouchableOpacity>
+          </>
         )}
 
         {/* Track indicator - only show for non-accommodation items */}
