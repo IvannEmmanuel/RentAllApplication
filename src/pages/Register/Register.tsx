@@ -14,6 +14,7 @@ const Register = () => {
     const [loading, setLoading] = useState(false);
     const [location, setLocation] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
     const { updateRegistrationData } = useRegistration();
+    const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -26,6 +27,14 @@ const Register = () => {
         dob: null as Date | null,
         idImage: null as any,
     });
+
+    const today = new Date();
+    const birthDate = new Date(formData.dob);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const monthDiff = today.getMonth() - birthDate.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birthDate.getDate())) {
+        age--;
+    }
 
     const navigation = useNavigation();
 
@@ -113,8 +122,15 @@ const Register = () => {
             Alert.alert('Error', 'Passwords do not match.');
             return;
         }
-        if (formData.password.length < 8) {
-            Alert.alert('Error', 'Password must be at least 8 characters.');
+        if (!strongPasswordRegex.test(formData.password)) {
+            Alert.alert(
+                'Weak Password',
+                'Password must have:\n• At least 8 characters\n• 1 uppercase letter (A-Z)\n• 1 lowercase letter (a-z)\n• 1 number (0-9)\n• 1 special character (!@#$%^&*)'
+            );
+            return;
+        }
+        if (age < 18) {
+            Alert.alert('Age Restriction', 'You must be at least 18 years old to register.');
             return;
         }
         if (!formData.dob) {
