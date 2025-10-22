@@ -25,7 +25,7 @@ function base64ToUint8Array(base64: string) {
 }
 
 const ItemTrackingScreen = ({ route, navigation }) => {
-    const { rental } = route.params;
+    const { rental, isAccommodation } = route.params;
     const [currentRental, setCurrentRental] = useState(rental);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
@@ -34,13 +34,55 @@ const ItemTrackingScreen = ({ route, navigation }) => {
     console.log('Current rental:', currentRental);
 
     // Phase configurations for renter - UPDATED WITH DEPOSIT PHASE
-    const phases = [
+    const defaultPhases = [
         { id: 1, title: 'Item Accepted', status: 'confirmed' },
         { id: 2, title: 'Upload Deposit', status: 'deposit_submitted' },
         { id: 3, title: 'On the Way', status: 'on_the_way' },
         { id: 4, title: 'Ongoing', status: 'ongoing' },
         { id: 5, title: 'Delivered', status: 'delivered' },
     ];
+
+    const accommodationPhases = [
+        { id: 1, title: 'Confirmed', status: 'confirmed' },
+        { id: 2, title: 'Deposit', status: 'deposit_submitted' },
+        { id: 3, title: 'Check-In', status: 'on_the_way' },
+        { id: 4, title: 'Checked-in', status: 'ongoing' },
+        { id: 5, title: 'Completed', status: 'completed' },
+    ];
+
+    const phases = isAccommodation ? accommodationPhases : defaultPhases;
+
+    const handleCheckIn = async () => {
+        setLoading(true);
+        try {
+            const oldStatus = currentRental.status;
+
+            const { error } = await supabase
+                .from('rental_transactions')
+                .update({ status: 'ongoing' }) // or 'checked_in' if you add that
+                .eq('rental_id', currentRental.rental_id);
+
+            if (error) throw error;
+
+            // trigger notification
+            const { data: fullRental } = await supabase
+                .from('rental_transactions')
+                .select('*')
+                .eq('rental_id', currentRental.rental_id)
+                .single();
+
+            if (fullRental) {
+                await handleBookingStatusChange(fullRental, oldStatus, 'ongoing');
+            }
+
+            Alert.alert('Success', 'You have successfully checked in!');
+        } catch (err) {
+            console.error(err);
+            Alert.alert('Error', 'Failed to check in. Please try again.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
     // Check if end date has passed
     const isReturnEnabled = () => {
@@ -424,21 +466,27 @@ const ItemTrackingScreen = ({ route, navigation }) => {
 
     // UPDATED: Get current phase based on rental status
     const getCurrentPhase = () => {
-        switch (currentRental.status) {
-            case 'confirmed':
-                return 1;
-            case 'deposit_submitted':
-                return 2;
-            case 'on_the_way':
-                return 3;
-            case 'ongoing':
-                return 4;
-            case 'delivered':
-            case 'awaiting_owner_confirmation':
-            case 'completed':
-                return 5;
-            default:
-                return 1;
+        if (isAccommodation) {
+            switch (currentRental.status) {
+                case 'confirmed': return 1;
+                case 'deposit_submitted': return 2;
+                case 'on_the_way': return 3;
+                case 'ongoing': return 4;
+                case 'awaiting_owner_confirmation':
+                case 'completed': return 5;
+                default: return 1;
+            }
+        } else {
+            switch (currentRental.status) {
+                case 'confirmed': return 1;
+                case 'deposit_submitted': return 2;
+                case 'on_the_way': return 3;
+                case 'ongoing': return 4;
+                case 'delivered':
+                case 'awaiting_owner_confirmation':
+                case 'completed': return 5;
+                default: return 1;
+            }
         }
     };
 
@@ -493,17 +541,29 @@ const ItemTrackingScreen = ({ route, navigation }) => {
     const getStatusMessage = () => {
         switch (currentRental.status) {
             case 'confirmed':
-                return 'accepted - Please upload your deposit proof';
+                return isAccommodation
+                    ? 'Booking confirmed — please upload your deposit to secure your stay.'
+                    : 'accepted - Please upload your deposit proof';
             case 'deposit_submitted':
-                return 'deposit submitted - Waiting for owner confirmation';
+                return isAccommodation
+                    ? 'Deposit submitted — waiting for host confirmation.'
+                    : 'deposit submitted - Waiting for owner confirmation';
             case 'on_the_way':
-                return 'on the way - Item is being delivered';
+                return isAccommodation
+                    ? 'It’s check‑in day — your place is ready for arrival.'
+                    : 'on the way - Item is being delivered';
             case 'ongoing':
-                return 'ongoing - Item is with you';
-            case 'delivered':
-                return 'delivered';
+                return isAccommodation
+                    ? 'You are checked in — enjoy your stay.'
+                    : 'ongoing - Item is with you';
             case 'awaiting_owner_confirmation':
-                return 'awaiting owner confirmation';
+                return isAccommodation
+                    ? 'Checkout requested — waiting for host confirmation.'
+                    : 'awaiting owner confirmation';
+            case 'completed':
+                return isAccommodation
+                    ? 'Your stay is completed — thank you for booking.'
+                    : 'completed';
             default:
                 return 'being processed';
         }
@@ -580,7 +640,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
 
                 {/* Status Message */}
                 <View style={styles.statusSection}>
-                    <Text style={styles.statusTitle}>Your order is {getStatusMessage()}.</Text>
+                    <Text style={styles.statusTitle}>{getStatusMessage()}.</Text>
 
                     {/* Deposit Upload Section */}
                     {currentRental.status === 'confirmed' && (
@@ -618,16 +678,19 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                     )} */}
 
                     {/* Mark as Delivered Section (for on_the_way status) */}
+                    {/* Check-In Section for accommodation, Delivered for others */}
                     {currentRental.status === 'on_the_way' && (
                         <TouchableOpacity
                             style={styles.confirmButton}
-                            onPress={handleMarkAsDelivered}
+                            onPress={isAccommodation ? handleCheckIn : handleMarkAsDelivered}
                             disabled={loading}
                         >
                             {loading ? (
                                 <ActivityIndicator color="#FFF" />
                             ) : (
-                                <Text style={styles.confirmButtonText}>Mark as Delivered</Text>
+                                <Text style={styles.confirmButtonText}>
+                                    {isAccommodation ? 'Check-In' : 'Mark as Delivered'}
+                                </Text>
                             )}
                         </TouchableOpacity>
                     )}
@@ -638,7 +701,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                             <TouchableOpacity
                                 style={[
                                     styles.confirmButton,
-                                    (!isReturnEnabled() || currentRental.status === 'awaiting_owner_confirmation') && 
+                                    (!isReturnEnabled() || currentRental.status === 'awaiting_owner_confirmation') &&
                                     styles.disabledButton
                                 ]}
                                 onPress={handleReturn}
@@ -648,14 +711,14 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                                     <ActivityIndicator color="#FFF" />
                                 ) : (
                                     <Text style={styles.confirmButtonText}>
-                                        {currentRental.status === 'awaiting_owner_confirmation' 
-                                            ? 'Return Requested' 
-                                            : 'Return Item'
+                                        {currentRental.status === 'awaiting_owner_confirmation'
+                                            ? (isAccommodation ? 'Checkout Requested' : 'Return Requested')
+                                            : (isAccommodation ? 'Check Out' : 'Return Item')
                                         }
                                     </Text>
                                 )}
                             </TouchableOpacity>
-                            
+
                             {!isReturnEnabled() && currentRental.status !== 'awaiting_owner_confirmation' && (
                                 <Text style={styles.returnInfoText}>
                                     Return will be available after {new Date(currentRental.end_date).toLocaleDateString()}
@@ -732,7 +795,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                         <View style={styles.detailRow}>
                             <Text style={styles.detailLabel}>Return Eligibility:</Text>
                             <Text style={[
-                                styles.detailValue, 
+                                styles.detailValue,
                                 isReturnEnabled() ? styles.eligibleText : styles.notEligibleText
                             ]}>
                                 {isReturnEnabled() ? 'Eligible' : 'Not yet eligible'}

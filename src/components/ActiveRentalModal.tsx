@@ -121,7 +121,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
 
     const handleRealtimeUpdate = (payload) => {
       console.log('Real-time update received for active rentals:', payload);
-      
+
       switch (payload.eventType) {
         case 'INSERT':
           // New rental added - check if it should be in active status
@@ -129,22 +129,22 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             fetchItemDetailsAndAddRental(payload.new);
           }
           break;
-        
+
         case 'UPDATE':
           // Rental updated
           const newStatus = payload.new.status;
-          
+
           if (['confirmed', 'ongoing', 'delivered'].includes(newStatus)) {
             // Update existing rental or add if it's a status change from pending
             setRentals(prev => {
-              const existingIndex = prev.findIndex(rental => 
+              const existingIndex = prev.findIndex(rental =>
                 rental.rental_id === payload.new.rental_id
               );
-              
+
               if (existingIndex >= 0) {
                 // Update existing rental
-                const updatedRental = { 
-                  ...prev[existingIndex], 
+                const updatedRental = {
+                  ...prev[existingIndex],
                   ...payload.new,
                   is_accommodation: categories[payload.new.items?.category_id] === 'Accommodation'
                 };
@@ -161,19 +161,19 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             });
           } else {
             // Remove from list if status is no longer active
-            setRentals(prev => prev.filter(rental => 
+            setRentals(prev => prev.filter(rental =>
               rental.rental_id !== payload.new.rental_id
             ));
           }
           break;
-        
+
         case 'DELETE':
           // Rental deleted
-          setRentals(prev => prev.filter(rental => 
+          setRentals(prev => prev.filter(rental =>
             rental.rental_id !== payload.old.rental_id
           ));
           break;
-        
+
         default:
           break;
       }
@@ -205,7 +205,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
             items: itemData,
             is_accommodation: categories[itemData.category_id] === 'Accommodation'
           };
-          
+
           setRentals(prev => [completeRental, ...prev]);
         }
       } catch (error) {
@@ -228,7 +228,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   // Manual refresh function
   const refreshRentals = async () => {
     if (!currentUser) return;
-    
+
     setRefreshing(true);
     const { data, error } = await supabase
       .from('rental_transactions')
@@ -308,20 +308,11 @@ const ActiveRentalModal = ({ visible, onClose }) => {
   };
 
   const handleCardPress = (rental) => {
-    // Check if the item is an Accommodation
-    if (rental.is_accommodation) {
-      Alert.alert(
-        'Accommodation Item',
-        'Tracking is not available for accommodation items.',
-        [{ text: 'OK' }]
-      );
-      return;
-    }
-
-    // Close the modal first
     onClose();
-    // Navigate to tracking screen only for non-accommodation items
-    navigation.navigate('ItemTrackingScreen', { rental });
+    navigation.navigate('ItemTrackingScreen', {
+      rental,
+      isAccommodation: rental.is_accommodation
+    });
   };
 
   return (
@@ -371,12 +362,12 @@ const ActiveRentalModal = ({ visible, onClose }) => {
               const remainingDays = getRemainingDays(rental.end_date);
               const isReturning = returningIds.includes(rental.rental_id);
               const isAccommodation = rental.is_accommodation;
-              
+
               return (
                 <TouchableOpacity
                   key={rental.rental_id}
                   style={[
-                    styles.card, 
+                    styles.card,
                     { marginTop: index === 0 ? 8 : 12 },
                     isAccommodation && styles.accommodationCard
                   ]}
@@ -458,7 +449,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                           {rental.items?.location}
                         </Text>
                       </View>
-                      
+
                       {/* Track indicator - Show different message for accommodation */}
                       <View style={styles.trackIndicator}>
                         {isAccommodation ? (
