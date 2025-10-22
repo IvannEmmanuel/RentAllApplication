@@ -48,6 +48,34 @@ const PendingRentalModal = ({ visible, onClose }) => {
     );
   };
 
+  const checkAndRejectExpiredRentals = async () => {
+    const now = new Date();
+
+    for (const rental of rentals) {
+      const startDate = new Date(rental.start_date);
+
+      if (startDate < now && rental.status === 'pending') {
+        try {
+          const { error } = await supabase
+            .from('rental_transactions')
+            .update({ status: 'rejected' })
+            .eq('rental_id', rental.rental_id);
+
+          if (error) {
+            console.error('Error auto-rejecting rental:', error);
+          } else {
+            // Update UI immediately
+            setRentals(prev =>
+              prev.filter(r => r.rental_id !== rental.rental_id)
+            );
+          }
+        } catch (err) {
+          console.error('Unexpected error auto-rejecting rental:', err);
+        }
+      }
+    }
+  };
+
 
   // Fetch initial data and set up real-time subscription
   useEffect(() => {
@@ -87,6 +115,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
         console.error('Error fetching pending rentals:', error);
       } else {
         setRentals(data);
+        checkAndRejectExpiredRentals();
       }
       setLoading(false);
     };
@@ -113,39 +142,44 @@ const PendingRentalModal = ({ visible, onClose }) => {
     const handleRealtimeUpdate = (payload) => {
       console.log('Real-time update received:', payload);
 
+      const rental = payload.new || payload.old;
+
+      // Auto-reject if start_date already passed
+      if (payload.new && payload.new.status === 'pending') {
+        const now = new Date();
+        const startDate = new Date(payload.new.start_date);
+
+        if (startDate < now) {
+          supabase
+            .from('rental_transactions')
+            .update({ status: 'rejected' })
+            .eq('rental_id', payload.new.rental_id)
+            .then(({ error }) => {
+              if (error) console.error('Error auto-rejecting in realtime:', error);
+            });
+          return; // don’t bother adding it to state
+        }
+      }
+
       switch (payload.eventType) {
         case 'INSERT':
-          // New rental added
           if (payload.new.status === 'pending') {
             fetchItemDetailsAndAddRental(payload.new);
           }
           break;
 
         case 'UPDATE':
-          // Rental updated (status changed, etc.)
           if (payload.new.status !== 'pending') {
-            // Remove from list if status is no longer pending
-            setRentals(prev => prev.filter(rental =>
-              rental.rental_id !== payload.new.rental_id
-            ));
+            setRentals(prev => prev.filter(r => r.rental_id !== payload.new.rental_id));
           } else {
-            // Update existing rental
-            setRentals(prev => prev.map(rental =>
-              rental.rental_id === payload.new.rental_id
-                ? { ...rental, ...payload.new }
-                : rental
+            setRentals(prev => prev.map(r =>
+              r.rental_id === payload.new.rental_id ? { ...r, ...payload.new } : r
             ));
           }
           break;
 
         case 'DELETE':
-          // Rental deleted
-          setRentals(prev => prev.filter(rental =>
-            rental.rental_id !== payload.old.rental_id
-          ));
-          break;
-
-        default:
+          setRentals(prev => prev.filter(r => r.rental_id !== payload.old.rental_id));
           break;
       }
     };
@@ -226,6 +260,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
 
     if (!error) {
       setRentals(data);
+      checkAndRejectExpiredRentals();
     }
     setLoading(false);
   };
