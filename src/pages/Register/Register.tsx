@@ -15,6 +15,7 @@ const Register = () => {
     const [location, setLocation] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
     const { updateRegistrationData } = useRegistration();
     const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const phoneRegex = /^(09\d{9}|(\+63)\d{10})$/;
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -141,6 +142,13 @@ const Register = () => {
             Alert.alert('Error', 'Please upload your ID image.');
             return;
         }
+        if (!phoneRegex.test(formData.phone)) {
+            Alert.alert(
+                'Invalid Phone Number',
+                'Please enter a valid Philippine phone number.\nAccepted formats:\n• 09123456789 (11 digits)\n• +639123456789'
+            );
+            return;
+        }
 
         try {
             setLoading(true);
@@ -246,8 +254,22 @@ const Register = () => {
                                 placeholderTextColor="#A1A1A1"
                                 style={styles.fullWidthInput}
                                 value={formData.phone}
-                                onChangeText={(text) => setFormData(prev => ({ ...prev, phone: text }))}
                                 keyboardType="phone-pad"
+                                onChangeText={(text) => {
+                                    // Remove all non-numeric except +
+                                    let cleaned = text.replace(/[^0-9+]/g, '');
+
+                                    // Auto-add +63 if user starts typing 9
+                                    if (cleaned.startsWith('9')) {
+                                        cleaned = '+63' + cleaned;
+                                    }
+
+                                    // Prevent extra characters beyond +639XXXXXXXXX
+                                    if (cleaned.startsWith('+63') && cleaned.length > 13) return;
+                                    if (!cleaned.startsWith('+63') && cleaned.length > 11) return;
+
+                                    setFormData(prev => ({ ...prev, phone: cleaned }));
+                                }}
                             />
                         </View>
 
