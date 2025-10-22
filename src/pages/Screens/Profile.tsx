@@ -690,6 +690,7 @@ const styles = StyleSheet.create({
   profileText: {
     fontFamily: 'DM-Bold',
     fontSize: 32,
+    flexWrap: 'wrap',
     paddingLeft: 20
   },
   profileImage: {
@@ -706,13 +707,13 @@ const styles = StyleSheet.create({
   subprofileContainer: {
     flexDirection: 'row',
     backgroundColor: '#FAF5EF',
-    height: 100,
+    height: 120,
     borderRadius: 20,
     paddingLeft: 10,
     elevation: 10,
   },
   informationContainer: {
-    flexDirection: 'column',
+    flexShrink: 1,
     alignSelf: 'center',
     paddingLeft: 10,
   },
