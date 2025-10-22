@@ -8,6 +8,7 @@ import {
   Modal,
   RefreshControl,
   TouchableOpacity,
+  Alert
 } from 'react-native';
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../supbaseClient';
@@ -17,6 +18,36 @@ const PendingRentalModal = ({ visible, onClose }) => {
   const { currentUser } = useFavorites();
   const [rentals, setRentals] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  const cancelBooking = async (rentalId) => {
+    try {
+      const { error } = await supabase
+        .from('rental_transactions')
+        .update({ status: 'canceled' })
+        .eq('rental_id', rentalId);
+
+      if (error) {
+        console.error('Error canceling booking:', error);
+      } else {
+        // Optimistically update UI
+        setRentals(prev => prev.filter(r => r.rental_id !== rentalId));
+      }
+    } catch (err) {
+      console.error('Unexpected error canceling booking:', err);
+    }
+  };
+
+  const confirmCancelBooking = (rentalId) => {
+    Alert.alert(
+      "Cancel Booking",
+      "Are you sure you want to cancel this booking?",
+      [
+        { text: "No", style: "cancel" },
+        { text: "Yes, Cancel", style: "destructive", onPress: () => cancelBooking(rentalId) }
+      ]
+    );
+  };
+
 
   // Fetch initial data and set up real-time subscription
   useEffect(() => {
@@ -292,6 +323,15 @@ const PendingRentalModal = ({ visible, onClose }) => {
                     </View>
                     <View style={styles.timeBadge}>
                       <Text style={styles.timeText}>{timeAgo}</Text>
+                    </View>
+
+                    <View style={styles.actionsContainer}>
+                      <TouchableOpacity
+                        style={styles.cancelButton}
+                        onPress={() => confirmCancelBooking(rental.rental_id)}
+                      >
+                        <Text style={styles.cancelButtonText}>✕</Text>
+                      </TouchableOpacity>
                     </View>
                   </View>
 
@@ -569,5 +609,21 @@ const styles = StyleSheet.create({
   refreshIcon: {
     fontSize: 18,
     color: '#FFAB00',
+  },
+  actionsContainer: {
+    marginTop: 10,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+  },
+  cancelButton: {
+    backgroundColor: '#FF4444',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '600',
+    fontSize: 14,
   },
 });
