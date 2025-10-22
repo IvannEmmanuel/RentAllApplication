@@ -542,6 +542,8 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
               <Text style={styles.legendText}>• Second tap: Select end date (creates range)</Text>
               <Text style={styles.legendText}>• Third tap: Start new selection</Text>
               <Text style={styles.legendText}>• Red dates are unavailable</Text>
+              <Text style={styles.noteText}>{"\n"}NOTE: A booking request must be confirmed by the lessor prior to the scheduled rental start date. 
+                Unconfirmed booking requests by the start date are automatically canceled and removed from the system.</Text>
             </View>
           </View>
 
@@ -799,6 +801,11 @@ const styles = StyleSheet.create({
   calendarLegend: {
     marginTop: 12,
     paddingHorizontal: 4,
+  },
+  noteText: {
+    fontSize: 11,
+    fontFamily: 'DM-Bold',
+    color: '#FFAB00',
   },
   legendText: {
     fontSize: 11,
