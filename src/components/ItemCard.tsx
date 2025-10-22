@@ -252,7 +252,7 @@ const styles = StyleSheet.create({
     lessorText: {
         fontSize: 12,
         color: "#555",
-        marginRight: 3,
+        maxWidth: '80%',  // ⬅ prevent long names from pushing rating out
     },
     lessorRateImage: {
         width: 10,
