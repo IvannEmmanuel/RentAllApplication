@@ -30,6 +30,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   const [categories, setCategories] = useState({}); // Store category names by ID
 
   const navigation = useNavigation();
+  // or include other statuses you want to track
 
   // Fetch categories on component mount
   useEffect(() => {
@@ -123,6 +124,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
           const endDate = new Date(booking.end_date);
           today.setHours(0, 0, 0, 0);
           endDate.setHours(0, 0, 0, 0);
+          const isOverdue = activeTab === 'active' && today > endDate;
 
           const isCheckoutAvailable = isAccommodation &&
             activeTab === 'active' &&
@@ -130,6 +132,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
 
           return {
             ...booking,
+            is_overdue: isOverdue,
             item_image: imageUrl,
             renter_name: `${booking.users.first_name} ${booking.users.last_name}`,
             formatted_dates: {
@@ -137,7 +140,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
               end: new Date(booking.end_date).toLocaleDateString(),
               created: new Date(booking.created_at).toLocaleDateString()
             },
-            is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date(),
+            // is_overdue: activeTab === 'active' && new Date(booking.end_date) < new Date(),
             is_highlighted: booking.rental_id === highlightedRentalId,
             is_accommodation: isAccommodation,
             is_checkout_available: isCheckoutAvailable
@@ -402,7 +405,14 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
               style={styles.renterImage}
             />
             <View style={styles.renterDetails}>
-              <Text style={styles.renterName}>{booking.renter_name}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
+                <Text style={styles.renterName}>{booking.renter_name}</Text>
+                {booking.is_overdue && (
+                  <View style={styles.overdueBadge}>
+                    <Text style={styles.overdueText}>Overdue</Text>
+                  </View>
+                )}
+              </View>
               <Text style={styles.requestDate}>
                 {activeTab === 'pending' ? `Requested on ${booking.formatted_dates.created}` : `Rental Period: ${booking.formatted_dates.start} - ${booking.formatted_dates.end}`}
               </Text>
@@ -648,6 +658,19 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     textAlign: 'center',
   },
+  overdueBadge: {
+    backgroundColor: '#FFCDD2',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  overdueText: {
+    color: '#C62828',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
 });
 
 export default YourItemsModal;
