@@ -78,7 +78,24 @@ const Login = () => {
         throw new Error("No role assigned to this account")
       }
 
+      // NEW: Check if user is banned
+      if (profile.role === "banned") {
+        // Sign out the user immediately
+        await supabase.auth.signOut()
+        showToast("Your account has been banned. Please contact support for assistance.", "error")
+        return
+      }
+
+      if (profile.role === "admin") {
+        // Sign out the user immediately
+        await supabase.auth.signOut()
+        showToast("Admin account is not available in mobile", "warning")
+        return
+      }
+
       if (profile.role === "unverified") {
+        // Sign out unverified users too
+        await supabase.auth.signOut()
         showToast("Your account is pending admin verification.", "info")
         return
       }
@@ -194,7 +211,24 @@ const Login = () => {
         throw new Error("No role assigned to this account")
       }
 
+      // NEW: Check if user is banned
+      if (profile.role === "banned") {
+        // Sign out the user immediately
+        await supabase.auth.signOut()
+        showToast("Your account has been banned. Please contact support for assistance.", "error")
+        return
+      }
+
+      if (profile.role === "admin") {
+        // Sign out the user immediately
+        await supabase.auth.signOut()
+        showToast("Admin account is not available in mobile", "warning")
+        return
+      }
+
       if (profile.role === "unverified") {
+        // Sign out unverified users too
+        await supabase.auth.signOut()
         showToast("Your account is pending admin verification.", "info")
         return
       }
