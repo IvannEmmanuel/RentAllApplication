@@ -11,8 +11,9 @@ export default function AppModals({ currentUser }) {
   const { modalData, hideModal } = useNotificationModal();
   const [userRole, setUserRole] = useState(null); // 'lessor' or 'renter'
   const [isLoadingRole, setIsLoadingRole] = useState(false);
+  const [isAccommodation, setIsAccommodation] = useState(false);
 
-  // Determine user role
+  // Determine user role and accommodation status
   useEffect(() => {
     if (modalData.visible && modalData.rentalId && currentUser?.id) {
       setIsLoadingRole(true);
@@ -23,19 +24,39 @@ export default function AppModals({ currentUser }) {
             .from('rental_transactions')
             .select(`
               renter_id,
-              items!inner(user_id)
+              items!inner(
+                user_id,
+                category_id,
+                categories(name)
+              )
             `)
             .eq('rental_id', modalData.rentalId)
             .single();
 
           if (error) throw error;
 
+          // Determine user role
           if (data.renter_id === currentUser.id) setUserRole('renter');
           else if (data.items.user_id === currentUser.id) setUserRole('lessor');
           else setUserRole(null);
+
+          // Determine if accommodation
+          const categoryName = data.items?.categories?.name?.toLowerCase() || '';
+          const isAccom = categoryName.includes('accommodation') || 
+                         categoryName.includes('lodging') || 
+                         categoryName.includes('housing');
+          setIsAccommodation(isAccom);
+
+          console.log('📍 Determined:', { 
+            userRole: data.renter_id === currentUser.id ? 'renter' : 'lessor',
+            isAccommodation: isAccom,
+            category: data.items?.categories?.name 
+          });
+
         } catch (error) {
           console.error('Error determining user role:', error);
           setUserRole(null);
+          setIsAccommodation(false);
         } finally {
           setIsLoadingRole(false);
         }
@@ -44,6 +65,7 @@ export default function AppModals({ currentUser }) {
       determineUserRole();
     } else {
       setUserRole(null);
+      setIsAccommodation(false);
     }
   }, [modalData.visible, modalData.rentalId, currentUser?.id]);
 
@@ -51,6 +73,7 @@ export default function AppModals({ currentUser }) {
     if (!modalData.visible) {
       setUserRole(null);
       setIsLoadingRole(false);
+      setIsAccommodation(false);
     }
   }, [modalData.visible]);
 
@@ -118,7 +141,7 @@ export default function AppModals({ currentUser }) {
         ) : null
       )}
 
-      {/* Other notifications for lessor */}
+      {/* Other notifications for lessor - NOW WITH isAccommodation prop */}
       {modalData.visible && !isLoadingRole && userRole === 'lessor' &&
         (modalData.type === 'booking_return' ||
           modalData.type === 'booking_started' ||
@@ -131,6 +154,7 @@ export default function AppModals({ currentUser }) {
             rentalId={modalData.rentalId}
             onClose={hideModal}
             currentUser={currentUser}
+            isAccommodation={isAccommodation}
           />
         )
       }
@@ -140,7 +164,8 @@ export default function AppModals({ currentUser }) {
         console.log('🔍 Modal data:', {
           type: modalData.type,
           rentalId: modalData.rentalId,
-          userRole: userRole
+          userRole: userRole,
+          isAccommodation: isAccommodation
         })
       )}
     </>

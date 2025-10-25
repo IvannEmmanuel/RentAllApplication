@@ -14,13 +14,20 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../supbaseClient';
 import { handleBookingStatusChange } from '../notifications/notifications';
 
-const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalId, currentUser }) => {
+const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalId, currentUser, isAccommodation: isAccommodationProp }) => {
     // Handle both navigation route params and direct props
     const isModal = visible !== undefined;
+
+    // FIXED: Safely access route.params with optional chaining and fallbacks
     const bookingFromRoute = route?.params?.booking;
-    const { booking, userRole, isAccommodation } = route.params;
+    const userRoleFromRoute = route?.params?.userRole;
+    const isAccommodationFromRoute = route?.params?.isAccommodation;
 
     const [currentBooking, setCurrentBooking] = useState(bookingFromRoute || null);
+    // FIXED: Use prop first, then route param, then default to false
+    const [isAccommodation, setIsAccommodation] = useState(
+        isAccommodationProp ?? isAccommodationFromRoute ?? false
+    );
     const [loading, setLoading] = useState(false);
     const [fetchingBooking, setFetchingBooking] = useState(isModal && !bookingFromRoute);
     const [isSubscribed, setIsSubscribed] = useState(false);
@@ -165,7 +172,9 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                     price_per_day,
                     user_id,
                     location,
-                    quantity
+                    quantity,
+                    category_id,
+                    categories(name)
                 ),
                 users!rental_transactions_renter_id_fkey(
                     first_name,
@@ -178,8 +187,14 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
             if (error) throw error;
 
-            console.log('📦 Fetched booking data:', data); // ADD THIS
-            console.log('🖼️ Proof of deposit URL:', data.proof_of_deposit_url); // ADD THIS
+            console.log('📦 Fetched booking data:', data);
+
+            // Determine if accommodation based on category
+            const categoryName = data.items?.categories?.name?.toLowerCase() || '';
+            const isAccom = categoryName.includes('accommodation') ||
+                categoryName.includes('lodging') ||
+                categoryName.includes('housing');
+            setIsAccommodation(isAccom);
 
             // Get item image
             const imageUrl = await getItemImage(data.items.user_id, data.item_id);
@@ -189,9 +204,9 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 items: {
                     ...data.items,
                     main_image_url: imageUrl,
-                    users: data.users // Ensure users is in items
+                    users: data.users
                 },
-                users: data.users // Also keep at root for compatibility
+                users: data.users
             });
         } catch (error) {
             console.error('Error fetching booking:', error);

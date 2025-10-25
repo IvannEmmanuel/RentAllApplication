@@ -25,8 +25,11 @@ function base64ToUint8Array(base64: string) {
 }
 
 const ItemTrackingScreen = ({ route, navigation }) => {
-    const { rental, isAccommodation } = route.params;
-    const [currentRental, setCurrentRental] = useState(rental);
+    const rental = route?.params?.rental;
+    const isAccommodationFromRoute = route?.params?.isAccommodation || false;
+
+    const [currentRental, setCurrentRental] = useState(rental || null);
+    const [isAccommodation, setIsAccommodation] = useState(isAccommodationFromRoute);
     const [loading, setLoading] = useState(false);
     const [uploading, setUploading] = useState(false);
     const [isSubscribed, setIsSubscribed] = useState(false);
@@ -51,6 +54,44 @@ const ItemTrackingScreen = ({ route, navigation }) => {
     ];
 
     const phases = isAccommodation ? accommodationPhases : defaultPhases;
+
+    useEffect(() => {
+        const fetchRentalDetails = async () => {
+            if (!rental) {
+                console.log('No rental data provided');
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('rental_transactions')
+                    .select(`
+                        *,
+                        items!inner(
+                            *,
+                            categories(name)
+                        )
+                    `)
+                    .eq('rental_id', rental.rental_id)
+                    .single();
+
+                if (error) throw error;
+
+                // Determine if accommodation
+                const categoryName = data.items?.categories?.name?.toLowerCase() || '';
+                const isAccom = categoryName.includes('accommodation') ||
+                    categoryName.includes('lodging') ||
+                    categoryName.includes('housing');
+
+                setIsAccommodation(isAccom);
+                setCurrentRental(data);
+            } catch (error) {
+                console.error('Error fetching rental details:', error);
+            }
+        };
+
+        fetchRentalDetails();
+    }, [rental?.rental_id]);
 
     const handleCheckIn = async () => {
         setLoading(true);
