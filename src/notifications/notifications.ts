@@ -398,10 +398,15 @@ export async function handleBookingStatusChange(
   newStatus: string
 ) {
   try {
-    // 1. Get item details
+    // 1. Get item details with category
     const { data: item, error: itemError } = await supabase
       .from('items')
-      .select('title, user_id')
+      .select(`
+        title, 
+        user_id, 
+        category_id,
+        categories(name)
+      `)
       .eq('item_id', rental.item_id)
       .single();
     if (itemError || !item) throw itemError || new Error('Item not found');
@@ -424,86 +429,45 @@ export async function handleBookingStatusChange(
 
     const renterName = `${renter.first_name} ${renter.last_name}`;
     const lessorName = `${lessor.first_name} ${lessor.last_name}`;
+    
+    // Determine if this is an accommodation based on category name
+    const categoryName = item.categories?.name?.toLowerCase() || '';
+    const isAccommodation = categoryName.includes('accommodation') || categoryName.includes('lodging') || categoryName.includes('housing');
 
     // 4. Send notifications based on new status
     switch (newStatus) {
       case 'pending':
-        // Notify lessor
+        // Notify lessor about new booking request
         await sendNotificationToUser(
           item.user_id,
-          'New Booking Request',
-          `${renterName} wants to rent your "${item.title}"`,
+          isAccommodation ? 'New Accommodation Booking' : 'New Booking Request',
+          isAccommodation 
+            ? `${renterName} wants to book your "${item.title}"`
+            : `${renterName} wants to rent your "${item.title}"`,
           { type: 'booking_request', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
       case 'confirmed':
-      case 'ongoing':
-        // Notify lessor
-        await sendNotificationToUser(
-          item.user_id,
-          'Delivered Item',
-          `${renterName} received the item "${item.title}"`,
-          { type: 'booking_ongoing', rental_id: rental.rental_id, item_id: rental.item_id }
-        );
-        break;
-      case 'cancelled':
-        // Notify renter about status update
+        // Notify renter that booking is confirmed
         await sendNotificationToUser(
           rental.renter_id,
-          `Booking ${newStatus.charAt(0).toUpperCase() + newStatus.slice(1)}`,
-          `${lessorName} has ${newStatus} your booking for "${item.title}"`,
-          { type: `booking_${newStatus}`, rental_id: rental.rental_id, item_id: rental.item_id }
-        );
-        break;
-
-      case 'completed':
-        // Notify both renter and lessor
-        // await sendNotificationToUser(
-        //   rental.renter_id,
-        //   'Rental Completed',
-        //   `Your rental of "${item.title}" is complete. Please rate your experience!`,
-        //   { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
-        // );
-
-        await sendNotificationToUser(
-          item.user_id,
-          'Rental Completed',
-          `Your rental of your "${item.title}" is complete. Please rate your experience!`,
-          { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
-        );
-        break;
-
-      case 'awaiting_owner_confirmation':
-        // Notify lessor that renter marked the item as returned
-        await sendNotificationToUser(
-          item.user_id,
-          'Return Pending Confirmation',
-          `${renterName} has returned your "${item.title}". Please confirm.`,
-          { type: 'booking_return', rental_id: rental.rental_id, item_id: rental.item_id }
-        );
-        break;
-
-      case 'delivered':
-        // Notify lessor that renter has confirmed receipt
-        await sendNotificationToUser(
-          item.user_id,
-          'Item Delivered Confirmed',
-          `${renterName} has confirmed received of your "${item.title}"`,
-          {
-            type: 'booking_delivered',
-            rental_id: rental.rental_id,
-            item_id: rental.item_id
-          }
+          isAccommodation ? 'Booking Confirmed!' : 'Rental Confirmed!',
+          isAccommodation
+            ? `${lessorName} has confirmed your stay at "${item.title}". Please submit your deposit.`
+            : `${lessorName} has confirmed your rental for "${item.title}". Please submit your deposit.`,
+          { type: 'booking_confirmed', rental_id: rental.rental_id, item_id: rental.item_id }
         );
         break;
 
       case 'deposit_submitted':
-        // Notify lessor that renter submitted a deposit
+        // Notify lessor that deposit has been submitted
         await sendNotificationToUser(
-          item.user_id, // lessor
+          item.user_id,
           'Deposit Submitted',
-          `${renterName} has submitted a deposit for "${item.title}". Please verify it.`,
+          isAccommodation
+            ? `${renterName} has submitted a deposit for their stay at "${item.title}". Please review it.`
+            : `${renterName} has submitted a deposit for "${item.title}". Please verify it.`,
           {
             type: 'deposit_submitted',
             rental_id: rental.rental_id,
@@ -513,17 +477,126 @@ export async function handleBookingStatusChange(
         break;
 
       case 'on_the_way':
-        // Notify renter that lessor is delivering the item
+        // Notify renter - different message for accommodation vs regular items
         await sendNotificationToUser(
-          rental.renter_id, // renter
-          'Item On The Way',
-          `${lessorName} is delivering the "${item.title}" to you.`,
-          { type: 'booking_ongoing', rental_id: rental.rental_id, item_id: rental.item_id }
+          rental.renter_id,
+          isAccommodation ? 'Ready for Check-In' : 'Item On The Way',
+          isAccommodation
+            ? `Your accommodation "${item.title}" is ready for check-in. Enjoy your stay!`
+            : `${lessorName} is delivering "${item.title}" to you.`,
+          { type: 'on_the_way', rental_id: rental.rental_id, item_id: rental.item_id }
+        );
+        break;
+
+      case 'ongoing':
+        // For accommodation: guest has checked in
+        // For regular items: item is being used
+        if (isAccommodation) {
+          // Notify lessor that guest has checked in
+          await sendNotificationToUser(
+            item.user_id,
+            'Guest Checked In',
+            `${renterName} has checked into "${item.title}".`,
+            {
+              type: 'booking_ongoing',
+              rental_id: rental.rental_id,
+              item_id: rental.item_id
+            }
+          );
+        } else {
+          // Notify lessor that item was delivered
+          await sendNotificationToUser(
+            item.user_id,
+            'Item Delivered',
+            `${renterName} has received "${item.title}".`,
+            {
+              type: 'booking_ongoing',
+              rental_id: rental.rental_id,
+              item_id: rental.item_id
+            }
+          );
+        }
+        break;
+
+      case 'delivered':
+        // This status is only for regular items (renter confirms receipt)
+        if (!isAccommodation) {
+          await sendNotificationToUser(
+            item.user_id,
+            'Item Delivery Confirmed',
+            `${renterName} has confirmed receipt of "${item.title}".`,
+            {
+              type: 'booking_delivered',
+              rental_id: rental.rental_id,
+              item_id: rental.item_id
+            }
+          );
+        }
+        break;
+
+      case 'awaiting_owner_confirmation':
+        // Notify lessor about return/checkout request
+        await sendNotificationToUser(
+          item.user_id,
+          isAccommodation ? 'Checkout Requested' : 'Return Requested',
+          isAccommodation
+            ? `${renterName} has requested checkout from "${item.title}". Please confirm.`
+            : `${renterName} has returned "${item.title}". Please confirm receipt.`,
+          { type: 'booking_return', rental_id: rental.rental_id, item_id: rental.item_id }
+        );
+        break;
+
+      case 'completed':
+        // Notify both parties about completion
+        if (isAccommodation) {
+          // For accommodation, notify lessor to rate the guest
+          await sendNotificationToUser(
+            item.user_id,
+            'Stay Completed',
+            `${renterName}'s stay at "${item.title}" is complete. Please rate your guest!`,
+            { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
+          );
+          
+          // Optionally notify renter too
+          await sendNotificationToUser(
+            rental.renter_id,
+            'Stay Completed',
+            `Your stay at "${item.title}" is complete. Please rate your experience!`,
+            { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
+          );
+        } else {
+          // For regular items
+          await sendNotificationToUser(
+            item.user_id,
+            'Rental Completed',
+            `The rental of "${item.title}" is complete. Please rate your experience!`,
+            { type: 'booking_completed', rental_id: rental.rental_id, item_id: rental.item_id }
+          );
+        }
+        break;
+
+      case 'cancelled':
+        // Determine who to notify (the other party)
+        const isLessorCancelling = oldStatus === 'pending';
+        const notifyUserId = isLessorCancelling ? rental.renter_id : item.user_id;
+        const cancellerName = isLessorCancelling ? lessorName : renterName;
+
+        await sendNotificationToUser(
+          notifyUserId,
+          isAccommodation ? 'Booking Cancelled' : 'Rental Cancelled',
+          isAccommodation
+            ? `${cancellerName} has cancelled the booking for "${item.title}".`
+            : `${cancellerName} has cancelled the rental for "${item.title}".`,
+          {
+            type: 'booking_cancelled',
+            rental_id: rental.rental_id,
+            item_id: rental.item_id
+          }
         );
         break;
 
       default:
-        // No notification for other statuses
+        console.log('No notification handler for status:', newStatus);
         break;
     }
 
