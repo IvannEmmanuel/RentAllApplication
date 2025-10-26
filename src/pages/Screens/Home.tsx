@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useCallback, useMemo } from "react";
 import {
   StyleSheet,
@@ -15,10 +17,10 @@ import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 // --- Local Imports ---
-// (Adjust these paths to match your project structure)
 import { useFavorites } from "../../components/FavoritesContext";
 import { useHomeData } from "../../hooks/useHomeData";
 import { useSearch } from "../../hooks/useSearch";
+import { useRecommendations } from "../../hooks/useRecommendations";
 import ItemCard from "../../components/ItemCard";
 import FavoritesModal from "../../components/FavoriteModal";
 import BookItemModal from "../../components/BookItemModal";
@@ -26,10 +28,10 @@ import PictureModal from "../../components/PictureModal";
 import SkeletonLoadingHome from "../../components/skeletonComponents/SkeletonLoadingHome";
 import SkeletonLoadingMore from "../../components/skeletonComponents/SkeletonLoadingMore";
 import { getInitials } from "../../services/supabaseServices";
-import { supabase } from "../../../supbaseClient"; // For handleMessage
+import { supabase } from "../../../supbaseClient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 // --- Type Definitions ---
-// (Define these in a types file if you prefer)
 type RootStackParamList = {
   Home: { resetToAll?: boolean };
   Chat: { /* params for chat screen */ };
@@ -40,7 +42,7 @@ type HomeProps = NativeStackScreenProps<RootStackParamList, 'Home'>;
 
 // --- Main Component ---
 const Home = ({ route }: HomeProps) => {
-  const navigation = useNavigation<any>(); // Use a typed navigator if available
+  const navigation = useNavigation<any>();
   const { favorites, currentUser, toggleFavorite, isFavorited } = useFavorites();
 
   // --- State Management ---
@@ -56,11 +58,22 @@ const Home = ({ route }: HomeProps) => {
     itemRatings,
     lessorRatings,
     handleLoadMore,
-    refresh, // Use this for pull-to-refresh
+    refresh,
   } = useHomeData(currentUser, navigation, route);
 
   const [searchTerm, setSearchTerm] = useState("");
   const { searchResults, isSearching, showResults } = useSearch(searchTerm);
+
+  // --- Recommendations Hook ---
+  const {
+    recommendations,
+    loading: recsLoading,
+    userProfile,
+    trackItemView,
+    trackFavorite,
+    trackSearch,
+    fetchRecommendations
+  } = useRecommendations(currentUser?.id);
 
   // Modal States
   const [favoritesModalVisible, setFavoritesModalVisible] = useState(false);
@@ -71,13 +84,26 @@ const Home = ({ route }: HomeProps) => {
   // --- Reset when click home tab ---
   useFocusEffect(
     useCallback(() => {
-      // When the screen comes into focus, check for the reset parameter
       if (route.params?.resetToAll) {
-        // Clear the local search term state
         setSearchTerm("");
-        // The useHomeData hook will handle resetting the category and params
       }
     }, [route.params?.resetToAll])
+  );
+
+  // --- Initialize recommendations on mount ---
+  // --- Initialize recommendations on mount ---
+  useFocusEffect(
+    useCallback(() => {
+      if (currentUser?.id && items.length > 0 && categories.length > 0) {
+        // Just fetch - the hook will handle caching internally
+        const timer = setTimeout(() => {
+          console.log('🚀 Requesting recommendations');
+          fetchRecommendations(items, categories);
+        }, 500);
+
+        return () => clearTimeout(timer);
+      }
+    }, [currentUser?.id, items.length, categories.length, fetchRecommendations])
   );
 
   // --- Business Logic & Callbacks ---
@@ -124,23 +150,44 @@ const Home = ({ route }: HomeProps) => {
       return;
     }
     if (getButtonInfo(item).disabled) {
-      // You can add a more specific alert here if you want
       return;
     }
+
+    // Track the view
+    trackItemView(item);
+
     setSelectedItem(item);
     setBookModalVisible(true);
   },
-    [currentUser, getButtonInfo]
+    [currentUser, getButtonInfo, trackItemView]
   );
 
   const handleToggleFavorite = useCallback(async (itemId: string) => {
+    const item = items.find(i => i.item_id === itemId);
+    if (item) {
+      const wasFavorited = isFavorited(itemId);
+      trackFavorite(item, !wasFavorited);
+    }
+
     const result = await toggleFavorite(itemId);
     if (!result.success && result.message) {
       Alert.alert("Error", result.message);
     }
   },
-    [toggleFavorite]
+    [toggleFavorite, isFavorited, trackFavorite, items]
   );
+
+  const handleSearchChange = useCallback((text: string) => {
+    setSearchTerm(text);
+
+    // Track search with debounce
+    if (text && text.trim().length > 0) {
+      const debounce = setTimeout(() => {
+        trackSearch(text);
+      }, 1000);
+      return () => clearTimeout(debounce);
+    }
+  }, [trackSearch]);
 
   const handleMessage = useCallback(async (item: any) => {
     if (!currentUser) {
@@ -153,7 +200,6 @@ const Home = ({ route }: HomeProps) => {
     }
 
     try {
-      // First, get the other user's details for the chat header
       const { data: otherUser, error: userError } = await supabase
         .from("users")
         .select("first_name, last_name")
@@ -164,21 +210,19 @@ const Home = ({ route }: HomeProps) => {
 
       const otherUserName = otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : "Unknown User";
 
-      // Check for an existing conversation
       let { data: conversation, error: convError } = await supabase
         .from("conversations")
         .select("*")
         .or(`and(user1_id.eq.${currentUser.id},user2_id.eq.${item.user_id}),and(user1_id.eq.${item.user_id},user2_id.eq.${currentUser.id})`)
         .single();
 
-      // If conversation exists, UPDATE the item_id to the new item
       if (conversation) {
         console.log("Updating existing conversation with new item:", item.item_id);
 
         const { data: updatedConversation, error: updateError } = await supabase
           .from("conversations")
           .update({
-            item_id: item.item_id, // Update to the new item
+            item_id: item.item_id,
             last_message: `Interested in renting: ${item.title}`,
             last_message_at: new Date().toISOString(),
           })
@@ -189,7 +233,6 @@ const Home = ({ route }: HomeProps) => {
         if (updateError) throw updateError;
         conversation = updatedConversation;
       }
-      // If no conversation is found, create a new one
       else if (convError && convError.code === "PGRST116") {
         console.log("Creating new conversation for item:", item.item_id);
 
@@ -210,18 +253,15 @@ const Home = ({ route }: HomeProps) => {
         if (createError) throw createError;
         conversation = newConversation;
       } else if (convError) {
-        // Handle other potential errors
         throw convError;
       }
 
-      // Ensure we have a valid conversation before navigating
       if (!conversation || !conversation.id) {
         throw new Error("Could not find or create a conversation.");
       }
 
       console.log("Navigating to Chat with Conversation ID:", conversation.id);
 
-      // Navigate to the chat screen with all required parameters
       navigation.navigate("Chat", {
         conversationId: conversation.id,
         otherUserId: item.user_id,
@@ -250,9 +290,8 @@ const Home = ({ route }: HomeProps) => {
   );
 
   const handleBookingComplete = useCallback(() => {
-    refresh(); // Simply call the refresh function from our hook
+    refresh();
   }, [refresh]);
-
 
   // --- Render Functions ---
   const renderItemCard = useCallback(({ item }: { item: any }) => (
@@ -267,6 +306,7 @@ const Home = ({ route }: HomeProps) => {
       onMessage={handleMessage}
       onToggleFavorite={handleToggleFavorite}
       onRentNow={handleRentNow}
+      fullWidth={false}
     />
   ),
     [itemRatings, lessorRatings, isFavorited, getButtonInfo, handleToggleFavorite, handleRentNow, handleMessage, handleLessorPress, handlePicturePress]
@@ -298,6 +338,24 @@ const Home = ({ route }: HomeProps) => {
     </TouchableOpacity>
   ), [handleLessorPress]);
 
+  const renderRecommendationItem = useCallback(({ item }: { item: any }) => (
+    <View style={styles.recommendationItemWrapper}>
+      <ItemCard
+        item={item}
+        itemRating={itemRatings[item.item_id]}
+        lessorRating={lessorRatings[item.lessorId || item.ownerId]}
+        isFavorited={isFavorited(item.item_id)}
+        buttonInfo={getButtonInfo(item)}
+        onPicturePress={handlePicturePress}
+        onLessorPress={handleLessorPress}
+        onMessage={handleMessage}
+        onToggleFavorite={handleToggleFavorite}
+        onRentNow={handleRentNow}
+        fullWidth={true}
+      />
+    </View>
+  ), [itemRatings, lessorRatings, isFavorited, getButtonInfo, handleToggleFavorite, handleRentNow, handleMessage, handleLessorPress, handlePicturePress]);
+
   const renderListHeader = useMemo(() => (
     <>
       <View style={styles.topMenuBar}>
@@ -306,7 +364,7 @@ const Home = ({ route }: HomeProps) => {
           placeholderTextColor="#9c9c9c"
           style={styles.searchInput}
           value={searchTerm}
-          onChangeText={setSearchTerm}
+          onChangeText={handleSearchChange}
         />
         <TouchableOpacity onPress={() => setFavoritesModalVisible(true)}>
           <View style={styles.favoritesButton}>
@@ -315,6 +373,23 @@ const Home = ({ route }: HomeProps) => {
           </View>
         </TouchableOpacity>
       </View>
+
+      {/* Categories */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
+        <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
+          <Text style={[styles.categoryChip, selectedCategoryId === "" && styles.categoryChipSelected]}>All</Text>
+        </TouchableOpacity>
+        {categories.map((category) => (
+          <TouchableOpacity
+            key={category.category_id}
+            onPress={() => setSelectedCategoryId(selectedCategoryId === String(category.category_id) ? "" : String(category.category_id))}
+          >
+            <Text style={[styles.categoryChip, selectedCategoryId === String(category.category_id) && styles.categoryChipSelected]}>
+              {category.name}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </ScrollView>
 
       {showResults ? (
         <View style={styles.searchResultsContainer}>
@@ -340,28 +415,36 @@ const Home = ({ route }: HomeProps) => {
         </View>
       ) : (
         <>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.categoriesContainer}>
-            <TouchableOpacity onPress={() => setSelectedCategoryId("")}>
-              <Text style={[styles.categoryChip, selectedCategoryId === "" && styles.categoryChipSelected]}>All</Text>
-            </TouchableOpacity>
-            {categories.map((category) => (
-              <TouchableOpacity
-                key={category.category_id}
-                onPress={() => setSelectedCategoryId(selectedCategoryId === String(category.category_id) ? "" : String(category.category_id))}
-              >
-                <Text style={[styles.categoryChip, selectedCategoryId === String(category.category_id) && styles.categoryChipSelected]}>
-                  {category.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+          {/* Recommendations Section */}
+          {recommendations.length > 0 && !recsLoading && (
+            <>
+              <View style={styles.recommendationsHeader}>
+                <Text style={styles.recommendationsTitle}>✨ Recommended For You</Text>
+                {userProfile?.primaryInterests && userProfile.primaryInterests.length > 0 && (
+                  <Text style={styles.recommendationsSubtitle}>
+                    Based on: {userProfile.primaryInterests.join(', ')}
+                  </Text>
+                )}
+              </View>
+              <FlatList
+                data={recommendations}
+                renderItem={renderRecommendationItem}
+                keyExtractor={(item) => item.item_id?.toString() || Math.random().toString()}
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                scrollEnabled={true}
+                contentContainerStyle={styles.recommendationsContainer}
+              />
+            </>
+          )}
+
           <View style={styles.sectionTitleContainer}>
             <Text style={styles.itemsTitle}>Items</Text>
           </View>
         </>
       )}
     </>
-  ), [searchTerm, favorites.length, showResults, isSearching, searchResults, categories, selectedCategoryId, renderUserResult, renderItemCard]);
+  ), [searchTerm, favorites.length, showResults, isSearching, searchResults, categories, selectedCategoryId, renderUserResult, recommendations, recsLoading, userProfile, renderRecommendationItem, handleSearchChange]);
 
   const renderListFooter = useMemo(() => {
     if (showResults) return null;
@@ -453,7 +536,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#FAF5EF",
     paddingTop: 40,
   },
-    contentContainer: {
+  contentContainer: {
     paddingBottom: 20,
   },
   columnWrapper: {
@@ -504,7 +587,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     backgroundColor: "#FFFFFF",
     color: '#333',
-    overflow: 'hidden', // for iOS rounded corners
+    overflow: 'hidden',
   },
   categoryChipSelected: {
     backgroundColor: "#FFAB00",
@@ -525,6 +608,30 @@ const styles = StyleSheet.create({
     marginTop: 15,
     paddingHorizontal: 15,
   },
+  // Recommendations Styles
+  recommendationsHeader: {
+    paddingHorizontal: 15,
+    paddingTop: 15,
+    paddingBottom: 10,
+  },
+  recommendationsTitle: {
+    fontFamily: "DM-Bold",
+    fontSize: 22,
+    marginBottom: 5,
+  },
+  recommendationsSubtitle: {
+    fontFamily: "DM-Medium",
+    fontSize: 12,
+    color: "#FFAB00",
+  },
+  recommendationsContainer: {
+    paddingHorizontal: 10,
+    marginBottom: 15,
+  },
+  recommendationItemWrapper: {
+    marginHorizontal: 5,
+    width: 160,
+  },
   // Search Results
   searchResultsContainer: {
     paddingHorizontal: 5,
@@ -542,7 +649,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     padding: 10,
     marginHorizontal: 5,
-    width: 220, // fixed width for horizontal scroll
+    width: 220,
     elevation: 2,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 1 },
@@ -581,9 +688,6 @@ const styles = StyleSheet.create({
     color: "#9C9894",
     fontSize: 12,
   },
-  itemsGrid: {
-    paddingHorizontal: 5,
-  },
   noResultsText: {
     textAlign: "center",
     color: "#9C9894",
@@ -608,17 +712,6 @@ const styles = StyleSheet.create({
     color: "#9C9894",
     fontSize: 14,
   },
-  searchResultsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    paddingHorizontal: 10,
-  },
-  itemWrapper: {
-    width: '48%', // Creates a two-column layout with a small gap
-    marginBottom: 15,
-  },
-
 });
 
 export default Home;
