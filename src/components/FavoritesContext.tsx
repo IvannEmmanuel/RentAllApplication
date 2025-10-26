@@ -1,8 +1,8 @@
 "use client"
 
-// FavoritesContext.js
 import { createContext, useContext, useState, useEffect, useCallback } from "react"
 import { supabase } from "../../supbaseClient"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 
 const FavoritesContext = createContext()
 
@@ -14,20 +14,12 @@ export const useFavorites = () => {
     return context
 }
 
-export const FavoritesProvider = ({ children }) => {
+export const FavoritesProvider = ({ children, initialUser = null }) => {
     const [favorites, setFavorites] = useState([])
-    const [currentUser, setCurrentUser] = useState(null)
+    const [currentUser, setCurrentUser] = useState(initialUser)
 
-    // Get current user
-    useEffect(() => {
-        const getCurrentUser = async () => {
-            const {
-                data: { user },
-            } = await supabase.auth.getUser()
-            setCurrentUser(user)
-        }
-        getCurrentUser()
-    }, [])
+    // ✅ Remove the old useEffect that fetched the user
+    // We'll get it from AppNavigator instead
 
     // Fetch favorites from database
     const fetchFavorites = useCallback(async () => {
@@ -51,16 +43,17 @@ export const FavoritesProvider = ({ children }) => {
         if (!currentUser) return
 
         try {
-            // Optional: remove FCM tokens
             await supabase.from("user_fcm_tokens").delete().eq("user_id", currentUser.id)
 
-            // Sign out from Supabase
             const { error } = await supabase.auth.signOut()
             if (error) throw error
 
-            // Clear user & favorites
             setCurrentUser(null)
             setFavorites([])
+
+            await AsyncStorage.removeItem('supabase.auth.token')
+
+            console.log("✅ Logged out successfully, tokens cleared")
         } catch (err) {
             console.error("Logout failed:", err)
             throw err
@@ -78,7 +71,6 @@ export const FavoritesProvider = ({ children }) => {
 
             try {
                 if (isFavorited) {
-                    // Remove from favorites
                     const { error } = await supabase
                         .from("favorites")
                         .delete()
@@ -86,7 +78,6 @@ export const FavoritesProvider = ({ children }) => {
                         .eq("item_id", itemId)
 
                     if (!error) {
-                        // Update local state immediately for instant UI feedback
                         setFavorites((prev) => prev.filter((id) => id !== itemId))
                         return { success: true, action: "removed" }
                     } else {
@@ -94,7 +85,6 @@ export const FavoritesProvider = ({ children }) => {
                         return { success: false, message: "Failed to remove from favorites" }
                     }
                 } else {
-                    // Add to favorites
                     const { error } = await supabase.from("favorites").insert([
                         {
                             user_id: currentUser.id,
@@ -103,7 +93,6 @@ export const FavoritesProvider = ({ children }) => {
                     ])
 
                     if (!error) {
-                        // Update local state immediately for instant UI feedback
                         setFavorites((prev) => [...prev, itemId])
                         return { success: true, action: "added" }
                     } else {
@@ -119,7 +108,6 @@ export const FavoritesProvider = ({ children }) => {
         [currentUser, favorites],
     )
 
-    // Check if item is favorited
     const isFavorited = useCallback(
         (itemId) => {
             return favorites.includes(itemId)
@@ -127,14 +115,14 @@ export const FavoritesProvider = ({ children }) => {
         [favorites],
     )
 
-    // Load favorites when user changes
+    // ✅ Load favorites when user changes (from AppNavigator)
     useEffect(() => {
         if (currentUser) {
             fetchFavorites()
         }
     }, [currentUser, fetchFavorites])
 
-    // Real-time subscription - SINGLE SUBSCRIPTION FOR ALL COMPONENTS
+    // Real-time subscription
     useEffect(() => {
         if (!currentUser) return
 
@@ -151,7 +139,6 @@ export const FavoritesProvider = ({ children }) => {
                 },
                 (payload) => {
                     console.log("Favorites change detected:", payload)
-                    // Refresh favorites from database to ensure consistency
                     fetchFavorites()
                 },
             )
@@ -189,13 +176,13 @@ export const FavoritesProvider = ({ children }) => {
     const value = {
         favorites,
         currentUser,
-        setCurrentUser,
+        setCurrentUser, // ✅ Now receives user from AppNavigator
         toggleFavorite,
         isFavorited,
         fetchFavorites,
         favoritesCount: favorites.length,
         logout,
-        updateItemQuantity, // Add updateItemQuantity to context value
+        updateItemQuantity,
     }
 
     return <FavoritesContext.Provider value={value}>{children}</FavoritesContext.Provider>

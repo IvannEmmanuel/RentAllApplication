@@ -458,23 +458,12 @@ const Profile = () => {
   }, []);
 
   const handleLogout = async () => {
-    if (!currentUser) return
-
-    try {
-      await logout()
-
-      setUserBookings([])
-      setSelectedItem(null)
-
-      navigation.reset({
-        index: 0,
-        routes: [{ name: 'LandingPage' }],
-      })
-    } catch (err) {
-      console.error('Logout error:', err)
-      Alert.alert('Error', 'Failed to logout. Please try again.')
-    }
-  }
+    await logout();  // ✅ refresh_token is cleared here
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'LandingPage' }],
+    });
+  };
 
   // Render item using the same ItemCard component as Home.tsx
   const renderItemCard = useCallback(({ item }) => (
@@ -596,7 +585,7 @@ const Profile = () => {
             <View style={styles.sectionHeader}>
               <Text style={styles.itemText}>Items for you</Text>
             </View>
-            
+
             {recommendedItems.length === 0 ? (
               <SkeletonLoadingProfile />
             ) : (

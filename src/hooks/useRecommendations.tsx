@@ -171,7 +171,7 @@ export function useRecommendations(userId) {
       // Use cache if:
       // 1. Behavior hasn't changed AND
       // 2. Cache is less than 5 minutes old
-      if (recommendationCache.behaviorHash === currentHash && timeSinceLastCall < 5 * 60 * 1000) {
+      if (recommendationCache.behaviorHash === currentHash && timeSinceLastCall < 20 * 60 * 1000) {
         console.log('✅ Using cached recommendations (age: ' + Math.round(timeSinceLastCall / 1000) + 's)');
         setRecommendations(recommendationCache.recommendations);
         setUserProfile(recommendationCache.profile);
