@@ -4,21 +4,22 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { formatPrice } from '../services/supabaseServices';
 
 const ItemCard = ({
-    item,
-    itemRating,
-    lessorRating,
-    isFavorited,
-    buttonInfo,
-    onPicturePress,
-    onLessorPress,
-    onMessage,
-    onToggleFavorite,
-    onRentNow,
+  item,
+  itemRating,
+  lessorRating,
+  isFavorited,
+  buttonInfo,
+  onPicturePress,
+  onLessorPress,
+  onMessage,
+  onToggleFavorite,
+  onRentNow,
+  fullWidth = false, // <-- new prop with default
 }) => {
-    const isOwner = buttonInfo.text === 'Your Item';
+  const isOwner = buttonInfo.text === 'Your Item';
 
     return (
-        <View style={styles.itemWrapper}>
+        <View style={[styles.itemWrapper, fullWidth && { width: '100%' }]}>
             <View style={styles.itemContainer}>
                 {/* Top section of the card */}
                 <View>
