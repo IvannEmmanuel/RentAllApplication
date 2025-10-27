@@ -468,7 +468,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
                 !isCheckoutAvailable && (
                   <View style={styles.accommodationMessage}>
                     <Text style={styles.accommodationMessageText}>
-                      Accommodation booking - No tracking required
+                      Accommodation booking
                     </Text>
                   </View>
                 )
@@ -481,18 +481,11 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
           </>
         )}
 
-        {/* Track indicator - only show for non-accommodation items */}
-        {isActiveTab && !isAccommodation && (
-          <View style={styles.trackIndicator}>
-            <Text style={styles.trackText}>Tap to track order</Text>
-          </View>
-        )}
-
         {/* Accommodation message for active tab */}
         {isActiveTab && isAccommodation && !isCheckoutAvailable && (
           <View style={styles.accommodationMessage}>
             <Text style={styles.accommodationMessageText}>
-              Accommodation booking - No tracking required
+              Accommodation booking
             </Text>
           </View>
         )}
