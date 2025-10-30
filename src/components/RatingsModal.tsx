@@ -270,7 +270,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                 if (!hasLessorReview) {
                     const { error: lessorError } = await supabase
                         .from("lessor_reviews")
-                        .insert([
+                        .upsert([
                             {
                                 rental_id: selectedRental.rental_id,
                                 lessor_id: selectedRental.items.user_id,
@@ -278,7 +278,7 @@ const RatingsModal = ({ visible, onClose, currentUserId }) => {
                                 rating: lessorRating,
                                 comment: lessorComment,
                             }
-                        ]);
+                        ], { onConflict: ['lessor_id', 'reviewer_id'] });
 
                     if (lessorError) throw lessorError;
                 }
