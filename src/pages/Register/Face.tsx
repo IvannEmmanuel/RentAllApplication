@@ -219,11 +219,13 @@ const Face = () => {
       setResult("🔄 Comparing faces...")
 
       // Compression function
-      const compressImageToLimit = async (uri: string, maxSizeBytes: number = 2097152): Promise<string> => {
+      // Replace your compressImageToLimit function with this:
+      const compressImageToLimit = async (uri: string, maxSizeBytes: number = 1048576): Promise<string> => {
         let compressedUri = uri
-        let quality = 0.9 // Start with 90% quality
+        let quality = 0.9
         let attempts = 0
-        const maxAttempts = 5
+        const maxAttempts = 10
+        let lastValidUri = uri
 
         while (attempts < maxAttempts) {
           try {
@@ -231,7 +233,7 @@ const Face = () => {
 
             const result = await ImageManipulator.manipulateAsync(
               uri,
-              [], // No manipulations, just compression
+              [{ resize: { width: 800, height: 600 } }], // Add resizing
               {
                 compress: quality,
                 format: ImageManipulator.SaveFormat.JPEG,
@@ -239,20 +241,25 @@ const Face = () => {
               }
             )
 
-            // Check the file size
             const response = await fetch(result.uri)
             const blob = await response.blob()
             const fileSize = blob.size
 
             console.log(`Compressed size: ${fileSize} bytes, target: ${maxSizeBytes} bytes`)
 
-            if (fileSize <= maxSizeBytes || quality <= 0.3) {
+            // ✅ Only return if actually under limit
+            if (fileSize <= maxSizeBytes) {
               console.log(`✅ Compression successful: ${fileSize} bytes (${(fileSize / 1024 / 1024).toFixed(2)}MB)`)
               return result.uri
             }
 
-            // Reduce quality for next attempt
-            quality -= 0.15
+            // Store the last valid compression before going too low
+            if (quality > 0.4) {
+              lastValidUri = result.uri
+            }
+
+            // Reduce quality more aggressively
+            quality -= 0.1
             attempts++
             compressedUri = result.uri
 
@@ -262,9 +269,9 @@ const Face = () => {
           }
         }
 
-        // If we still exceed size after all attempts, use the smallest we got
-        console.log('⚠️ Using smallest compressed version despite exceeding limit')
-        return compressedUri
+        // Use the last valid compression we got
+        console.log('⚠️ Using best compressed version available')
+        return lastValidUri
       }
 
       console.log('Starting image compression...')
