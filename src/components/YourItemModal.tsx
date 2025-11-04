@@ -73,7 +73,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
       let statusFilter;
       if (activeTab === 'pending') statusFilter = ['pending'];
       else if (activeTab === 'active') statusFilter = ['confirmed', 'ongoing', 'delivered', 'awaiting_owner_confirmation', 'deposit_submitted'];
-      else statusFilter = ['completed'];
+      else if (activeTab === 'completed') statusFilter = ['completed'];
+      else if (activeTab === 'cancelled') statusFilter = ['cancelled', 'canceled'];
 
       const from = page * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
@@ -244,7 +245,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
       setBookings(prev =>
         prev
           .map(b => (b.rental_id === rentalId ? { ...b, status: actualNewStatus } : b))
-          .filter(b => !(activeTab === 'active' && b.status === 'cancelled'))
+          .filter(b => !(activeTab === 'pending' && b.status === 'cancelled')) // Updated filter to remove from pending when cancelled
       );
 
       // Trigger notifications
@@ -402,13 +403,13 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
               style={styles.renterImage}
             />
             <View style={styles.renterDetails}>
+              {booking.is_overdue && (
+                <View style={styles.overdueBadge}>
+                  <Text style={styles.overdueText}>Overdue</Text>
+                </View>
+              )}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 }}>
                 <Text style={styles.renterName}>{booking.renter_name}</Text>
-                {booking.is_overdue && (
-                  <View style={styles.overdueBadge}>
-                    <Text style={styles.overdueText}>Overdue</Text>
-                  </View>
-                )}
               </View>
               <Text style={styles.requestDate}>
                 {activeTab === 'pending' ? `Requested on ${booking.formatted_dates.created}` : `Rental Period: ${booking.formatted_dates.start} - ${booking.formatted_dates.end}`}
@@ -496,7 +497,8 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
   const getEmptyStateText = () => ({
     pending: { title: 'No Pending Bookings', subtitle: "You don't have any pending booking requests at the moment." },
     active: { title: 'No Active Rentals', subtitle: "You don't have any active rentals at the moment." },
-    completed: { title: 'No Completed Rentals', subtitle: "You don't have any completed rentals yet." }
+    completed: { title: 'No Completed Rentals', subtitle: "You don't have any completed rentals yet." },
+    cancelled: { title: 'No Cancelled Rentals', subtitle: "You don't have any cancelled rentals." }
   }[activeTab] || { title: 'No Items', subtitle: 'No items found.' });
 
   const emptyState = getEmptyStateText();
@@ -511,7 +513,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
 
         {/* Tabs */}
         <View style={styles.methodSelector}>
-          {['pending', 'active', 'completed'].map(tab => (
+          {['pending', 'active', 'completed', 'cancelled'].map(tab => (
             <TouchableOpacity
               key={tab}
               style={[styles.methodButton, activeTab === tab && styles.methodButtonActive]}
@@ -661,9 +663,10 @@ const styles = StyleSheet.create({
   overdueBadge: {
     backgroundColor: '#FFCDD2',
     paddingHorizontal: 8,
+    marginBottom: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    alignSelf: 'flex-start',
+    alignSelf: 'flex-end',
   },
   overdueText: {
     color: '#C62828',

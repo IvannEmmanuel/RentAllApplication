@@ -8,7 +8,8 @@ import {
   Image,
   TouchableOpacity,
   FlatList,
-  Alert
+  Alert,
+  Modal,
 } from 'react-native';
 import { supabase } from '../../supbaseClient';
 import { useNavigation } from '@react-navigation/native';
@@ -16,6 +17,7 @@ import { useFavorites } from './FavoritesContext';
 import BookItemModal from './BookItemModal';
 import PictureModal from './PictureModal';
 import ReportModal from './ReportModal';
+import EditItemModal from './EditItem';
 
 const LessorReviews = ({ route }) => {
   const { lessorId } = route.params;
@@ -35,11 +37,13 @@ const LessorReviews = ({ route }) => {
   const LIMIT = 6;
   const [bookModalVisible, setBookModalVisible] = useState(false);
   const [pictureModalVisible, setPictureModalVisible] = useState(false);
+  const [editModalVisible, setEditModalVisible] = useState(false);
   const [pictureItem, setPictureItem] = useState(null)
   const [selectedItem, setSelectedItem] = useState(null);
   const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [optionsModalVisible, setOptionsModalVisible] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
-  // Fetch user's bookings - SAME AS HOME.TSX
   const fetchUserBookings = useCallback(async () => {
     if (!currentUser) {
       setUserBookings([]);
@@ -65,7 +69,6 @@ const LessorReviews = ({ route }) => {
     }
   }, [currentUser]);
 
-  // Check if user has pending/active booking for an item - SAME AS HOME.TSX
   const getUserBookingStatus = useCallback(
     (itemId) => {
       const status = userBookings.find((booking) => booking.item_id === itemId)?.status || null;
@@ -74,26 +77,37 @@ const LessorReviews = ({ route }) => {
     [userBookings],
   );
 
-  // Check if item belongs to current user - SAME AS HOME.TSX
   const isUserItem = (item) => {
     return currentUser && currentUser.id === item.user_id;
   }
 
-  // Get button text and style based on item status - SAME AS HOME.TSX
   const getButtonInfo = useCallback(
     (item) => {
       const isOwner = isUserItem(item);
       const bookingStatus = getUserBookingStatus(item.item_id);
 
       if (isOwner) {
+        if (item.item_status === 'pending') {
+          return {
+            text: "Under Review",
+            disabled: true,
+            style: "disabled",
+          };
+        }
+        if (item.item_status === 'rejected') {
+          return {
+            text: "Item Rejected",
+            disabled: true,
+            style: "disabled",
+          };
+        }
         return {
           text: "Your Item",
           disabled: true,
           style: "disabled",
-        }
+        };
       }
 
-      // Only disable button if booking is pending/confirmed/ongoing
       if (bookingStatus && bookingStatus !== "completed") {
         const statusText = bookingStatus.charAt(0).toUpperCase() + bookingStatus.slice(1)
         return {
@@ -134,7 +148,6 @@ const LessorReviews = ({ route }) => {
     setReportModalVisible(true);
   };
 
-  // Handle rent now button - SAME AS HOME.TSX
   const handleRentNow = (item) => {
     if (!currentUser) {
       Alert.alert("Login Required", "Please log in to rent items")
@@ -156,7 +169,6 @@ const LessorReviews = ({ route }) => {
     setBookModalVisible(true)
   }
 
-  // Fetch lessor basic information including face image
   const fetchLessorInfo = useCallback(async () => {
     try {
       const { data: userData, error: userError } = await supabase
@@ -176,7 +188,6 @@ const LessorReviews = ({ route }) => {
     }
   }, [lessorId]);
 
-  // Fetch lessor ratings and review count
   const fetchLessorRatings = useCallback(async () => {
     try {
       const { data: reviews, error } = await supabase
@@ -203,14 +214,12 @@ const LessorReviews = ({ route }) => {
     }
   }, [lessorId]);
 
-  // Dedupe items to prevent duplicates
   const dedupeItems = (itemsArray) => {
     const map = new Map();
     itemsArray.forEach((i) => map.set(i.item_id, i));
     return Array.from(map.values());
   };
 
-  // Fetch lessor's items with pagination
   const fetchLessorItems = useCallback(async (pageNum = 1, append = false) => {
     if (pageNum === 1 && !append) {
       setLoadingMore(false);
@@ -219,14 +228,21 @@ const LessorReviews = ({ route }) => {
     }
 
     try {
+      const isOwnProfile = lessorId === currentUser?.id;
+
       let query = supabase
         .from('items')
         .select('item_id, user_id, category_id, title, description, price_per_day, deposit_fee, location, available, created_at, item_status, quantity')
         .eq('user_id', lessorId)
         .eq('available', true)
-        .eq('item_status', 'approved')
         .order('created_at', { ascending: false })
         .range((pageNum - 1) * LIMIT, pageNum * LIMIT - 1);
+
+      if (isOwnProfile) {
+        query = query.in('item_status', ['approved', 'pending', 'rejected']);
+      } else {
+        query = query.eq('item_status', 'approved');
+      }
 
       const { data: items, error } = await query;
 
@@ -235,7 +251,6 @@ const LessorReviews = ({ route }) => {
         return;
       }
 
-      // Add images and format data
       const itemsWithImages = await Promise.all(
         (items || []).map(async (item) => {
           const imageUrl = await getImageUrl(item.user_id, item.item_id);
@@ -252,7 +267,6 @@ const LessorReviews = ({ route }) => {
         const merged = append ? [...prev, ...itemsWithImages] : itemsWithImages;
         const deduped = dedupeItems(merged);
 
-        // Fetch ratings for the items
         const itemIds = deduped.map(item => item.item_id);
         fetchItemRatings(itemIds);
 
@@ -265,9 +279,8 @@ const LessorReviews = ({ route }) => {
     } finally {
       setLoadingMore(false);
     }
-  }, [lessorId]);
+  }, [lessorId, currentUser?.id]);
 
-  // Get image URL for items
   const getImageUrl = async (userId, itemId) => {
     try {
       const dir = `${userId}/${itemId}`;
@@ -293,7 +306,6 @@ const LessorReviews = ({ route }) => {
     }
   };
 
-  // Fetch item ratings
   const fetchItemRatings = useCallback(async (itemIds) => {
     if (!itemIds || itemIds.length === 0) return;
 
@@ -308,7 +320,6 @@ const LessorReviews = ({ route }) => {
         return;
       }
 
-      // Calculate average ratings for each item
       const ratingsMap = {};
       data.forEach(review => {
         if (!ratingsMap[review.item_id]) {
@@ -318,7 +329,6 @@ const LessorReviews = ({ route }) => {
         ratingsMap[review.item_id].count += 1;
       });
 
-      // Convert to average ratings
       const averageRatings = {};
       Object.keys(ratingsMap).forEach(itemId => {
         const { total, count } = ratingsMap[itemId];
@@ -331,16 +341,14 @@ const LessorReviews = ({ route }) => {
     }
   }, []);
 
-  // Handle load more items
   const handleLoadMore = () => {
     if (hasMore && !loadingMore) {
       const nextPage = page + 1;
       setPage(nextPage);
-      fetchLessorItems(nextPage, true); // append new items
+      fetchLessorItems(nextPage, true);
     }
   };
 
-  // Handle chat with lessor directly
   const handleChatWithLessor = async () => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to send messages');
@@ -374,7 +382,7 @@ const LessorReviews = ({ route }) => {
             {
               user1_id: currentUser.id,
               user2_id: lessorId,
-              item_id: null, // No specific item for lessor chat
+              item_id: null,
               last_message: `Hello ${otherUserName}!`,
               last_message_at: new Date().toISOString(),
             },
@@ -399,7 +407,6 @@ const LessorReviews = ({ route }) => {
     }
   };
 
-  // Navigate to reviews screen
   const handleViewReviews = () => {
     const lessorName = lessorInfo ? `${lessorInfo.first_name} ${lessorInfo.last_name}` : 'Unknown Lessor';
     navigation.navigate('LessorReviewee', {
@@ -408,7 +415,6 @@ const LessorReviews = ({ route }) => {
     });
   };
 
-  // Handle message button press for items
   const handleMessage = async (item) => {
     if (!currentUser) {
       Alert.alert('Login Required', 'Please log in to send messages');
@@ -467,7 +473,6 @@ const LessorReviews = ({ route }) => {
     }
   };
 
-  // Toggle favorite
   const handleToggleFavorite = async (itemId) => {
     const result = await toggleFavorite(itemId);
     if (!result.success && result.message) {
@@ -475,15 +480,47 @@ const LessorReviews = ({ route }) => {
     }
   };
 
-  // Load all data
+  const handleEdit = (item) => {
+    setOptionsModalVisible(false);
+    setSelectedItem(item);
+    setEditModalVisible(true);
+  };
+
+  const handleDelete = async (item) => {
+    setDeleting(true);
+    try {
+      const { error } = await supabase
+        .from('items')
+        .delete()
+        .eq('item_id', item.item_id);
+
+      if (error) throw error;
+
+      setOptionsModalVisible(false);
+      setPage(1);
+      fetchLessorItems(1, false);
+      Alert.alert('Success', 'Item deleted successfully');
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      Alert.alert('Error', 'Failed to delete item');
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const handleMoreOptions = (item) => {
+    setSelectedItem(item);
+    setOptionsModalVisible(true);
+  };
+
   useEffect(() => {
     const loadData = async () => {
       setLoading(true);
       await Promise.all([
         fetchLessorInfo(),
         fetchLessorRatings(),
-        fetchLessorItems(1, false), // Load first page
-        fetchUserBookings() // Load user bookings
+        fetchLessorItems(1, false),
+        fetchUserBookings()
       ]);
       setLoading(false);
     };
@@ -492,6 +529,88 @@ const LessorReviews = ({ route }) => {
       loadData();
     }
   }, [lessorId, fetchLessorInfo, fetchLessorRatings, fetchLessorItems, fetchUserBookings]);
+
+  // Real-time subscription for items
+  useEffect(() => {
+    if (!lessorId) return;
+
+    const itemsSubscription = supabase
+      .channel(`items:user_id=eq.${lessorId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'items',
+          filter: `user_id=eq.${lessorId}`,
+        },
+        (payload) => {
+          console.log('Item change detected:', payload);
+          // Refresh items when changes occur
+          setPage(1);
+          fetchLessorItems(1, false);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(itemsSubscription);
+    };
+  }, [lessorId, fetchLessorItems]);
+
+  // Real-time subscription for user bookings
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const bookingsSubscription = supabase
+      .channel(`rental_transactions:renter_id=eq.${currentUser.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'rental_transactions',
+          filter: `renter_id=eq.${currentUser.id}`,
+        },
+        (payload) => {
+          console.log('Booking change detected:', payload);
+          // Refresh bookings when changes occur
+          fetchUserBookings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(bookingsSubscription);
+    };
+  }, [currentUser, fetchUserBookings]);
+
+  // Real-time subscription for lessor ratings
+  useEffect(() => {
+    if (!lessorId) return;
+
+    const ratingsSubscription = supabase
+      .channel(`lessor_reviews:lessor_id=eq.${lessorId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'lessor_reviews',
+          filter: `lessor_id=eq.${lessorId}`,
+        },
+        (payload) => {
+          console.log('Rating change detected:', payload);
+          // Refresh ratings when changes occur
+          fetchLessorRatings();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(ratingsSubscription);
+    };
+  }, [lessorId, fetchLessorRatings]);
 
   const renderItem = ({ item }) => {
     const buttonInfo = getButtonInfo(item);
@@ -540,9 +659,13 @@ const LessorReviews = ({ route }) => {
                     style={styles.likeImage}
                   />
                 </TouchableOpacity>
+                {isUserItem(item) && (
+                  <TouchableOpacity onPress={() => handleMoreOptions(item)} style={styles.moreOptions}>
+                    <Text style={styles.moreOptionsText}>⋯</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             </View>
-            {/* ADD RENT NOW BUTTON */}
             <View style={styles.rentNowContainer}>
               <TouchableOpacity
                 style={[
@@ -581,7 +704,6 @@ const LessorReviews = ({ route }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Text style={styles.backButtonText}>‹</Text>
@@ -589,14 +711,13 @@ const LessorReviews = ({ route }) => {
         <Text style={styles.headerTitle}>Lessor Profile</Text>
         <TouchableOpacity
           style={{ left: 120 }}
-          onPress={handleReportPress} // Updated handler
+          onPress={handleReportPress}
         >
           <Image source={require('../../assets/report.png')} style={styles.reportPhoto} />
         </TouchableOpacity>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Lessor Profile Section */}
         <View style={styles.profileSection}>
           <View style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
@@ -632,7 +753,6 @@ const LessorReviews = ({ route }) => {
                     ({reviewCount} review{reviewCount !== 1 ? 's' : ''})
                   </Text>
                 </TouchableOpacity>
-                {/* Chat button added here */}
                 {currentUser && currentUser.id !== lessorId && (
                   <TouchableOpacity style={styles.chatButton} onPress={handleChatWithLessor}>
                     <Image source={require('../../assets/message.png')} style={styles.chatButtonImage} />
@@ -643,7 +763,6 @@ const LessorReviews = ({ route }) => {
           </View>
         </View>
 
-        {/* Listed Items Section */}
         <View style={styles.itemsSection}>
           <Text style={styles.sectionTitle}>Listed Items</Text>
 
@@ -678,7 +797,48 @@ const LessorReviews = ({ route }) => {
         </View>
       </ScrollView>
 
-      {/* Book Item Modal */}
+      {/* Options Modal */}
+      <Modal
+        visible={optionsModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setOptionsModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.optionsModalContainer}>
+            <Text style={styles.optionsModalTitle}>Item Options</Text>
+            
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => handleEdit(selectedItem)}
+            >
+              <Text style={styles.optionButtonText}>Edit</Text>
+            </TouchableOpacity>
+
+            <View style={styles.optionDivider} />
+
+            <TouchableOpacity
+              style={[styles.optionButton, styles.deleteOptionButton]}
+              onPress={() => handleDelete(selectedItem)}
+              disabled={deleting}
+            >
+              <Text style={[styles.optionButtonText, styles.deleteOptionText]}>
+                {deleting ? 'Deleting...' : 'Delete'}
+              </Text>
+            </TouchableOpacity>
+
+            <View style={styles.optionDivider} />
+
+            <TouchableOpacity
+              style={styles.optionButton}
+              onPress={() => setOptionsModalVisible(false)}
+            >
+              <Text style={styles.optionButtonText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       <BookItemModal
         visible={bookModalVisible}
         onClose={() => setBookModalVisible(false)}
@@ -698,18 +858,30 @@ const LessorReviews = ({ route }) => {
         item={pictureItem}
       />
 
+      <EditItemModal
+        visible={editModalVisible}
+        onClose={() => setEditModalVisible(false)}
+        item={selectedItem}
+        onSaved={() => {
+          setPage(1);
+          fetchLessorItems(1, false);
+        }}
+      />
+
       <ReportModal
         visible={reportModalVisible}
         onClose={() => setReportModalVisible(false)}
         senderId={currentUser?.id}
         targetUserId={lessorId}
-        rentalId={null} // No specific rental for lessor report
+        rentalId={null}
         title="Report Lessor"
         description="Please provide details about why you are reporting this lessor. Our team will review your report and take appropriate action."
       />
     </View>
   );
 };
+
+export default LessorReviews;
 
 const styles = StyleSheet.create({
   container: {
@@ -919,7 +1091,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 130,
   },
-  // ADD RENT NOW BUTTON STYLES (SAME AS HOME.TSX)
   rentNowContainer: {
     justifyContent: 'center',
     marginTop: 10,
@@ -972,7 +1143,55 @@ const styles = StyleSheet.create({
   reportPhoto: {
     width: 25,
     height: 25
-  }
+  },
+  moreOptions: {
+    marginLeft: 5,
+    padding: 2,
+  },
+  moreOptionsText: {
+    fontSize: 20,
+    color: '#333',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  optionsModalContainer: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+  },
+  optionsModalTitle: {
+    fontSize: 18,
+    fontFamily: 'DM-Bold',
+    color: '#333',
+    marginBottom: 15,
+    textAlign: 'center',
+  },
+  optionButton: {
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  optionButtonText: {
+    fontSize: 16,
+    fontFamily: 'DM-Medium',
+    color: '#333',
+  },
+  deleteOptionButton: {
+    backgroundColor: '#FFF',
+  },
+  deleteOptionText: {
+    color: '#F44336',
+    fontFamily: 'DM-Bold',
+  },
+  optionDivider: {
+    height: 1,
+    backgroundColor: '#E5E5E5',
+    marginVertical: 5,
+  },
 });
-
-export default LessorReviews;

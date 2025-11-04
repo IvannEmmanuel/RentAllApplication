@@ -112,11 +112,6 @@ const AddItem = ({ navigation }) => {
   }
 
   const handleSubmit = async () => {
-    console.log('=== SUBMIT STARTED ===')
-    console.log('User ID:', currentUser?.id)
-    console.log('Form:', form)
-    console.log('Image file:', imageFile ? 'Selected' : 'None')
-
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to add an item.')
       return
@@ -254,12 +249,9 @@ const AddItem = ({ navigation }) => {
         }
       }
 
-      console.log('=== ITEM CREATION COMPLETED ===')
-      console.log('Final public URL:', publicUrl)
-
       Alert.alert(
         'Success',
-        `Item created successfully${publicUrl ? ' with image!' : '!'}`,
+        `Your item was created successfully! It will be reviewed by an administrator and made visible to renters once approved.`,
         [{
           text: 'OK',
           onPress: () => {

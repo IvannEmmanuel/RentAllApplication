@@ -4,19 +4,19 @@ import { View, Text, Image, TouchableOpacity, StyleSheet } from 'react-native';
 import { formatPrice } from '../services/supabaseServices';
 
 const ItemCard = ({
-  item,
-  itemRating,
-  lessorRating,
-  isFavorited,
-  buttonInfo,
-  onPicturePress,
-  onLessorPress,
-  onMessage,
-  onToggleFavorite,
-  onRentNow,
-  fullWidth = false, // <-- new prop with default
+    item,
+    itemRating,
+    lessorRating,
+    isFavorited,
+    buttonInfo,
+    onPicturePress,
+    onLessorPress,
+    onMessage,
+    onToggleFavorite,
+    onRentNow,
+    fullWidth = false,
 }) => {
-  const isOwner = buttonInfo.text === 'Your Item';
+    const isOwner = buttonInfo.text === 'Your Item';
 
     return (
         <View style={[styles.itemWrapper, fullWidth && { width: '100%' }]}>
@@ -39,7 +39,7 @@ const ItemCard = ({
                             source={require('../../assets/rate.png')} // Adjust path
                             style={styles.rateImage}
                         />
-                        <Text style={styles.ratingText}>{itemRating || 'No rating'}</Text>
+                        <Text style={styles.ratingText}>{itemRating || '0'}</Text>
                     </View>
                     <Text style={styles.itemName} numberOfLines={2}>
                         {item.title}
@@ -58,7 +58,7 @@ const ItemCard = ({
                             source={require('../../assets/rate.png')} // Adjust path
                             style={styles.lessorRateImage}
                         />
-                        <Text style={styles.lessorText}>{lessorRating || 'No rating'}</Text>
+                        <Text style={styles.lessorText}>{lessorRating || '0'}</Text>
                     </TouchableOpacity>
                     <Text style={styles.detailText} numberOfLines={1}>
                         {item.location || 'Location not specified'}
@@ -316,6 +316,38 @@ const styles = StyleSheet.create({
     },
     rentButtonTextPending: {
         color: "#FFF",
+    },
+    // NEW: Styles for owner actions
+    ownerActionsRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        marginTop: 10,
+    },
+    editButton: {
+        backgroundColor: '#4CAF50', // Green for edit
+        borderRadius: 10,
+        height: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '48%',
+    },
+    deleteButton: {
+        backgroundColor: '#F44336', // Red for delete
+        borderRadius: 10,
+        height: 30,
+        justifyContent: 'center',
+        alignItems: 'center',
+        width: '48%',
+    },
+    editButtonText: {
+        color: '#FFF',
+        fontFamily: 'DM-Medium',
+        fontSize: 14,
+    },
+    deleteButtonText: {
+        color: '#FFF',
+        fontFamily: 'DM-Medium',
+        fontSize: 14,
     },
 
     // Search Results
