@@ -147,25 +147,45 @@ const AddItem = ({ navigation }) => {
     }))
   }
 
+  // Replace your handleSubmit function with this updated version:
+
   const handleSubmit = async () => {
     if (!currentUser) {
       Alert.alert('Error', 'You must be logged in to add an item.')
       return
     }
-    if (!form.title || !form.price_per_day) {
-      Alert.alert('Error', 'Title and Price per day are required.')
+
+    // Check all required fields
+    if (!form.title || !form.title.trim()) {
+      Alert.alert('Error', 'Title is required.')
+      return
+    }
+
+    if (!form.category_id) {
+      Alert.alert('Error', 'Please select a category.')
+      return
+    }
+
+    if (!form.price_per_day || !form.price_per_day.trim()) {
+      Alert.alert('Error', 'Price per day is required.')
+      return
+    }
+
+    if (!form.quantity || !form.quantity.trim()) {
+      Alert.alert('Error', 'Quantity is required.')
       return
     }
 
     // Validate numbers
     const price = parseFloat(form.price_per_day)
-    const deposit = parseFloat(form.deposit_fee)
+    const deposit = form.deposit_fee ? parseFloat(form.deposit_fee) : 0
     const quantity = parseInt(form.quantity, 10)
 
     if (isNaN(price) || price <= 0) {
       Alert.alert('Error', 'Please enter a valid price per day.')
       return
     }
+
     if (isNaN(deposit) || deposit < 0) {
       Alert.alert('Error', 'Please enter a valid deposit fee.')
       return
@@ -173,6 +193,15 @@ const AddItem = ({ navigation }) => {
 
     if (isNaN(quantity) || quantity <= 0) {
       Alert.alert('Error', 'Please enter a valid quantity.')
+      return
+    }
+
+    // NEW: Check if price per day is higher than deposit fee
+    if (deposit > 0 && deposit >= price) {
+      Alert.alert(
+        'Invalid Price',
+        `Deposit fee (₱${deposit.toFixed(2)}) cannot be equal to or higher than price per day (₱${price.toFixed(2)}).\n\nPrice per day must be higher than deposit fee.`
+      )
       return
     }
 
@@ -221,14 +250,11 @@ const AddItem = ({ navigation }) => {
         console.log('Image details:', imageFile)
 
         try {
-          // Create path for the image
           const fileName = `${Date.now()}-${imageFile.name}`
           const path = `${currentUser.id}/${itemId}/${fileName}`
 
           console.log('Upload path:', path)
 
-          // Convert image to FormData (React Native compatible)
-          console.log('Creating FormData for upload...')
           const formData = new FormData()
           formData.append('file', {
             uri: imageFile.uri,
@@ -251,8 +277,6 @@ const AddItem = ({ navigation }) => {
 
           console.log('Upload successful:', uploadData)
 
-          // Get public URL
-          console.log('Getting public URL...')
           const { data: pub } = supabase.storage
             .from('Items-photos')
             .getPublicUrl(path)
@@ -261,7 +285,6 @@ const AddItem = ({ navigation }) => {
           console.log('Public URL generated:', publicUrl)
 
           if (publicUrl) {
-            // Update item with image URL
             console.log('Updating item with image URL...')
             const { error: updateErr } = await supabase
               .from('items')
@@ -280,7 +303,6 @@ const AddItem = ({ navigation }) => {
 
         } catch (imageError) {
           console.error('Image upload failed:', imageError)
-          // Don't throw here - let the item be created without image
           Alert.alert('Warning', `Item created but image upload failed: ${imageError.message}`)
         }
       }
@@ -300,6 +322,7 @@ const AddItem = ({ navigation }) => {
               deposit_fee: '',
               location: '',
               available: true,
+              quantity: '',
             })
             setImageFile(null)
             // Navigate to Home tab
