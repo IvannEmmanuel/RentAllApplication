@@ -30,7 +30,76 @@ const AddItem = ({ navigation }) => {
   })
   const [imageFile, setImageFile] = useState(null)
   const [categoryModalVisible, setCategoryModalVisible] = useState(false)
+  const [isImagePickerModalVisible, setImagePickerModalVisible] = useState(false)
 
+  const takePhoto = async () => {
+    setImagePickerModalVisible(false)
+
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Camera permission is required to take photos!')
+        return
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0]
+        console.log('Photo taken:', asset.uri)
+        setImageFile({
+          uri: asset.uri,
+          name: `image-${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        })
+      }
+    } catch (error) {
+      console.error('Camera error:', error)
+      Alert.alert('Error', 'Failed to take photo')
+    }
+  }
+
+  const chooseFromGallery = async () => {
+    setImagePickerModalVisible(false)
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Gallery permission is required!')
+        return
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.8,
+        base64: false,
+      })
+
+      if (!result.canceled && result.assets[0]) {
+        const asset = result.assets[0]
+        console.log('Image selected:', asset.uri)
+        setImageFile({
+          uri: asset.uri,
+          name: `image-${Date.now()}.jpg`,
+          type: 'image/jpeg',
+        })
+      }
+    } catch (error) {
+      console.error('Image picker error:', error)
+      Alert.alert('Error', 'Failed to pick image')
+    }
+  }
+
+  const pickImage = async () => {
+    setImagePickerModalVisible(true)
+  }
 
   // Get current user
   useEffect(() => {
@@ -76,39 +145,6 @@ const AddItem = ({ navigation }) => {
       ...prev,
       [field]: value,
     }))
-  }
-
-  const pickImage = async () => {
-    try {
-      // Request permission
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
-      if (status !== 'granted') {
-        Alert.alert('Permission Required', 'Sorry, we need camera roll permissions to make this work!')
-        return
-      }
-
-      // Launch image picker
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [4, 3],
-        quality: 0.8,
-        base64: false, // Don't need base64
-      })
-
-      if (!result.canceled && result.assets[0]) {
-        const asset = result.assets[0]
-        console.log('Image selected:', asset.uri)
-        setImageFile({
-          uri: asset.uri,
-          name: `image-${Date.now()}.jpg`,
-          type: 'image/jpeg',
-        })
-      }
-    } catch (error) {
-      console.error('Image picker error:', error)
-      Alert.alert('Error', 'Failed to pick image')
-    }
   }
 
   const handleSubmit = async () => {
@@ -287,8 +323,18 @@ const AddItem = ({ navigation }) => {
       animationType="slide"
       onRequestClose={() => setCategoryModalVisible(false)}
     >
-      <View style={styles.modalOverlay}>
-        <View style={styles.categoryModal}>
+      {/* Outside touchable area to close modal */}
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setCategoryModalVisible(false)}
+      >
+        {/* Inner touchable to prevent closing when tapping modal content */}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={(e) => e.stopPropagation()}
+          style={styles.categoryModal}
+        >
           <View style={styles.categoryHeader}>
             <Text style={styles.categoryTitle}>Select Category</Text>
             <TouchableOpacity onPress={() => setCategoryModalVisible(false)}>
@@ -325,8 +371,8 @@ const AddItem = ({ navigation }) => {
               </TouchableOpacity>
             ))}
           </ScrollView>
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   )
 
@@ -440,7 +486,14 @@ const AddItem = ({ navigation }) => {
 
         {/* Image Picker */}
         <Text style={styles.label}>Image (optional)</Text>
-        <TouchableOpacity style={styles.imageButton} onPress={pickImage}>
+        <TouchableOpacity
+          style={styles.imageButton}
+          onPress={pickImage}
+        >
+          <Image
+            source={require("../../../assets/camera.png")}
+            style={styles.imageButtonIcon}
+          />
           <Text style={styles.imageButtonText}>
             {imageFile ? 'Change Image' : 'Select Image'}
           </Text>
@@ -449,10 +502,9 @@ const AddItem = ({ navigation }) => {
         {imageFile && (
           <View style={styles.imagePreview}>
             <Image source={{ uri: imageFile.uri }} style={styles.previewImage} />
-            <Text style={styles.imageFileName}>Selected: {imageFile.name}</Text>
+            <Text style={styles.imageFileName}>✓ {imageFile.name}</Text>
           </View>
         )}
-
         {/* Save Button */}
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.disabledButton]}
@@ -471,6 +523,69 @@ const AddItem = ({ navigation }) => {
       </ScrollView>
 
       <CategorySelector />
+
+      // Replace your Modal section with this updated version:
+
+      <Modal
+        visible={isImagePickerModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setImagePickerModalVisible(false)}
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setImagePickerModalVisible(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={styles.imagePickerModal}
+          >
+            <TouchableOpacity onPress={() => setImagePickerModalVisible(false)}>
+              <View style={styles.handleBar} />
+            </TouchableOpacity>
+
+            <Text style={styles.modalTitle}>Select Photo</Text>
+            <Text style={styles.modalSubtitle}>Choose how you want to add your item photo</Text>
+
+            <TouchableOpacity
+              onPress={takePhoto}
+              style={styles.imageOptionButton}
+            >
+              <Image
+                source={require("../../../assets/camera.png")}
+                style={styles.imageOptionIcon}
+              />
+              <View style={styles.imageOptionContent}>
+                <Text style={styles.imageOptionTitle}>Take a Photo</Text>
+                <Text style={styles.imageOptionSubtitle}>Use your camera</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={chooseFromGallery}
+              style={[styles.imageOptionButton, styles.imageOptionSecondary]}
+            >
+              <Image
+                source={require("../../../assets/gallery.png")}
+                style={styles.imageOptionIcon}
+              />
+              <View style={styles.imageOptionContent}>
+                <Text style={styles.imageOptionTitle}>Choose from Gallery</Text>
+                <Text style={styles.imageOptionSubtitle}>Select existing photo</Text>
+              </View>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              onPress={() => setImagePickerModalVisible(false)}
+              style={styles.imageOptionCancel}
+            >
+              <Text style={styles.imageOptionCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </View>
   )
 }
@@ -640,14 +755,14 @@ const styles = StyleSheet.create({
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   categoryModal: {
     backgroundColor: '#FFF',
-    borderRadius: 12,
-    width: '80%',
-    maxHeight: '60%',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '70%',
+    paddingHorizontal: 0,
   },
   categoryHeader: {
     flexDirection: 'row',
@@ -664,12 +779,12 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   closeText: {
-    fontSize: 18,
+    fontSize: 24,
     color: '#666',
     fontWeight: 'bold',
   },
   categoryList: {
-    maxHeight: 300,
+    maxHeight: 400,
   },
   categoryOption: {
     paddingHorizontal: 20,
@@ -686,4 +801,81 @@ const styles = StyleSheet.create({
     color: '#FFAB00',
     fontFamily: 'DM-Bold',
   },
+  imageButtonIcon: {
+    width: 24,
+    height: 24,
+    tintColor: '#FFAB00',
+  },
+  imagePickerModal: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 20,
+    paddingTop: 16,
+    paddingBottom: 30,
+  },
+  handleBar: {
+    width: 50,
+    height: 5,
+    backgroundColor: '#CCCCCC',
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontFamily: 'DM-Bold',
+    color: '#333',
+    marginBottom: 4,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    fontFamily: 'DM-Regular',
+    marginBottom: 24,
+  },
+  imageOptionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFAB00',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  imageOptionSecondary: {
+    backgroundColor: '#F5F5F5',
+  },
+  imageOptionIcon: {
+    width: 28,
+    height: 28,
+    marginRight: 16,
+    tintColor: '#333',
+  },
+  imageOptionContent: {
+    flex: 1,
+  },
+  imageOptionTitle: {
+    fontSize: 16,
+    fontFamily: 'DM-Bold',
+    color: '#333',
+    marginBottom: 2,
+  },
+  imageOptionSubtitle: {
+    fontSize: 12,
+    color: '#666',
+    fontFamily: 'DM-Regular',
+  },
+  imageOptionCancel: {
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    paddingVertical: 14,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  imageOptionCancelText: {
+    fontSize: 16,
+    fontFamily: 'DM-Bold',
+    color: '#333',
+  }
 })
