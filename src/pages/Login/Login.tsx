@@ -27,6 +27,8 @@ const Login = () => {
   const [emailOtpCode, setEmailOtpCode] = useState("")
   const [smsPhone, setSmsPhone] = useState("")
   const [loading, setLoading] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
+
 
   const { setCurrentUser } = useFavorites()
 
@@ -270,7 +272,6 @@ const Login = () => {
     >
       {/* Top Section */}
       <View style={styles.topSection}>
-        <Text style={styles.loginText}>Login</Text>
         <View style={{ alignItems: "center" }}>
           <Image source={require("../../../assets/logo.png")} style={styles.logo} />
           <Text style={styles.rentAllText}>RentAll</Text>
@@ -326,14 +327,29 @@ const Login = () => {
           {loginMethod === "password" && (
             <View>
               <Text style={styles.text}>Password</Text>
-              <TextInput
-                placeholder="Password"
-                placeholderTextColor="#bebebeff"
-                style={styles.textInput}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-              />
+              <View style={{ position: 'relative' }}>
+                <TextInput
+                  placeholder="Password"
+                  placeholderTextColor="#bebebeff"
+                  style={styles.textInput}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword(!showPassword)}
+                  style={{ position: 'absolute', right: 15, top: 12 }}
+                >
+                  <Image
+                    source={
+                      showPassword
+                        ? require("../../../assets/hidePassword.png")
+                        : require("../../../assets/showPassword.png")
+                    }
+                    style={{ width: 24, height: 24 }}
+                  />
+                </TouchableOpacity>
+              </View>
               <TouchableOpacity
                 style={[styles.loginButton, loading && styles.buttonDisabled]}
                 onPress={handlePasswordLogin}
