@@ -1,11 +1,12 @@
-import { ImageBackground, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, Dimensions } from 'react-native';
+import { ImageBackground, StyleSheet, Text, TextInput, View, TouchableOpacity, ScrollView, KeyboardAvoidingView, Platform, Alert, Dimensions, Image } from 'react-native';
 import React, { useState } from 'react';
-import DateTimePickerModal from 'react-native-modal-datetime-picker';
 import * as ImagePicker from 'expo-image-picker';
 import * as Location from 'expo-location';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../../supbaseClient';
 import { useRegistration } from '../../hooks/RegistrationContext';
+import { Calendar } from "react-native-calendars";
+import Modal from "react-native-modal";
 
 const Register = () => {
     const [isDatePickerVisible, setDatePickerVisible] = useState(false);
@@ -15,7 +16,12 @@ const Register = () => {
     const [location, setLocation] = useState<{ lat: number | null; lng: number | null }>({ lat: null, lng: null });
     const { updateRegistrationData } = useRegistration();
     const strongPasswordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
+    const [showPassword, setShowPassword] = useState(false);
+    const [showConfirmPassword, setShowConfirmPassword] = useState(false);
     const phoneRegex = /^(09\d{9}|(\+63)\d{10})$/;
+    const [isCalendarVisible, setCalendarVisible] = useState(false);
+    const [birthday, setBirthday] = useState("");
+    const [calendarKey, setCalendarKey] = useState(0);
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -239,9 +245,12 @@ const Register = () => {
 
                     <View style={styles.birthdateContainer}>
                         <Text style={styles.label}>Birthdate</Text>
-                        <TouchableOpacity style={styles.dateButton} onPress={showDatePicker}>
-                            <Text style={styles.dateText}>
-                                {birthdate || 'Select Date'}
+                        <TouchableOpacity
+                            style={styles.dateButton}
+                            onPress={() => setCalendarVisible(true)}
+                        >
+                            <Text style={{ color: birthday ? "#000" : "#A1A1A1" }}>
+                                {birthday || "Select Birthday"}
                             </Text>
                         </TouchableOpacity>
 
@@ -303,26 +312,58 @@ const Register = () => {
 
                         <View style={styles.emailColumn}>
                             <Text style={styles.fieldLabel}>Password</Text>
-                            <TextInput
-                                placeholder="Password"
-                                placeholderTextColor="#A1A1A1"
-                                style={styles.fullWidthInput}
-                                value={formData.password}
-                                onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
-                                secureTextEntry
-                            />
+                            <View style={{ position: 'relative' }}>
+                                <TextInput
+                                    placeholder="Password"
+                                    placeholderTextColor="#A1A1A1"
+                                    style={styles.fullWidthInput}
+                                    value={formData.password}
+                                    onChangeText={(text) => setFormData(prev => ({ ...prev, password: text }))}
+                                    secureTextEntry={!showPassword}
+                                />
+
+                                <TouchableOpacity
+                                    onPress={() => setShowPassword(!showPassword)}
+                                    style={{ position: 'absolute', right: 15, top: 12 }}
+                                >
+                                    <Image
+                                        source={
+                                            showPassword
+                                                ? require('../../../assets/hidePassword.png')
+                                                : require('../../../assets/showPassword.png')
+                                        }
+                                        style={{ width: 24, height: 24 }}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={styles.emailColumn}>
                             <Text style={styles.fieldLabel}>Confirm Password</Text>
-                            <TextInput
-                                placeholder="Confirm Password"
-                                placeholderTextColor="#A1A1A1"
-                                style={styles.fullWidthInput}
-                                value={formData.confirmPassword}
-                                onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
-                                secureTextEntry
-                            />
+                            <View style={{ position: 'relative' }}>
+                                <TextInput
+                                    placeholder="Confirm Password"
+                                    placeholderTextColor="#A1A1A1"
+                                    style={styles.fullWidthInput}
+                                    value={formData.confirmPassword}
+                                    onChangeText={(text) => setFormData(prev => ({ ...prev, confirmPassword: text }))}
+                                    secureTextEntry={!showConfirmPassword}
+                                />
+
+                                <TouchableOpacity
+                                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                                    style={{ position: 'absolute', right: 15, top: 12 }}
+                                >
+                                    <Image
+                                        source={
+                                            showConfirmPassword
+                                                ? require('../../../assets/hidePassword.png')
+                                                : require('../../../assets/showPassword.png')
+                                        }
+                                        style={{ width: 24, height: 24 }}
+                                    />
+                                </TouchableOpacity>
+                            </View>
                         </View>
 
                         <View style={{ flexDirection: 'row', marginBottom: 20 }}>
@@ -355,13 +396,148 @@ const Register = () => {
                 </ImageBackground>
             </ScrollView>
 
-            <DateTimePickerModal
-                isVisible={isDatePickerVisible}
-                mode="date"
-                onConfirm={handleConfirm}
-                onCancel={hideDatePicker}
-                maximumDate={new Date()}
-            />
+            <Modal
+                isVisible={isCalendarVisible}
+                onBackdropPress={() => setCalendarVisible(false)}
+                style={{ margin: 0, justifyContent: "flex-end" }}
+                swipeDirection={['down']}
+                onSwipeComplete={() => setCalendarVisible(false)}
+            >
+                <ScrollView
+                    style={{
+                        backgroundColor: "white",
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        maxHeight: '85%',
+                    }}
+                    contentContainerStyle={{ padding: 20, paddingBottom: 30 }}
+                    showsVerticalScrollIndicator={false}
+                >
+                    {/* Handle Bar */}
+                    <View
+                        style={{
+                            width: 50,
+                            height: 5,
+                            backgroundColor: '#CCCCCC',
+                            borderRadius: 2.5,
+                            alignSelf: 'center',
+                            marginBottom: 20,
+                        }}
+                    />
+
+                    <Text style={{ fontSize: 20, fontWeight: "bold", marginBottom: 20 }}>
+                        Select Your Birthday
+                    </Text>
+
+                    {/* Year Selector */}
+                    <View style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 14, color: '#666', marginBottom: 10, fontWeight: '600' }}>
+                            Year
+                        </Text>
+                        <ScrollView
+                            horizontal
+                            showsHorizontalScrollIndicator={false}
+                            contentContainerStyle={{ paddingVertical: 10 }}
+                        >
+                            {Array.from({ length: 100 }, (_, i) => new Date().getFullYear() - i).map((year) => {
+                                const birthdayYear = birthday ? new Date(birthday).getFullYear().toString() : '';
+                                return (
+                                    <TouchableOpacity
+                                        key={year}
+                                        onPress={() => {
+                                            let newDate;
+                                            if (birthday) {
+                                                newDate = new Date(birthday);
+                                                newDate.setFullYear(year);
+                                            } else {
+                                                newDate = new Date();
+                                                newDate.setFullYear(year);
+                                            }
+                                            const dateString = newDate.toISOString().split('T')[0];
+                                            setBirthday(dateString);
+                                            setCalendarKey(prev => prev + 1); // Force calendar re-render
+                                        }}
+                                        style={{
+                                            paddingHorizontal: 16,
+                                            paddingVertical: 10,
+                                            marginRight: 10,
+                                            borderRadius: 20,
+                                            backgroundColor: birthdayYear === year.toString() ? '#4A90E2' : '#F0F0F0',
+                                            minWidth: 60,
+                                            alignItems: 'center',
+                                        }}
+                                    >
+                                        <Text
+                                            style={{
+                                                fontSize: 16,
+                                                fontWeight: '600',
+                                                color: birthdayYear === year.toString() ? 'white' : '#333',
+                                            }}
+                                        >
+                                            {year}
+                                        </Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </ScrollView>
+                    </View>
+
+                    {/* Month & Day Selector */}
+                    <View style={{ marginBottom: 20 }}>
+                        <Text style={{ fontSize: 14, color: '#666', marginBottom: 10, fontWeight: '600' }}>
+                            Month & Day
+                        </Text>
+                        <Calendar
+                            key={calendarKey}
+                            onDayPress={(day) => {
+                                setBirthday(day.dateString);
+                                setCalendarVisible(false);
+                            }}
+                            maxDate={new Date().toISOString().split("T")[0]}
+                            markedDates={{
+                                [birthday]: {
+                                    selected: true,
+                                    selectedColor: "#4A90E2",
+                                },
+                            }}
+                            theme={{
+                                todayTextColor: "#4A90E2",
+                                arrowColor: "#4A90E2",
+                                selectedDayBackgroundColor: "#4A90E2",
+                                textDayFontSize: 16,
+                                textMonthFontSize: 18,
+                                textDayHeaderFontSize: 13,
+                                backgroundColor: '#fff',
+                                calendarBackground: '#fff',
+                            }}
+                            current={birthday || new Date().toISOString().split("T")[0]}
+                        />
+                    </View>
+
+                    {/* Confirm Button */}
+                    <TouchableOpacity
+                        onPress={() => {
+                            // Update formData with the selected birthday
+                            if (birthday) {
+                                const selectedDate = new Date(birthday);
+                                setFormData(prev => ({ ...prev, dob: selectedDate }));
+                            }
+                            setCalendarVisible(false);
+                        }}
+                        style={{
+                            backgroundColor: '#4A90E2',
+                            paddingVertical: 14,
+                            borderRadius: 20,
+                            alignItems: 'center',
+                            marginTop: 10,
+                        }}
+                    >
+                        <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+                            Confirm Birthday
+                        </Text>
+                    </TouchableOpacity>
+                </ScrollView>
+            </Modal>
         </KeyboardAvoidingView>
     );
 };
