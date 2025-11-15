@@ -547,6 +547,12 @@ const Face = () => {
         )}
       </View>
 
+      <View style={styles.warningCard}>
+        <Text>
+          To verify your identity, please take a selfie. We will compare this photo to your uploaded ID to secure your account and prevent unauthorized access.
+        </Text>
+      </View>
+
       <View style={styles.buttonContainer}>
         {!isCameraOpen ? (
           <TouchableOpacity
@@ -613,6 +619,10 @@ const styles = StyleSheet.create({
     marginTop: 130,
     overflow: "hidden",
   },
+  buttonContainer: {
+    alignSelf: 'flex-end',
+    right: 40,
+  },
   camera: {
     flex: 1,
   },
@@ -625,9 +635,6 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     textAlign: "center",
-  },
-  buttonContainer: {
-    marginTop: 10,
   },
   openCameraContainer: {
     width: 50,
@@ -679,5 +686,13 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 16,
     fontWeight: "bold",
+  },
+  warningCard: {
+    marginHorizontal: 20,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 })
