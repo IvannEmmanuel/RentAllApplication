@@ -22,6 +22,7 @@ const Register = () => {
     const [isCalendarVisible, setCalendarVisible] = useState(false);
     const [birthday, setBirthday] = useState("");
     const [calendarKey, setCalendarKey] = useState(0);
+    const [isImagePickerModalVisible, setImagePickerModalVisible] = useState(false);
 
     // Form data state
     const [formData, setFormData] = useState({
@@ -56,6 +57,42 @@ const Register = () => {
     };
 
     const pickImage = async () => {
+        setImagePickerModalVisible(true);
+    };
+
+    const takePhoto = async () => {
+        setImagePickerModalVisible(false);
+
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert('Permission Required', 'Permission to access camera is required!');
+            return;
+        }
+
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [4, 3],
+            quality: 1,
+        });
+
+        if (!result.canceled) {
+            const uri = result.assets[0].uri;
+            const fileName = `ID_${Date.now()}.jpg`;
+            setSelectedFileName(fileName);
+
+            const imageFile = {
+                uri: uri,
+                type: 'image/jpeg',
+                name: fileName,
+            };
+            setFormData(prev => ({ ...prev, idImage: imageFile }));
+        }
+    };
+
+    const chooseFromGallery = async () => {
+        setImagePickerModalVisible(false);
+
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
             Alert.alert('Permission Required', 'Permission to access media library is required!');
@@ -72,7 +109,6 @@ const Register = () => {
             const fileName = uri.split('/').pop() || 'Selected Image';
             setSelectedFileName(fileName);
 
-            // Create a file-like object for the image
             const imageFile = {
                 uri: uri,
                 type: result.assets[0].type || 'image/jpeg',
@@ -462,7 +498,7 @@ const Register = () => {
                                             paddingVertical: 10,
                                             marginRight: 10,
                                             borderRadius: 20,
-                                            backgroundColor: birthdayYear === year.toString() ? '#4A90E2' : '#F0F0F0',
+                                            backgroundColor: birthdayYear === year.toString() ? '#FFAB00' : '#F0F0F0',
                                             minWidth: 60,
                                             alignItems: 'center',
                                         }}
@@ -497,13 +533,13 @@ const Register = () => {
                             markedDates={{
                                 [birthday]: {
                                     selected: true,
-                                    selectedColor: "#4A90E2",
+                                    selectedColor: "#FFAB00",
                                 },
                             }}
                             theme={{
-                                todayTextColor: "#4A90E2",
-                                arrowColor: "#4A90E2",
-                                selectedDayBackgroundColor: "#4A90E2",
+                                todayTextColor: "#FFAB00",
+                                arrowColor: "#FFAB00",
+                                selectedDayBackgroundColor: "#FFAB00",
                                 textDayFontSize: 16,
                                 textMonthFontSize: 18,
                                 textDayHeaderFontSize: 13,
@@ -525,7 +561,7 @@ const Register = () => {
                             setCalendarVisible(false);
                         }}
                         style={{
-                            backgroundColor: '#4A90E2',
+                            backgroundColor: "#FFAB00",
                             paddingVertical: 14,
                             borderRadius: 20,
                             alignItems: 'center',
@@ -537,6 +573,113 @@ const Register = () => {
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>
+            </Modal>
+
+            <Modal
+                isVisible={isImagePickerModalVisible}
+                onBackdropPress={() => setImagePickerModalVisible(false)}
+                style={{ margin: 0, justifyContent: 'flex-end' }}
+                swipeDirection={['down']}
+                onSwipeComplete={() => setImagePickerModalVisible(false)}
+            >
+                <View
+                    style={{
+                        backgroundColor: 'white',
+                        borderTopLeftRadius: 24,
+                        borderTopRightRadius: 24,
+                        paddingHorizontal: 20,
+                        paddingTop: 20,
+                        paddingBottom: 40,
+                    }}
+                >
+                    {/* Handle Bar */}
+                    <View
+                        style={{
+                            width: 50,
+                            height: 5,
+                            backgroundColor: '#CCCCCC',
+                            borderRadius: 2.5,
+                            alignSelf: 'center',
+                            marginBottom: 20,
+                        }}
+                    />
+
+                    <Text style={{ fontSize: 20, fontWeight: 'bold', marginBottom: 5 }}>
+                        Capture Your ID
+                    </Text>
+                    <Text style={{ fontSize: 14, color: '#666', marginBottom: 20 }}>
+                        Choose how you want to upload your ID photo
+                    </Text>
+
+                    {/* Camera Option */}
+                    <TouchableOpacity
+                        onPress={takePhoto}
+                        style={{
+                            backgroundColor: "#FFAB00",
+                            borderRadius: 20,
+                            paddingVertical: 20,
+                            marginBottom: 15,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 20,
+                        }}
+                    >
+                        <Image
+                            source={require('../../../assets/camera.png')} // or use an icon library
+                            style={{ width: 28, height: 28, marginRight: 15, tintColor: 'white' }}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: 'white', fontSize: 16, fontWeight: 'bold' }}>
+                                Take a Photo
+                            </Text>
+                            <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 }}>
+                                Use your camera to capture ID
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Gallery Option */}
+                    <TouchableOpacity
+                        onPress={chooseFromGallery}
+                        style={{
+                            backgroundColor: '#F0F0F0',
+                            borderRadius: 20,
+                            paddingVertical: 20,
+                            marginBottom: 20,
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingHorizontal: 20,
+                        }}
+                    >
+                        <Image
+                            source={require('../../../assets/gallery.png')} // or use an icon library
+                            style={{ width: 28, height: 28, marginRight: 15, tintColor: '#333' }}
+                        />
+                        <View style={{ flex: 1 }}>
+                            <Text style={{ color: '#333', fontSize: 16, fontWeight: 'bold' }}>
+                                Choose from Gallery
+                            </Text>
+                            <Text style={{ color: '#666', fontSize: 12, marginTop: 4 }}>
+                                Select from your existing photos
+                            </Text>
+                        </View>
+                    </TouchableOpacity>
+
+                    {/* Cancel Button */}
+                    <TouchableOpacity
+                        onPress={() => setImagePickerModalVisible(false)}
+                        style={{
+                            backgroundColor: '#F0F0F0',
+                            borderRadius: 20,
+                            paddingVertical: 14,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Text style={{ color: '#333', fontSize: 16, fontWeight: '600' }}>
+                            Cancel
+                        </Text>
+                    </TouchableOpacity>
+                </View>
             </Modal>
         </KeyboardAvoidingView>
     );

@@ -145,7 +145,7 @@
 //   },
 // })
 
-import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, Alert } from "react-native"
+import { ImageBackground, StyleSheet, Text, TouchableOpacity, View, Alert, Image } from "react-native"
 import { useState, useRef } from "react"
 import { CameraView, type CameraType, useCameraPermissions } from "expo-camera"
 import { useNavigation } from "@react-navigation/native"
@@ -216,7 +216,7 @@ const Face = () => {
 
     try {
       setLoading(true)
-      setResult("🔄 Comparing faces...")
+      setResult("Comparing faces...")
 
       // Compression function
       // Replace your compressImageToLimit function with this:
@@ -374,9 +374,9 @@ const Face = () => {
       const matched = confidence > 80
 
       if (matched) {
-        setResult(`✅ Face matched! Confidence: ${confidence.toFixed(1)}%`)
+        setResult(`Face matched! Confidence: ${confidence.toFixed(1)}%`)
       } else {
-        setResult(`❌ Face does not match. Confidence: ${confidence.toFixed(1)}%`)
+        setResult(`Face does not match. Confidence: ${confidence.toFixed(1)}% Please try again`)
       }
 
       return matched
@@ -541,7 +541,7 @@ const Face = () => {
         ) : (
           <View style={styles.cameraPlaceholder}>
             <Text style={styles.placeholderText}>
-              {capturedImage ? "✅ Selfie Captured" : "Camera Preview"}
+              {capturedImage ? "Selfie Captured" : "Camera Preview"}
             </Text>
           </View>
         )}
@@ -554,7 +554,10 @@ const Face = () => {
             onPress={openCamera}
             disabled={loading}
           >
-            <Text style={styles.cameraText}>Open Camera</Text>
+            <Image
+              source={require("../../../assets/camera.png")}
+              style={{ width: 20, height: 20, alignSelf: 'center', tintColor: 'white' }}
+            />
           </TouchableOpacity>
         ) : (
           <View style={styles.cameraControls}>
@@ -627,7 +630,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   openCameraContainer: {
-    width: 150,
+    width: 50,
     height: 30,
     backgroundColor: "#524F4F",
     borderRadius: 5,
