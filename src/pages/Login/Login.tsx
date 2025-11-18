@@ -113,8 +113,7 @@ const Login = () => {
       console.log(userInfo)
 
       const greetingName = profile?.first_name || authUser.email || "there"
-      showToast(`Welcome back, ${greetingName}!`, "success")
-
+      
       // Navigate based on role
       if (profile.role === "user") {
         setCurrentUser(userInfo)
