@@ -410,7 +410,7 @@ const Face = () => {
       return
     }
 
-    if (!result?.includes("✅")) {
+    if (!result?.includes("matched")) {
       Alert.alert("Error", "Face verification failed! Please try again.")
       return
     }
