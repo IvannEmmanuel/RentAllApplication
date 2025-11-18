@@ -166,8 +166,18 @@ const AddItem = ({ navigation }) => {
       return
     }
 
+    if (!form.description || !form.description.trim()) {
+      Alert.alert('Error', 'Description is required.')
+      return
+    }
+
     if (!form.price_per_day || !form.price_per_day.trim()) {
       Alert.alert('Error', 'Price per day is required.')
+      return
+    }
+
+    if (!form.deposit_fee || !form.deposit_fee.trim()) {
+      Alert.alert('Error', 'Deposit fee is required.')
       return
     }
 
@@ -176,9 +186,19 @@ const AddItem = ({ navigation }) => {
       return
     }
 
+    if (!form.location || !form.location.trim()) {
+      Alert.alert('Error', 'Location is required.')
+      return
+    }
+
+    if (!imageFile) {
+      Alert.alert('Error', 'Image is required.')
+      return
+    }
+
     // Validate numbers
     const price = parseFloat(form.price_per_day)
-    const deposit = form.deposit_fee ? parseFloat(form.deposit_fee) : 0
+    const deposit = parseFloat(form.deposit_fee)
     const quantity = parseInt(form.quantity, 10)
 
     if (isNaN(price) || price <= 0) {
@@ -196,7 +216,7 @@ const AddItem = ({ navigation }) => {
       return
     }
 
-    // NEW: Check if price per day is higher than deposit fee
+    // Check if price per day is higher than deposit fee
     if (deposit > 0 && deposit >= price) {
       Alert.alert(
         'Invalid Price',
@@ -212,10 +232,10 @@ const AddItem = ({ navigation }) => {
       const basePayload = {
         user_id: currentUser.id,
         title: form.title.trim(),
-        description: form.description.trim() || null,
+        description: form.description.trim(),
         price_per_day: price,
         deposit_fee: deposit,
-        location: form.location.trim() || null,
+        location: form.location.trim(),
         available: !!form.available,
         category_id: form.category_id ? Number(form.category_id) : null,
         main_image_url: null,
@@ -244,7 +264,7 @@ const AddItem = ({ navigation }) => {
 
       let publicUrl = null
 
-      // Step 2: Upload image if provided
+      // Step 2: Upload image
       if (imageFile && itemId) {
         console.log('=== STARTING IMAGE UPLOAD ===')
         console.log('Image details:', imageFile)
@@ -303,7 +323,8 @@ const AddItem = ({ navigation }) => {
 
         } catch (imageError) {
           console.error('Image upload failed:', imageError)
-          Alert.alert('Warning', `Item created but image upload failed: ${imageError.message}`)
+          Alert.alert('Error', `Failed to upload image: ${imageError.message}`)
+          return
         }
       }
 
@@ -346,13 +367,13 @@ const AddItem = ({ navigation }) => {
       animationType="slide"
       onRequestClose={() => setCategoryModalVisible(false)}
     >
-      {/* Outside touchable area to close modal */}
+
       <TouchableOpacity
         style={styles.modalOverlay}
         activeOpacity={1}
         onPress={() => setCategoryModalVisible(false)}
       >
-        {/* Inner touchable to prevent closing when tapping modal content */}
+
         <TouchableOpacity
           activeOpacity={1}
           onPress={(e) => e.stopPropagation()}
@@ -403,13 +424,13 @@ const AddItem = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Header */}
+
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Post an Item</Text>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Title */}
+
         <Text style={styles.label}>
           Title<Text style={styles.required}>*</Text>
         </Text>
@@ -421,8 +442,9 @@ const AddItem = ({ navigation }) => {
           placeholderTextColor="#999"
         />
 
-        {/* Category */}
-        <Text style={styles.label}>Category</Text>
+        <Text style={styles.label}>
+          Category<Text style={styles.required}>*</Text>
+        </Text>
         <TouchableOpacity
           style={styles.categoryButton}
           onPress={() => setCategoryModalVisible(true)}
@@ -433,8 +455,9 @@ const AddItem = ({ navigation }) => {
           <Text style={styles.dropdownArrow}>▼</Text>
         </TouchableOpacity>
 
-        {/* Description */}
-        <Text style={styles.label}>Description</Text>
+        <Text style={styles.label}>
+          Description<Text style={styles.required}>*</Text>
+        </Text>
         <TextInput
           style={[styles.input, styles.textArea]}
           value={form.description}
@@ -446,7 +469,6 @@ const AddItem = ({ navigation }) => {
           textAlignVertical="top"
         />
 
-        {/* Price and Deposit */}
         <View style={styles.row}>
           <View style={styles.halfWidth}>
             <Text style={styles.label}>
@@ -462,7 +484,9 @@ const AddItem = ({ navigation }) => {
             />
           </View>
           <View style={styles.halfWidth}>
-            <Text style={styles.label}>Deposit fee (₱)</Text>
+            <Text style={styles.label}>
+              Deposit fee (₱)<Text style={styles.required}>*</Text>
+            </Text>
             <TextInput
               style={styles.input}
               value={form.deposit_fee}
@@ -486,8 +510,9 @@ const AddItem = ({ navigation }) => {
           keyboardType="numeric"
         />
 
-        {/* Location */}
-        <Text style={styles.label}>Location</Text>
+        <Text style={styles.label}>
+          Location<Text style={styles.required}>*</Text>
+        </Text>
         <TextInput
           style={styles.input}
           value={form.location}
@@ -496,19 +521,9 @@ const AddItem = ({ navigation }) => {
           placeholderTextColor="#999"
         />
 
-        {/* Available Checkbox */}
-        {/* <TouchableOpacity
-          style={styles.checkboxContainer}
-          onPress={() => updateForm('available', !form.available)}
-        >
-          <View style={[styles.checkbox, form.available && styles.checkboxChecked]}>
-            {form.available && <Text style={styles.checkmark}>✓</Text>}
-          </View>
-          <Text style={styles.checkboxLabel}>Available</Text>
-        </TouchableOpacity> */}
-
-        {/* Image Picker */}
-        <Text style={styles.label}>Image (optional)</Text>
+        <Text style={styles.label}>
+          Image<Text style={styles.required}>*</Text>
+        </Text>
         <TouchableOpacity
           style={styles.imageButton}
           onPress={pickImage}
@@ -528,7 +543,7 @@ const AddItem = ({ navigation }) => {
             <Text style={styles.imageFileName}>✓ {imageFile.name}</Text>
           </View>
         )}
-        {/* Save Button */}
+
         <TouchableOpacity
           style={[styles.saveButton, loading && styles.disabledButton]}
           onPress={handleSubmit}
@@ -541,7 +556,7 @@ const AddItem = ({ navigation }) => {
           )}
         </TouchableOpacity>
 
-        {/* Add some bottom padding for better scrolling */}
+
         <View style={{ height: 50 }} />
       </ScrollView>
 
