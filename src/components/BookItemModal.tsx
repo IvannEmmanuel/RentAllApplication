@@ -193,8 +193,8 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
     // Multiply price by days and quantity
     const subtotal = price * days * selectedQuantity
 
-    // Multiply deposit by quantity * days (as per your example)
-    const depositTotal = deposit * days * selectedQuantity
+    // Deposit is fixed per item, only multiply by quantity (not days)
+    const depositTotal = deposit * selectedQuantity
 
     const totalCost = subtotal + depositTotal
 
@@ -542,7 +542,7 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
               <Text style={styles.legendText}>• Second tap: Select end date (creates range)</Text>
               <Text style={styles.legendText}>• Third tap: Start new selection</Text>
               <Text style={styles.legendText}>• Red dates are unavailable</Text>
-              <Text style={styles.noteText}>{"\n"}NOTE: A booking request must be confirmed by the lessor prior to the scheduled rental start date. 
+              <Text style={styles.noteText}>{"\n"}NOTE: A booking request must be confirmed by the lessor prior to the scheduled rental start date.
                 Unconfirmed booking requests by the start date are automatically canceled and removed from the system.</Text>
             </View>
           </View>
@@ -587,7 +587,7 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Deposit x {selectedQuantity}</Text>
               <Text style={styles.summaryValue}>
-                ₱{(Number(item?.deposit_fee || 0) * daysCount * selectedQuantity).toFixed(2)}
+                ₱{(Number(item?.deposit_fee || 0) * selectedQuantity).toFixed(2)}
               </Text>
             </View>
 
