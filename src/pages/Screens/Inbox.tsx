@@ -28,6 +28,16 @@ const Inbox = () => {
     getCurrentUser()
   }, [])
 
+  // Add this helper function at the top of your component, after imports
+  const getProfileImageUrl = (user) => {
+    if (!user) {
+      return null;
+    }
+
+    // Priority: profile_pic_url first, then face_image_url, then fallback
+    return user.profile_pic_url || user.face_image_url || null;
+  };
+
   // Fetch conversations
   const fetchConversations = useCallback(async () => {
     if (!currentUser) return
@@ -77,7 +87,7 @@ const Inbox = () => {
       // Fetch user details
       const { data: usersData, error: usersError } = await supabase
         .from('users')
-        .select('id, first_name, last_name, face_image_url')
+        .select('id, first_name, last_name, face_image_url, profile_pic_url')
         .in('id', otherUserIds)
 
       if (usersError) {
@@ -143,7 +153,7 @@ const Inbox = () => {
           ...conv,
           otherUserId,
           otherUserName: otherUser ? `${otherUser.first_name} ${otherUser.last_name}` : 'Unknown User',
-          otherUserImage: otherUser?.face_image_url || null,
+          otherUserImage: getProfileImageUrl(otherUser), // Use the helper function
           itemTitle: item?.title || 'Item not found',
           formattedTime: formatMessageTime(conv.last_message_at),
           preview

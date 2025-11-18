@@ -85,7 +85,7 @@ const Chat = () => {
             if (otherUserId) {
                 const { data: otherUserData, error: otherUserError } = await supabase
                     .from('users')
-                    .select('id, first_name, last_name, face_image_url')
+                    .select('id, first_name, last_name, face_image_url, profile_pic_url')
                     .eq('id', otherUserId)
                     .single();
 
@@ -228,6 +228,16 @@ const Chat = () => {
             console.error("❌ Error uploading image:", err);
             return null;
         }
+    };
+
+    // Add this helper function after the base64ToUint8Array function
+    const getProfileImageUrl = (userProfile) => {
+        if (!userProfile) {
+            return null;
+        }
+
+        // Priority: profile_pic_url first, then face_image_url, then fallback
+        return userProfile.profile_pic_url || userProfile.face_image_url || null;
     };
 
     // --- Pick image from gallery ---
@@ -595,8 +605,8 @@ const Chat = () => {
                             {message.read_at ? (
                                 <Image
                                     source={
-                                        otherUserProfile?.face_image_url
-                                            ? { uri: otherUserProfile.face_image_url }
+                                        getProfileImageUrl(otherUserProfile)
+                                            ? { uri: getProfileImageUrl(otherUserProfile) }
                                             : require('../../../assets/splash-icon.png')
                                     }
                                     style={styles.readStatusImage}
@@ -645,8 +655,8 @@ const Chat = () => {
                             {/* Other User Profile Image in Header */}
                             <Image
                                 source={
-                                    otherUserProfile?.face_image_url
-                                        ? { uri: otherUserProfile.face_image_url }
+                                    getProfileImageUrl(otherUserProfile)
+                                        ? { uri: getProfileImageUrl(otherUserProfile) }
                                         : require('../../../assets/splash-icon.png')
                                 }
                                 style={styles.headerProfileImage}
