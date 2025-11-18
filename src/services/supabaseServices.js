@@ -169,12 +169,20 @@ export class ItemsService {
 }
 
 // --- SEARCH SERVICE ---
+// --- SEARCH SERVICE ---
 export class SearchService {
     static async search(searchTerm) {
         try {
+            // Clean and normalize the search term
+            const cleanedSearchTerm = searchTerm.trim().toLowerCase();
+            
+            if (cleanedSearchTerm.length === 0) {
+                return { users: [], items: [] };
+            }
+
             const [usersData, itemsData] = await Promise.all([
-                this._searchUsers(searchTerm),
-                this._searchItems(searchTerm),
+                this._searchUsersEnhanced(cleanedSearchTerm),
+                this._searchItemsEnhanced(cleanedSearchTerm),
             ]);
 
             return {
@@ -186,29 +194,69 @@ export class SearchService {
             throw error;
         }
     }
-    static async _searchUsers(searchTerm) {
-        const { data, error } = await supabase
+
+    static async _searchUsersEnhanced(searchTerm) {
+        const searchWords = searchTerm.split(' ').filter(word => word.length > 0);
+        
+        let query = supabase
             .from("users")
             .select("id, first_name, last_name, face_image_url, profile_pic_url")
-            .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
             .limit(SEARCH_LIMIT);
 
+        if (searchWords.length === 1) {
+            // Single word search
+            query = query.or(`first_name.ilike.%${searchWords[0]}%,last_name.ilike.%${searchWords[0]}%`);
+        } else if (searchWords.length > 1) {
+            // Multiple words - search for combinations
+            const orConditions = [];
+            
+            // Search for full name match
+            orConditions.push(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`);
+            
+            // Search for individual words in both fields
+            searchWords.forEach(word => {
+                orConditions.push(`first_name.ilike.%${word}%,last_name.ilike.%${word}%`);
+            });
+            
+            query = query.or(orConditions.join(','));
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         return data;
     }
-    static async _searchItems(searchTerm) {
-        const { data, error } = await supabase
+
+    static async _searchItemsEnhanced(searchTerm) {
+        const searchWords = searchTerm.split(' ').filter(word => word.length > 0);
+        
+        let query = supabase
             .from("items")
             .select(
                 "item_id, user_id, category_id, title, description, price_per_day, deposit_fee, location, available, created_at, item_status, quantity"
             )
             .eq("available", true)
             .eq("item_status", "approved")
-            .or(
-                `title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%`
-            )
             .limit(SEARCH_LIMIT);
 
+        if (searchWords.length === 1) {
+            // Single word search
+            query = query.or(`title.ilike.%${searchWords[0]}%,description.ilike.%${searchWords[0]}%,location.ilike.%${searchWords[0]}%`);
+        } else if (searchWords.length > 1) {
+            // Multiple words - search for combinations
+            const orConditions = [];
+            
+            // Search for exact phrase
+            orConditions.push(`title.ilike.%${searchTerm}%,description.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%`);
+            
+            // Search for individual words in all fields
+            searchWords.forEach(word => {
+                orConditions.push(`title.ilike.%${word}%,description.ilike.%${word}%,location.ilike.%${word}%`);
+            });
+            
+            query = query.or(orConditions.join(','));
+        }
+
+        const { data, error } = await query;
         if (error) throw error;
         return await ItemsService._enrichItemsData(data || []);
     }
