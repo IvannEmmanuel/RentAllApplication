@@ -312,6 +312,7 @@ const Home = ({ route }: HomeProps) => {
     [itemRatings, lessorRatings, isFavorited, getButtonInfo, handleToggleFavorite, handleRentNow, handleMessage, handleLessorPress, handlePicturePress]
   );
 
+
   const renderUserResult = useCallback((user: any) => (
     <TouchableOpacity
       key={user.id}
@@ -319,7 +320,9 @@ const Home = ({ route }: HomeProps) => {
       onPress={() => handleLessorPress(user.id)}
     >
       <View style={styles.userImageContainer}>
-        {user.face_image_url ? (
+        {user.profile_pic_url ? (
+          <Image source={{ uri: user.profile_pic_url }} style={styles.userImage} />
+        ) : user.face_image_url ? (
           <Image source={{ uri: user.face_image_url }} style={styles.userImage} />
         ) : (
           <View style={styles.userPlaceholder}>

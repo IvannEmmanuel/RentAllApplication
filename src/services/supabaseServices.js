@@ -189,7 +189,7 @@ export class SearchService {
     static async _searchUsers(searchTerm) {
         const { data, error } = await supabase
             .from("users")
-            .select("id, first_name, last_name, face_image_url")
+            .select("id, first_name, last_name, face_image_url, profile_pic_url")
             .or(`first_name.ilike.%${searchTerm}%,last_name.ilike.%${searchTerm}%`)
             .limit(SEARCH_LIMIT);
 

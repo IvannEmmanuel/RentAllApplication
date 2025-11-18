@@ -16,7 +16,7 @@ import { supabase } from '../../supbaseClient';
 export default function EditProfileModal({ visible, onClose, currentUser, setCurrentUser }) {
   const [firstName, setFirstName] = useState(currentUser.first_name);
   const [lastName, setLastName] = useState(currentUser.last_name);
-  const [image, setImage] = useState(currentUser.face_image_url);
+  const [image, setImage] = useState(currentUser.profile_pic_url || currentUser.face_image_url);
   const [uploading, setUploading] = useState(false);
 
   const pickImage = async () => {
@@ -44,7 +44,7 @@ export default function EditProfileModal({ visible, onClose, currentUser, setCur
       let uploadedImageUrl = image;
 
       // If user selected a new image (not the same as current URL)
-      if (image && image !== currentUser.face_image_url && !image.startsWith('https')) {
+      if (image && image !== currentUser.profile_pic_url && image !== currentUser.face_image_url && !image.startsWith('https')) {
         const fileExt = image.split('.').pop();
         const fileName = `${currentUser.id}-${Date.now()}.${fileExt}`;
         const filePath = `user-profile-pic/${fileName}`;
@@ -64,14 +64,13 @@ export default function EditProfileModal({ visible, onClose, currentUser, setCur
         uploadedImageUrl = data.publicUrl;
       }
 
-
-      // Update user info
+      // Update user info - use profile_pic_url for edited profile pictures
       const { error } = await supabase
         .from('users')
         .update({
           first_name: firstName,
           last_name: lastName,
-          face_image_url: uploadedImageUrl,
+          profile_pic_url: uploadedImageUrl,
         })
         .eq('id', currentUser.id);
 
@@ -81,7 +80,7 @@ export default function EditProfileModal({ visible, onClose, currentUser, setCur
         ...currentUser,
         first_name: firstName,
         last_name: lastName,
-        face_image_url: uploadedImageUrl,
+        profile_pic_url: uploadedImageUrl,
       });
 
       Alert.alert('Success', 'Profile updated successfully.');

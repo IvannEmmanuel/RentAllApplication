@@ -490,9 +490,11 @@ const Profile = () => {
             <View style={styles.subprofileContainer}>
               <Image
                 source={
-                  currentUser?.face_image_url
-                    ? { uri: currentUser.face_image_url }
-                    : require('../../../assets/splash-icon.png')
+                  currentUser?.profile_pic_url
+                    ? { uri: currentUser.profile_pic_url }
+                    : currentUser?.face_image_url
+                      ? { uri: currentUser.face_image_url }
+                      : require('../../../assets/splash-icon.png')
                 }
                 style={styles.profileImage}
               />

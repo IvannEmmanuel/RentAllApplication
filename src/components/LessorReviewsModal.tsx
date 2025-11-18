@@ -173,7 +173,7 @@ const LessorReviews = ({ route }) => {
     try {
       const { data: userData, error: userError } = await supabase
         .from('users')
-        .select('id, first_name, last_name, face_image_url')
+        .select('id, first_name, last_name, face_image_url, profile_pic_url')
         .eq('id', lessorId)
         .single();
 
@@ -721,7 +721,13 @@ const LessorReviews = ({ route }) => {
         <View style={styles.profileSection}>
           <View style={styles.profileContainer}>
             <View style={styles.avatarContainer}>
-              {lessorInfo?.face_image_url ? (
+              {lessorInfo?.profile_pic_url ? (
+                <Image
+                  source={{ uri: lessorInfo.profile_pic_url }}
+                  style={styles.avatarImage}
+                  resizeMode="cover"
+                />
+              ) : lessorInfo?.face_image_url ? (
                 <Image
                   source={{ uri: lessorInfo.face_image_url }}
                   style={styles.avatarImage}
@@ -730,7 +736,9 @@ const LessorReviews = ({ route }) => {
               ) : (
                 <View style={styles.avatar}>
                   <Text style={styles.avatarText}>
-                    {lessorInfo ? lessorInfo.first_name[0] + lessorInfo.last_name[0] : 'U'}
+                    {lessorInfo && lessorInfo.first_name && lessorInfo.last_name
+                      ? `${lessorInfo.first_name[0]}${lessorInfo.last_name[0]}`
+                      : 'U'}
                   </Text>
                 </View>
               )}
@@ -797,7 +805,6 @@ const LessorReviews = ({ route }) => {
         </View>
       </ScrollView>
 
-      {/* Options Modal */}
       <Modal
         visible={optionsModalVisible}
         transparent={true}
@@ -807,7 +814,7 @@ const LessorReviews = ({ route }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.optionsModalContainer}>
             <Text style={styles.optionsModalTitle}>Item Options</Text>
-            
+
             <TouchableOpacity
               style={styles.optionButton}
               onPress={() => handleEdit(selectedItem)}
