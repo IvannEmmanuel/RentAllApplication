@@ -62,13 +62,13 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
                 case 'deposit_submitted':
                     return 'Deposit submitted';
                 case 'on_the_way':
-                    return 'On the way';
+                    return 'Ready to give the item.';
                 case 'ongoing':
-                    return 'Ongoing';
+                    return 'Renter currently has the item.';
                 case 'awaiting_owner_confirmation':
                     return 'Awaiting owner confirmation';
                 case 'completed':
-                    return 'Completed';
+                    return 'Rental transaction done.';
                 default:
                     return currentBooking.status;
             }
@@ -293,11 +293,11 @@ const ItemTrackingLessorScreen = ({ route, navigation, visible, onClose, rentalI
 
     // UPDATED: Phases to include Deposit Review
     const defaultPhases = [
-        { id: 1, title: 'Ready for Pickup', status: 'confirmed' },
-        { id: 2, title: 'Deposit Review', status: 'deposit_submitted' },
-        { id: 3, title: 'On the Way', status: 'on_the_way' },
-        { id: 4, title: 'Ongoing', status: 'ongoing' },
-        { id: 5, title: 'Delivered', status: 'delivered' },
+        { id: 1, title: 'Prepared', status: 'confirmed' },
+        { id: 2, title: 'Verify', status: 'deposit_submitted' },
+        { id: 3, title: 'Hand Over', status: 'on_the_way' },
+        { id: 4, title: 'In Use', status: 'ongoing' },
+        { id: 5, title: 'Completed', status: 'delivered' },
     ];
 
     const accommodationPhases = [

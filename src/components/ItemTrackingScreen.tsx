@@ -38,11 +38,11 @@ const ItemTrackingScreen = ({ route, navigation }) => {
 
     // Phase configurations for renter - UPDATED WITH DEPOSIT PHASE
     const defaultPhases = [
-        { id: 1, title: 'Item Accepted', status: 'confirmed' },
-        { id: 2, title: 'Upload Deposit', status: 'deposit_submitted' },
-        { id: 3, title: 'On the Way', status: 'on_the_way' },
-        { id: 4, title: 'Ongoing', status: 'ongoing' },
-        { id: 5, title: 'Delivered', status: 'delivered' },
+        { id: 1, title: 'Accepted', status: 'confirmed' },
+        { id: 2, title: 'Deposit Review', status: 'deposit_submitted' },
+        { id: 3, title: 'Ready', status: 'on_the_way' },
+        { id: 4, title: 'In Use', status: 'ongoing' },
+        { id: 5, title: 'Returned', status: 'delivered' },
     ];
 
     const accommodationPhases = [
@@ -583,28 +583,28 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         switch (currentRental.status) {
             case 'confirmed':
                 return isAccommodation
-                    ? 'Booking confirmed — please upload your deposit to secure your stay.'
-                    : 'accepted - Please upload your deposit proof';
+                    ? 'Booking confirmed, please upload your deposit to secure your stay.'
+                    : 'Accepted, please upload your deposit proof';
             case 'deposit_submitted':
                 return isAccommodation
-                    ? 'Deposit submitted — waiting for host confirmation.'
-                    : 'deposit submitted - Waiting for owner confirmation';
+                    ? 'Deposit uploaded, waiting for host confirmation.'
+                    : 'Deposit uploaded, waiting for lessor confirmation';
             case 'on_the_way':
                 return isAccommodation
                     ? 'It’s check‑in day — your place is ready for arrival.'
-                    : 'on the way - Item is being delivered';
+                    : 'Item is ready for hand over';
             case 'ongoing':
                 return isAccommodation
                     ? 'You are checked in — enjoy your stay.'
-                    : 'ongoing - Item is with you';
+                    : 'Item is with you';
             case 'awaiting_owner_confirmation':
                 return isAccommodation
                     ? 'Checkout requested — waiting for host confirmation.'
-                    : 'awaiting owner confirmation';
+                    : 'Awaiting owner confirmation';
             case 'completed':
                 return isAccommodation
                     ? 'Your stay is completed — thank you for booking.'
-                    : 'completed';
+                    : 'Completed, item returned and confirmed by the lessor';
             default:
                 return 'being processed';
         }
@@ -730,7 +730,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                                 <ActivityIndicator color="#FFF" />
                             ) : (
                                 <Text style={styles.confirmButtonText}>
-                                    {isAccommodation ? 'Check-In' : 'Mark as Delivered'}
+                                    {isAccommodation ? 'Check-In' : 'Item Received'}
                                 </Text>
                             )}
                         </TouchableOpacity>
@@ -762,7 +762,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
 
                             {!isReturnEnabled() && currentRental.status !== 'awaiting_owner_confirmation' && (
                                 <Text style={styles.returnInfoText}>
-                                    Return will be available after {new Date(currentRental.end_date).toLocaleDateString()}
+                                    Return item will be available after {new Date(currentRental.end_date).toLocaleDateString()}
                                 </Text>
                             )}
                         </View>

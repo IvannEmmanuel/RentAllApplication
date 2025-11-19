@@ -320,7 +320,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
       <View style={styles.container}>
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerText}>Active Rentals</Text>
+          <Text style={styles.headerText}>My Bookings</Text>
           <View style={styles.headerButtons}>
             <TouchableOpacity onPress={onClose} style={styles.closeButtonContainer}>
               <Text style={styles.closeButton}>✕</Text>

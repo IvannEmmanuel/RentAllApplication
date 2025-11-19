@@ -1,4 +1,4 @@
-import { Image, StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList } from 'react-native'
+import { Image, StyleSheet, Text, View, TouchableOpacity, ScrollView, Alert, ActivityIndicator, FlatList, Dimensions } from 'react-native'
 import React, { useEffect, useState, useCallback } from 'react'
 import { supabase } from '../../../supbaseClient'
 import { useNavigation } from '@react-navigation/native'
@@ -16,6 +16,8 @@ import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 import EditProfileModal from '../../components/EditProfileModal'
 import ItemCard from '../../components/ItemCard' // Import the same ItemCard component
+
+const { height, width } = Dimensions.get('window');
 
 const Profile = () => {
   const navigation = useNavigation()
@@ -509,9 +511,15 @@ const Profile = () => {
                     ? new Date(currentUser.dob).toLocaleDateString()
                     : 'Birthdate not available'}
                 </Text>
-                <View style={styles.editButton}>
-                  <TouchableOpacity onPress={() => setEditModalVisible(true)}>
-                    <Text style={styles.editText}>Edit Profile</Text>
+                <View style={styles.actionRow}>
+                  <View style={styles.editContainer}>
+                    <TouchableOpacity onPress={() => setEditModalVisible(true)}>
+                      <Text style={styles.editText}>Edit Profile</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                    <Text style={styles.logoutText}>Logout</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -538,7 +546,7 @@ const Profile = () => {
                 style={styles.subActivitiesContainer}
               >
                 <Image source={require('../../../assets/active_rental.png')} style={styles.image} />
-                <Text>Active Rental</Text>
+                <Text>My Bookings</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.activitiesContainer}>
@@ -556,7 +564,7 @@ const Profile = () => {
                 onPress={() => setIsYourItemModalVisible(true)}
               >
                 <Image source={require('../../../assets/item.png')} style={styles.pendingImage} />
-                <Text>Your Item</Text>
+                <Text>Requests</Text>
               </TouchableOpacity>
             </View>
             <View style={styles.activitiesContainer}>
@@ -578,7 +586,7 @@ const Profile = () => {
               })}
             >
               <Image source={require('../../../assets/product.png')} style={styles.pendingImage} />
-              <Text>Product</Text>
+              <Text>Item Lists</Text>
             </TouchableOpacity>
           </View>
 
@@ -604,12 +612,6 @@ const Profile = () => {
             )}
           </View>
         </View>
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-        >
-          <Text style={styles.logoutText}>Logout</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Modals */}
@@ -774,6 +776,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 10,
     alignItems: 'center',
+    height: height * 0.05,
+    width: width * 0.2,
     justifyContent: 'center',
     marginHorizontal: 20,
     marginBottom: 20,
@@ -795,5 +799,19 @@ const styles = StyleSheet.create({
   editText: {
     fontFamily: 'DM-Medium',
     fontSize: 12
-  }
+  },
+  actionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    width: "100%",
+  },
+  editContainer: {
+    backgroundColor: '#FFAB00',
+    borderRadius: 20,
+    height: 25,
+    width: '50%',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
 })

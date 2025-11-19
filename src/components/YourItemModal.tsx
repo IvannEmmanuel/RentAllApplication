@@ -507,7 +507,7 @@ const YourItemsModal = ({ visible, onClose, currentUser, rentalId = null, initia
     <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
       <View style={styles.container}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Your Items</Text>
+          <Text style={styles.headerTitle}>Requests</Text>
           <TouchableOpacity style={styles.closeButton} onPress={onClose}><Text style={styles.closeButtonText}>✕</Text></TouchableOpacity>
         </View>
 
