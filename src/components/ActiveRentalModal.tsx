@@ -51,6 +51,13 @@ const ActiveRentalModal = ({ visible, onClose }) => {
     }
   };
 
+  // Helper: format payment method
+  const formatPaymentMethod = (method: string | null | undefined) => {
+    if (method === 'meet_up') return 'Meet-up';
+    if (method === 'cash_on_delivery') return 'Cash On Delivery';
+    return method || '—';
+  };
+
   // Fetch initial data and set up real-time subscription
   useEffect(() => {
     if (!currentUser || !visible) return;
@@ -70,6 +77,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
           quantity,
           total_cost,
           created_at,
+          payment_method,
           items (
             title,
             price_per_day,
@@ -146,7 +154,8 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                 const updatedRental = {
                   ...prev[existingIndex],
                   ...payload.new,
-                  is_accommodation: categories[payload.new.items?.category_id] === 'Accommodation'
+                  is_accommodation:
+                    categories[payload.new.items?.category_id] === 'Accommodation'
                 };
                 return prev.map(rental =>
                   rental.rental_id === payload.new.rental_id
@@ -241,6 +250,7 @@ const ActiveRentalModal = ({ visible, onClose }) => {
         quantity,
         total_cost,
         created_at,
+        payment_method,
         items (
           title,
           price_per_day,
@@ -443,6 +453,14 @@ const ActiveRentalModal = ({ visible, onClose }) => {
                         </View>
                       </View>
 
+                      {/* Payment method display */}
+                      <View style={styles.paymentRow}>
+                        <Text style={styles.detailLabel}>Payment Method</Text>
+                        <Text style={styles.detailValue}>
+                          {formatPaymentMethod(rental.payment_method)}
+                        </Text>
+                      </View>
+
                       <View style={styles.locationContainer}>
                         <Text style={styles.detailIcon}>📍</Text>
                         <Text style={styles.locationText} numberOfLines={1}>
@@ -604,7 +622,7 @@ const styles = StyleSheet.create({
   detailsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   detailItem: {
     flex: 1,
@@ -623,6 +641,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFAB00',
+  },
+  // new payment row
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   locationContainer: {
     flexDirection: 'row',

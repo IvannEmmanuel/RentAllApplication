@@ -96,6 +96,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
           quantity,
           total_cost,
           created_at,
+          payment_method,
           items (
             title,
             price_per_day,
@@ -243,6 +244,7 @@ const PendingRentalModal = ({ visible, onClose }) => {
         quantity,
         total_cost,
         created_at,
+        payment_method,
         items (
           title,
           price_per_day,
@@ -299,6 +301,12 @@ const PendingRentalModal = ({ visible, onClose }) => {
     const diffTime = start - today;
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays;
+  };
+
+  const formatPaymentMethod = (method) => {
+    if (method === 'meet_up') return 'Meet-up';
+    if (method === 'cash_on_delivery') return 'Cash On Delivery';
+    return method || '—';
   };
 
   return (
@@ -417,6 +425,14 @@ const PendingRentalModal = ({ visible, onClose }) => {
                           <Text style={styles.detailLabel}>Total Cost</Text>
                           <Text style={styles.priceText}>₱{rental.total_cost}</Text>
                         </View>
+                      </View>
+
+                      {/* NEW: payment method display */}
+                      <View style={styles.paymentRow}>
+                        <Text style={styles.detailLabel}>Payment Method</Text>
+                        <Text style={styles.detailValue}>
+                          {formatPaymentMethod(rental.payment_method)}
+                        </Text>
                       </View>
 
                       <View style={styles.locationContainer}>
@@ -552,7 +568,7 @@ const styles = StyleSheet.create({
   detailsGrid: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 8,
   },
   detailItem: {
     flex: 1,
@@ -571,6 +587,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFAB00',
+  },
+  // NEW: payment row
+  paymentRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   locationContainer: {
     flexDirection: 'row',

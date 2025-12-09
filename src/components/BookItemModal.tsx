@@ -28,6 +28,9 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
 
   const [selectedQuantity, setSelectedQuantity] = useState(1);
 
+  // NEW: payment method (same values as web)
+  const [paymentMethod, setPaymentMethod] = useState<'cash_on_delivery' | 'meet_up'>('cash_on_delivery');
+
   //Ratings
   const [ratings, setRatings] = useState([])
   const [averageRating, setAverageRating] = useState<number | null>(null);
@@ -154,6 +157,7 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
     if (!visible) {
       setSelectedDates({})
       setErrorMsg("")
+      setPaymentMethod('cash_on_delivery') // reset payment method
     }
   }, [visible])
 
@@ -288,62 +292,6 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
   const isOwner = currentUserId && item?.user_id && currentUserId === item.user_id
   const canSubmit = !loading && !isOwner && daysCount > 0 && !!currentUserId
 
-  // const submit = async () => {
-  //   setErrorMsg("")
-
-  //   if (!currentUserId) {
-  //     setErrorMsg("Please sign in to request a booking.")
-  //     return
-  //   }
-
-  //   if (!item?.item_id) return
-
-  //   if (daysCount === 0) {
-  //     setErrorMsg("Select rental dates to continue.")
-  //     return
-  //   }
-
-  //   if (isOwner) {
-  //     setErrorMsg("You can't rent your own item.")
-  //     return
-  //   }
-
-  //   try {
-  //     setLoading(true)
-
-  //     const payload = {
-  //       item_id: item.item_id,
-  //       renter_id: currentUserId,
-  //       start_date: startDate,
-  //       end_date: endDate,
-  //       total_cost: total,
-  //     }
-
-  //     const { error } = await supabase
-  //       .from("rental_transactions")
-  //       .insert([payload])
-
-  //     if (error) throw error
-
-  //     Alert.alert(
-  //       'Booking Requested',
-  //       'Your rental request has been submitted successfully!',
-  //       [{
-  //         text: 'OK', onPress: () => {
-  //           onBooked?.()
-  //           onClose()
-  //         }
-  //       }]
-  //     )
-
-  //   } catch (e) {
-  //     console.error('Booking error:', e)
-  //     setErrorMsg("Failed to submit booking. Please try again.")
-  //   } finally {
-  //     setLoading(false)
-  //   }
-  // }
-
   const submit = async () => {
     setErrorMsg("")
 
@@ -372,9 +320,10 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
         renter_id: currentUserId,
         start_date: startDate,
         end_date: endDate,
-        total_cost: total * selectedQuantity,
+        total_cost: total * selectedQuantity,  // keeping your existing logic
         quantity: selectedQuantity,
-        status: 'pending'
+        status: 'pending',
+        payment_method: paymentMethod,         // NEW: send payment method to DB
       }
 
       const { data: newBooking, error } = await supabase
@@ -426,6 +375,9 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
     ...busyDates,
     ...selectedDates
   }
+
+  const renderPaymentLabel = (value: 'cash_on_delivery' | 'meet_up') =>
+    value === 'cash_on_delivery' ? 'Cash On Delivery' : 'Meet-up'
 
   return (
     <Modal
@@ -573,6 +525,41 @@ const BookItemModal = ({ visible, onClose, item, currentUserId, onBooked }) => {
             <View style={styles.summaryRow}>
               <Text style={styles.summaryLabel}>Quantity</Text>
               <Text style={styles.summaryValue}>{selectedQuantity}</Text>
+            </View>
+
+            {/* NEW: Payment method radio options */}
+            <View style={styles.paymentSection}>
+              <Text style={styles.paymentTitle}>Payment method</Text>
+
+              <TouchableOpacity
+                style={styles.paymentOption}
+                onPress={() => setPaymentMethod('cash_on_delivery')}
+              >
+                <View style={[
+                  styles.radioOuter,
+                  paymentMethod === 'cash_on_delivery' && styles.radioOuterActive
+                ]}>
+                  {paymentMethod === 'cash_on_delivery' && <View style={styles.radioInner} />}
+                </View>
+                <Text style={styles.paymentLabel}>
+                  {renderPaymentLabel('cash_on_delivery')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.paymentOption}
+                onPress={() => setPaymentMethod('meet_up')}
+              >
+                <View style={[
+                  styles.radioOuter,
+                  paymentMethod === 'meet_up' && styles.radioOuterActive
+                ]}>
+                  {paymentMethod === 'meet_up' && <View style={styles.radioInner} />}
+                </View>
+                <Text style={styles.paymentLabel}>
+                  {renderPaymentLabel('meet_up')}
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <View style={styles.separator} />
@@ -976,5 +963,44 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "600",
     color: "#333",
+  },
+  // NEW: payment method styles
+  paymentSection: {
+    marginTop: 8,
+    marginBottom: 4,
+  },
+  paymentTitle: {
+    fontSize: 14,
+    fontFamily: 'DM-Bold',
+    color: '#333',
+    marginBottom: 6,
+  },
+  paymentOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  paymentLabel: {
+    fontSize: 14,
+    color: '#333',
+    marginLeft: 8,
+  },
+  radioOuter: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 2,
+    borderColor: '#CCC',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  radioOuterActive: {
+    borderColor: '#FFAB00',
+  },
+  radioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFAB00',
   },
 })

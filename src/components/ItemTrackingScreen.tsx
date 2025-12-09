@@ -67,6 +67,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                     .from('rental_transactions')
                     .select(`
                         *,
+                        payment_method,
                         items!inner(
                             *,
                             categories(name)
@@ -74,6 +75,7 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                     `)
                     .eq('rental_id', rental.rental_id)
                     .single();
+
 
                 if (error) throw error;
 
@@ -134,6 +136,11 @@ const ItemTrackingScreen = ({ route, navigation }) => {
         endDate.setHours(0, 0, 0, 0);
         today.setHours(0, 0, 0, 0);
         return today >= endDate;
+    };
+    const formatPaymentMethod = (method: string | null) => {
+        if (method === "cash_on_delivery") return "Cash on Delivery";
+        if (method === "meet_up") return "Meet-up";
+        return "—";
     };
 
     // Real-time subscription for status updates
@@ -787,6 +794,12 @@ const ItemTrackingScreen = ({ route, navigation }) => {
                 {/* Details Section */}
                 <View style={styles.detailsSection}>
                     <Text style={styles.sectionTitle}>Rental Details</Text>
+                <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Payment Method:</Text>
+                    <Text style={styles.detailValue}>
+                        {formatPaymentMethod(currentRental.payment_method)}
+                    </Text>
+                </View>
 
                     <View style={styles.detailRow}>
                         <Text style={styles.detailLabel}>Quantity:</Text>
